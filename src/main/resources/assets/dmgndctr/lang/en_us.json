@@ -1,0 +1,8 @@
+{
+  "dmgndctr.prefix": "[DMGndctr] ",
+  "dmgndctr.error.player_only": "This command can only be used by a player",
+  "dmgndctr.error.no_held_item": "You must hold an item in your hand",
+  "dmgndctr.name": "Damage Indicator",
+  "dmgndctr.desc": "Shows floating damage numbers above creatures. Critical damage is highlighted in gold.",
+  "dmgndctr.cmd.usage": "Usage: /dmgndctr"
+}

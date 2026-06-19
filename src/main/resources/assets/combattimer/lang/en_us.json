@@ -1,0 +1,18 @@
+{
+  "combattimer.prefix": "[CombatTimer] ",
+  "combattimer.error.player_only": "This command can only be used by a player",
+  "combattimer.error.no_held_item": "You must hold an item in your hand",
+  "combattimer.command.settime": "Combat Tag time set to %s seconds.",
+  "combattimer.command.killlogout": "Death on combat logout: %s",
+  "combattimer.command.killlogout.enabled": "ENABLED",
+  "combattimer.command.killlogout.disabled": "DISABLED",
+  "combattimer.command.info.header": "=== CombatTimer Info ===",
+  "combattimer.command.info.duration": "Combat duration: %s sec.",
+  "combattimer.command.info.kill": "Logout penalty: %s",
+  "combattimer.command.info.kill.enabled": "ON",
+  "combattimer.command.info.kill.disabled": "OFF",
+  "combattimer.boss.enter": "COMBAT! DON'T LOG OUT!",
+  "combattimer.boss.timer": "COMBAT: %s sec",
+  "combattimer.logout.killed": "Player %s logged out in combat and died!",
+  "combattimer.logout.warning": "Player %s logged out in combat (penalty disabled)."
+}

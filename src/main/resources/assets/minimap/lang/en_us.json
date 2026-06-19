@@ -1,0 +1,16 @@
+{
+  "category.minimap": "Minimap",
+  "key.minimap.open_map": "Open Map",
+  "minimap.settings.title": "Minimap Settings",
+  "minimap.settings.minimap": "Minimap: %s",
+  "minimap.settings.other_markers": "Other Markers: %s",
+  "minimap.settings.size": "Minimap size: %s",
+  "minimap.settings.zoom": "Zoom: %s",
+  "minimap.toggle.on": "ON",
+  "minimap.toggle.off": "OFF",
+  "minimap.button.close": "Close",
+  "minimap.button.settings": "Settings",
+  "minimap.label.you": "Me",
+  "minimap.label.personal": "Personal",
+  "minimap.label.personal_marker": "Personal marker"
+}

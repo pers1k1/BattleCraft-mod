@@ -1,0 +1,23 @@
+{
+  "killreward.prefix": "[KillReward] ",
+  "killreward.error.player_only": "This command can only be used by a player",
+  "killreward.error.no_held_item": "You must hold an item in your hand",
+  "killreward.reward_received": "You received %sx %s for a kill!",
+  "killreward.mod_enabled": "KillReward mod enabled",
+  "killreward.mod_disabled": "KillReward mod disabled",
+  "killreward.reward_item_set": "Reward item set: %s",
+  "killreward.reward_amount_set": "Reward amount set: %s",
+  "killreward.teamkills_set": "Team kill reward: %s",
+  "killreward.enabled": "Enabled",
+  "killreward.disabled": "Disabled",
+  "killreward.last_reward": "Your last reward: %s",
+  "killreward.no_rewards": "You have not received any rewards this session.",
+  "killreward.players_only": "This command is only for players.",
+  "killreward.info_header": "=== KillReward Settings ===",
+  "killreward.info_status": "Status: ",
+  "killreward.info_item": "Item: ",
+  "killreward.info_amount": "Amount: ",
+  "killreward.info_teamkills": "Team kills: ",
+  "killreward.yes": "Yes",
+  "killreward.no": "No"
+}

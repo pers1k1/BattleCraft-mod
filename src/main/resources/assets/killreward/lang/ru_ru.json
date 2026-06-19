@@ -1,0 +1,23 @@
+{
+  "killreward.prefix": "[KillReward] ",
+  "killreward.error.player_only": "Эту команду может использовать только игрок",
+  "killreward.error.no_held_item": "Вы должны держать предмет в руке",
+  "killreward.reward_received": "Вы получили %sx %s за убийство!",
+  "killreward.mod_enabled": "Мод KillReward включен",
+  "killreward.mod_disabled": "Мод KillReward выключен",
+  "killreward.reward_item_set": "Предмет награды установлен: %s",
+  "killreward.reward_amount_set": "Количество награды установлено: %s",
+  "killreward.teamkills_set": "Награда за убийство союзников: %s",
+  "killreward.enabled": "Включена",
+  "killreward.disabled": "Выключена",
+  "killreward.last_reward": "Ваша последняя награда: %s",
+  "killreward.no_rewards": "Вы еще не получали наград в этой сессии.",
+  "killreward.players_only": "Эта команда только для игроков.",
+  "killreward.info_header": "=== Настройки KillReward ===",
+  "killreward.info_status": "Статус: ",
+  "killreward.info_item": "Предмет: ",
+  "killreward.info_amount": "Количество: ",
+  "killreward.info_teamkills": "Награда за союзников: ",
+  "killreward.yes": "Да",
+  "killreward.no": "Нет"
+}

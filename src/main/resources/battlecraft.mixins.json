@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.persiki84.battlecraft.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "battlecraft.refmap.json",
+  "mixins": [
+    "SculkShriekerMixin",
+    "ServerLevelSoundMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "category.minimap": "Мини-карта",
+  "key.minimap.open_map": "Открыть карту",
+  "minimap.settings.title": "Настройки миникарты",
+  "minimap.settings.minimap": "Миникарта: %s",
+  "minimap.settings.other_markers": "Другие метки: %s",
+  "minimap.settings.size": "Размер миникарты: %s",
+  "minimap.settings.zoom": "Приближение: %s",
+  "minimap.toggle.on": "ВКЛ",
+  "minimap.toggle.off": "ВЫКЛ",
+  "minimap.button.close": "Закрыть",
+  "minimap.button.settings": "Настройки",
+  "minimap.label.you": "Я",
+  "minimap.label.personal": "Личная",
+  "minimap.label.personal_marker": "Личная метка"
+}

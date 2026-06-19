@@ -1,0 +1,18 @@
+{
+  "combattimer.prefix": "[CombatTimer] ",
+  "combattimer.error.player_only": "Эту команду может использовать только игрок",
+  "combattimer.error.no_held_item": "Вы должны держать предмет в руке",
+  "combattimer.command.settime": "Время Combat Tag установлено на %s секунд.",
+  "combattimer.command.killlogout": "Смерть при выходе в бою: %s",
+  "combattimer.command.killlogout.enabled": "ВКЛЮЧЕНА",
+  "combattimer.command.killlogout.disabled": "ВЫКЛЮЧЕНА",
+  "combattimer.command.info.header": "=== CombatTimer Info ===",
+  "combattimer.command.info.duration": "Время боя: %s сек.",
+  "combattimer.command.info.kill": "Наказание за выход: %s",
+  "combattimer.command.info.kill.enabled": "ВКЛ",
+  "combattimer.command.info.kill.disabled": "ВЫКЛ",
+  "combattimer.boss.enter": "БОЙ! НЕ ВЫХОДИ!",
+  "combattimer.boss.timer": "БОЙ: %s сек",
+  "combattimer.logout.killed": "Игрок %s вышел в бою и умер!",
+  "combattimer.logout.warning": "Игрок %s вышел в бою (наказание отключено)."
+}

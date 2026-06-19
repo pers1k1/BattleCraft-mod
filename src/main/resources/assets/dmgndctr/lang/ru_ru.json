@@ -1,0 +1,8 @@
+{
+  "dmgndctr.prefix": "[DMGndctr] ",
+  "dmgndctr.error.player_only": "Эту команду может использовать только игрок",
+  "dmgndctr.error.no_held_item": "Вы должны держать предмет в руке",
+  "dmgndctr.name": "Индикатор урона",
+  "dmgndctr.desc": "Показывает всплывающие числа урона над существами. Критический урон выделен золотым.",
+  "dmgndctr.cmd.usage": "Использование: /dmgndctr"
+}

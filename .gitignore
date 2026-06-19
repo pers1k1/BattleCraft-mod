@@ -1,0 +1,12 @@
+.gradle/
+build/
+bin/
+out/
+.idea/
+*.iml
+*.iws
+*.ipr
+run/
+run-data/
+GEMINI.md
+.claude/
