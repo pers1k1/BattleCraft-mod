@@ -46,3 +46,11 @@ cd project/megamod
 ```
 
 The output JAR will be located under `build/libs/`.
+
+## License and attribution
+
+Released under the [GNU Affero General Public License v3.0](LICENSE) with the
+attribution terms in [NOTICE](NOTICE). Any fork or derivative work must publish
+its complete source under the same license and keep a visible credit to the
+author - pers1k1, https://github.com/pers1k1. Closed-source derivatives and
+builds with the attribution stripped out are not permitted.
