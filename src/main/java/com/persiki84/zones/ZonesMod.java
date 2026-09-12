@@ -1,0 +1,184 @@
+package com.persiki84.zones;
+
+import com.persiki84.zones.client.ClientMarkData;
+import com.persiki84.zones.client.ClientModifierData;
+import com.persiki84.zones.client.ClientShopData;
+import com.persiki84.zones.client.ClientZoneData;
+import com.persiki84.zones.client.menu.VehiclePreview;
+import com.persiki84.zones.network.PacketHandler;
+import com.persiki84.zones.network.ZoneRemovePacket;
+import com.persiki84.itemmodifiers.ModifierConfig;
+import com.persiki84.zones.network.ModifierSyncPacket;
+import com.persiki84.zones.network.ShopSyncPacket;
+import com.persiki84.zones.mark.MapMark;
+import com.persiki84.zones.mark.MarkMenuState;
+import com.persiki84.zones.mark.MarkRegistry;
+import com.persiki84.zones.network.MarkSyncAllPacket;
+import com.persiki84.zones.network.ZoneSyncAllPacket;
+import com.persiki84.zones.network.ZoneUpsertPacket;
+import com.persiki84.shared.client.menu.MenuScreens;
+import com.persiki84.shared.menu.MenuStates;
+import com.persiki84.zones.client.menu.MarkManagerScreen;
+import com.persiki84.zones.client.menu.ShopAdminScreen;
+import com.persiki84.zones.client.menu.ZoneManagerScreen;
+import com.persiki84.zones.shop.ShopCatalog;
+import net.minecraft.nbt.CompoundTag;
+
+import java.util.ArrayList;
+import java.util.List;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.scores.Team;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.server.ServerLifecycleHooks;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.network.PacketDistributor;
+
+@Mod(ZonesMod.MOD_ID)
+public class ZonesMod {
+    public static final String MOD_ID = "zones";
+    public static final String ZONES_MENU_ID = "zones";
+
+    private static final int RESTOCK_INTERVAL_TICKS = 20;
+
+    private int restockTicks;
+
+    public ZonesMod() {
+        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+        modEventBus.addListener(this::commonSetup);
+        modEventBus.addListener(this::clientSetup);
+        MinecraftForge.EVENT_BUS.register(this);
+    }
+
+    private void commonSetup(final FMLCommonSetupEvent event) {
+        PacketHandler.register();
+        MenuStates.register(ZONES_MENU_ID, 2, player -> new CompoundTag());
+        MarkMenuState.register();
+    }
+
+    private void clientSetup(final FMLClientSetupEvent event) {
+        MenuScreens.register(ZONES_MENU_ID, ZoneManagerScreen::new);
+        MenuScreens.register(ShopAdminScreen.MENU_ID, ShopAdminScreen::new);
+        MenuScreens.register(MarkMenuState.MENU_ID, MarkManagerScreen::new);
+    }
+
+    @SubscribeEvent
+    public void onServerStarted(ServerStartedEvent event) {
+        ZoneRegistry.bind(event.getServer().overworld());
+        MarkRegistry.bind(event.getServer().overworld());
+        ShopCatalog.bind(event.getServer().overworld());
+        syncEveryone(event.getServer());
+        syncShopToEveryone(event.getServer());
+    }
+
+    @SubscribeEvent
+    public void onServerStopping(ServerStoppingEvent event) {
+        ZoneRegistry.persist();
+        ZoneRegistry.unbind();
+        MarkRegistry.persist();
+        MarkRegistry.unbind();
+        ShopCatalog.persist();
+        ShopCatalog.unbind();
+    }
+
+    @SubscribeEvent
+    public void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+
+        restockTicks++;
+        if (restockTicks < RESTOCK_INTERVAL_TICKS) return;
+        restockTicks = 0;
+
+        if (!ShopCatalog.restockDue(System.currentTimeMillis())) return;
+        ShopCatalog.persist();
+        syncShopToEveryone(ServerLifecycleHooks.getCurrentServer());
+    }
+
+    @SubscribeEvent
+    public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            syncTo(player);
+        }
+    }
+
+    @SubscribeEvent
+    public void onPlayerChangeDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            syncTo(player);
+        }
+    }
+
+    public static void syncTo(ServerPlayer player) {
+        PacketHandler.INSTANCE.send(
+                PacketDistributor.PLAYER.with(() -> player),
+                new ZoneSyncAllPacket(ZoneRegistry.all()));
+        syncShopTo(player);
+        PacketHandler.INSTANCE.send(
+                PacketDistributor.PLAYER.with(() -> player),
+                new ModifierSyncPacket(ModifierConfig.getPotionEffects(), ModifierConfig.getAttributes()));
+        syncMarksTo(player);
+    }
+
+    public static void syncMarksTo(ServerPlayer player) {
+        List<MapMark> visible = new ArrayList<>();
+        for (MapMark mark : MarkRegistry.all()) {
+            if (mark.visibleTo(player.getTeam())) visible.add(mark);
+        }
+        PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), new MarkSyncAllPacket(visible));
+    }
+
+    public static void syncMarksToEveryone(MinecraftServer server) {
+        if (server == null) return;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            syncMarksTo(player);
+        }
+    }
+
+    // WHY: каталог у каждого свой, потому что отделы и товары ограничиваются командами;
+    // WHY: оператору уходит полный, иначе ему нечего было бы править в админском экране
+    public static void syncShopTo(ServerPlayer player) {
+        Team team = player.getTeam();
+        PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player),
+                new ShopSyncPacket(ShopCatalog.sections(),
+                        team == null ? null : team.getName(), player.hasPermissions(2)));
+    }
+
+    public static void syncShopToEveryone(MinecraftServer server) {
+        if (server == null) return;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            syncShopTo(player);
+        }
+    }
+
+    public static void syncEveryone(MinecraftServer server) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            syncTo(player);
+        }
+    }
+
+    public static void broadcastUpsert(Zone zone) {
+        PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(), new ZoneUpsertPacket(zone));
+    }
+
+    public static void broadcastRemoval(String zoneId) {
+        PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(), new ZoneRemovePacket(zoneId));
+    }
+
+    public static void clearClientState() {
+        ClientZoneData.clear();
+        ClientMarkData.clear();
+        ClientShopData.clear();
+        ClientModifierData.clear();
+        VehiclePreview.forget();
+    }
+
+}

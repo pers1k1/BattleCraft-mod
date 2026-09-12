@@ -1,0 +1,200 @@
+{
+    "blend": {
+        "func": "add",
+        "srcrgb": "srcalpha",
+        "dstrgb": "1-srcalpha"
+    },
+    "vertex": "battlecraft:ui_pane",
+    "fragment": "battlecraft:ui_pane",
+    "attributes": [
+        "Position",
+        "UV0",
+        "Color"
+    ],
+    "samplers": [
+        {
+            "name": "Sampler0"
+        }
+    ],
+    "uniforms": [
+        {
+            "name": "ModelViewMat",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "ProjMat",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "ColorModulator",
+            "type": "float",
+            "count": 4,
+            "values": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "name": "ScreenSize",
+            "type": "float",
+            "count": 2,
+            "values": [
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "name": "PaneTop",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "PaneBottom",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "PaneShape",
+            "type": "float",
+            "count": 4,
+            "values": [
+                1.0,
+                1.0,
+                6.5,
+                0.5
+            ]
+        },
+        {
+            "name": "PaneLens",
+            "type": "float",
+            "count": 4,
+            "values": [
+                13.0,
+                4.6,
+                0.022,
+                0.0
+            ]
+        },
+        {
+            "name": "PaneEdge",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "PaneGrade",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.35,
+                1.0,
+                1.0,
+                0.0
+            ]
+        },
+        {
+            "name": "PaneFlow",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.35,
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "PaneBend",
+            "type": "float",
+            "count": 4,
+            "values": [
+                -1.0,
+                3.5,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "PaneCentre",
+            "type": "float",
+            "count": 2,
+            "values": [
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "PaneWarp",
+            "type": "matrix3x3",
+            "count": 9,
+            "values": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        }
+    ]
+}

@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.persiki84.battlecraft.mixin.extrasounds",
+  "plugin": "com.persiki84.battlecraft.compat.extrasounds.ExtraSoundsPlugin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "battlecraft.refmap.json",
+  "client": [
+    "ExtraSoundsManagerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

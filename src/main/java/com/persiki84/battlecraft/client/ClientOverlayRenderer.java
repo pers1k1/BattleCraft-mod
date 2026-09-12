@@ -1,224 +1,356 @@
 package com.persiki84.battlecraft.client;
 
 import com.persiki84.battlecraft.BattleCraftManager;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.*;
-import net.minecraft.ChatFormatting;
+import com.persiki84.battlecraft.client.custom.HudBox;
+import com.persiki84.battlecraft.client.custom.HudLayout;
+import com.persiki84.battlecraft.client.custom.HudSlot;
+import com.persiki84.battlecraft.client.hud.HudInk;
+import com.persiki84.shared.client.ui.KeyLabel;
+import com.persiki84.shared.client.ui.Smooth;
+import com.persiki84.shared.client.ui.Toggle;
+import com.persiki84.shared.client.ui.UiAnim;
+import com.persiki84.shared.client.ui.UiFrame;
+import com.persiki84.shared.client.ui.UiGlass;
+import com.persiki84.shared.client.ui.UiMetrics;
+import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiScale;
+import com.persiki84.shared.client.ui.UiAccent;
+import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiVital;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
 import net.minecraftforge.client.gui.overlay.IGuiOverlay;
-import org.joml.Matrix4f;
 
 public class ClientOverlayRenderer {
-    private static final float RADIUS = 8.0f;
-    private static float overlayAlpha = 0.0f;
-    private static float voteOffset = 0.0f;
-    private static float animatedFillWidth = -1f;
-    private static long lastTime = 0;
+    private static final float VOTE_TRAVEL = 40.0f;
+    private static final float LOBBY_TRAVEL = 7.0f;
+    private static final float LOBBY_BAR_WIDTH = 150.0f;
+    private static final float LOBBY_BAR_HEIGHT = 2.5f;
+    private static final float LOBBY_PADDING = 8.0f;
+    private static final float LOBBY_TEXT_BLOCK = 10.0f;
+    private static final float LOBBY_BAR_BLOCK = 4.0f;
+    private static final float LOBBY_BEAT_LIFT = 0.35f;
+    private static final int LOBBY_URGENT_FROM = 5;
+    private static final float MISSING_TRAVEL = 4.0f;
+
+    private static final Toggle warningToggle = new Toggle(4.0f, 200L);
+    private static final Toggle voteToggle = new Toggle(5.0f, 150L);
+    private static final Toggle lobbyToggle = new Toggle(9.0f, 120L);
+    private static final Toggle missingToggle = new Toggle(7.0f, 150L);
+    private static final Smooth lobbyFill = new Smooth(12.0f);
+    private static final Smooth lobbyWidth = new Smooth(14.0f);
+    private static final Smooth lobbyHeight = new Smooth(14.0f);
+    private static final Smooth lobbyBar = new Smooth(9.0f);
+    private static final Smooth lobbyBeat = new Smooth(0.0f, 5.5f);
+
+    private static int heldVoteRemaining;
+    private static int heldVoteYes;
+    private static int heldVoteRequired;
+    private static String heldVoteTeam = "";
+    private static float heldVoteProgress;
+
+    private static final int SAMPLE_SECONDS = 15;
+    private static final int SAMPLE_YES = 3;
+    private static final int SAMPLE_REQUIRED = 5;
+    private static final String SAMPLE_TEAM = "RED";
+
+    private static int heldSeconds;
+    private static float heldProgress;
+    private static String heldMissing = "";
+    private static boolean missingLive;
+    private static boolean heldGrace;
 
     public static final IGuiOverlay HUD_OVERLAY = (gui, guiGraphics, partialTick, screenWidth, screenHeight) -> {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) return;
+        if (mc.player == null || mc.options.hideGui) return;
 
-        long now = System.currentTimeMillis();
-        float delta = lastTime == 0 ? 0 : (now - lastTime) / 1000f;
-        lastTime = now;
-        if (delta > 0.1f) delta = 0.1f;
-
-        boolean needsTeam = mc.player.getTeam() == null && !ClientGameData.isSoftDisabled() && ClientGameData.getCurrentPhase() == BattleCraftManager.GamePhase.LOBBY;
-        boolean needsReady = mc.player.getTeam() != null && !ClientGameData.isReady() && !ClientGameData.isSoftDisabled() && ClientGameData.getCurrentPhase() == BattleCraftManager.GamePhase.LOBBY;
-
-        float targetAlpha = (needsTeam || needsReady) ? 1.0f : 0.0f;
-        overlayAlpha = lerp(overlayAlpha, targetAlpha, 2.0f, delta);
-
-        if (overlayAlpha > 0.01f) {
-            renderWarning(guiGraphics, mc, screenWidth, overlayAlpha, needsTeam);
-        }
-
-        if (ClientGameData.hasActiveVote()) {
-            voteOffset = lerp(voteOffset, 1.0f, 2.0f, delta);
-        } else {
-            voteOffset = lerp(voteOffset, 0.0f, 2.0f, delta);
-        }
-
-        if (voteOffset > 0.01f) {
-            renderVoteOverlay(guiGraphics, mc, screenWidth, screenHeight, voteOffset);
-        }
-
-        if (ClientGameData.getCurrentPhase() == BattleCraftManager.GamePhase.LOBBY) {
-            float timer = ClientGameData.getInterpolatedLobbyTimer();
-            int maxTimer = ClientGameData.getLobbyMaxTimer();
-            if (timer > 0) {
-                renderLobbyOverlay(guiGraphics, mc, screenWidth, timer, maxTimer, ClientGameData.getMissingPlayers());
-            }
+        float scale = UiScale.push(guiGraphics);
+        try {
+            render(guiGraphics, mc, screenWidth / scale, screenHeight / scale);
+        } finally {
+            UiScale.pop(guiGraphics);
         }
     };
 
-    private static void renderLobbyOverlay(GuiGraphics guiGraphics, Minecraft mc, int screenWidth, float timer, int maxTimer, String missing) {
-        int secs = (int) Math.ceil(timer / 20f);
-        Component text = Component.translatable("battlecraft.lobby.countdown", secs).withStyle(ChatFormatting.YELLOW, ChatFormatting.BOLD);
-        int textWidth = mc.font.width(text);
-        
-        float progressWidth = 180f;
-        float progressHeight = 6f;
-        float x = (screenWidth - progressWidth) / 2f;
-        float y = 20f;
-        
-        float progress = maxTimer > 0 ? Math.min(1.0f, Math.max(0.0f, timer / (float)maxTimer)) : 0f;
-        float targetFillWidth = progressWidth * progress;
-        
-        float delta = mc.getDeltaFrameTime() * 0.05f;
-        if (delta > 0.1f) delta = 0.1f;
-        if (animatedFillWidth < 0 || Math.abs(animatedFillWidth - targetFillWidth) > progressWidth / 2f) {
-            animatedFillWidth = targetFillWidth;
-        }
-        animatedFillWidth = lerp(animatedFillWidth, targetFillWidth, 10f, delta);
-        
-        float textX = (screenWidth - textWidth) / 2f;
-        guiGraphics.drawString(mc.font, text, (int)textX, (int)y, 0xFFFFFF, true);
-        
-        y += mc.font.lineHeight + 4f;
-        
-        fillRoundedRect(guiGraphics, x, y, progressWidth, progressHeight, progressHeight / 2f, 0x88000000);
-        
-        if (animatedFillWidth > progressHeight) {
-            fillRoundedRect(guiGraphics, x, y, animatedFillWidth, progressHeight, progressHeight / 2f, 0xFFFFAA00);
+    private static void render(GuiGraphics guiGraphics, Minecraft mc, float screenWidth, float screenHeight) {
+        float delta = UiFrame.delta();
+
+        boolean lobby = !ClientGameData.isSoftDisabled() && ClientGameData.getCurrentPhase() == BattleCraftManager.GamePhase.LOBBY;
+        boolean needsTeam = lobby && mc.player.getTeam() == null;
+        boolean needsReady = lobby && mc.player.getTeam() != null && !ClientGameData.isReady();
+
+        float alpha = warningToggle.update(needsTeam || needsReady, delta);
+        if (alpha > 0.01f && HudLayout.visible(HudSlot.WARNING)) {
+            renderWarning(guiGraphics, mc, screenWidth, screenHeight, alpha, needsTeam);
         }
 
-        if (missing != null && !missing.isEmpty()) {
-            Component missingText = Component.translatable("battlecraft.overlay.waiting", missing).withStyle(ChatFormatting.GRAY);
-            int mw = mc.font.width(missingText);
-            int mwidth = mw + 16;
-            int mheight = mc.font.lineHeight + 8;
-            float mx = (screenWidth - mwidth) / 2f;
-            float my = y + progressHeight + 6f;
-            fillRoundedRect(guiGraphics, mx, my, mwidth, mheight, RADIUS, 0xAA1E1E1E);
-            guiGraphics.drawString(mc.font, missingText, (int)(mx + 8), (int)(my + 4), 0xFFFFFF, false);
+        float slide = voteToggle.update(ClientGameData.hasActiveVote(), delta);
+        if (slide > 0.01f && HudLayout.visible(HudSlot.VOTE)) {
+            renderVote(guiGraphics, mc, screenWidth, screenHeight, slide);
+        }
+
+        float countdown = lobbyToggle.update(lobbyWanted(), delta);
+        trackLobby();
+        if (countdown > 0.01f) {
+            renderLobby(guiGraphics, mc, screenWidth, screenHeight, countdown, delta);
         }
     }
 
-    private static void renderWarning(GuiGraphics guiGraphics, Minecraft mc, int screenWidth, float alpha, boolean needsTeam) {
-        if (alpha < 0.05f) return;
-        Component text = needsTeam 
-            ? Component.translatable("battlecraft.warning.select_team").withStyle(ChatFormatting.RED, ChatFormatting.BOLD)
-            : Component.translatable("battlecraft.warning.not_ready").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD);
-        int textWidth = mc.font.width(text);
-        int padX = 12;
-        int padY = 6;
-        int width = textWidth + padX * 2;
-        int height = mc.font.lineHeight + padY * 2;
-        float x = (screenWidth - width) / 2f;
-        float y = 15f;
-
-        int color = ((int)(alpha * 180) << 24) | 0x1E1E1E;
-        fillRoundedRect(guiGraphics, x, y, width, height, RADIUS, color);
-
-        int baseColor = needsTeam ? 0xFF5555 : 0xFFAA00;
-        int textColor = ((int)(alpha * 255) << 24) | baseColor;
-        guiGraphics.drawString(mc.font, text, (int)(x + padX), (int)(y + padY), textColor, false);
+    private static boolean lobbyWanted() {
+        if (ClientGameData.getCurrentPhase() != BattleCraftManager.GamePhase.LOBBY) return false;
+        if (!HudLayout.visible(HudSlot.LOBBY)) return false;
+        return ClientGameData.getInterpolatedLobbyTimer() > 0 || ClientGameData.getGraceSeconds() > 0;
     }
 
-    private static void renderVoteOverlay(GuiGraphics guiGraphics, Minecraft mc, int screenWidth, int screenHeight, float animOffset) {
-        if (animOffset < 0.05f) return;
-        long remainingMs = ClientGameData.getVoteEndTime() - System.currentTimeMillis();
-        int remainingSecs = Math.max(0, (int)(remainingMs / 1000));
-
-        Component header = Component.translatable("battlecraft.vote.overlay.header", ClientGameData.getVoteTeam()).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD);
-        Component details = Component.translatable("battlecraft.vote.overlay.details", ClientGameData.getYesCount(), ClientGameData.getTotalRequired(), remainingSecs).withStyle(ChatFormatting.WHITE);
-        Component keys = Component.translatable("battlecraft.vote.overlay.keys").withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC);
-
-        int w1 = mc.font.width(header);
-        int w2 = mc.font.width(details);
-        int w3 = mc.font.width(keys);
-        int width = Math.max(w1, Math.max(w2, w3)) + 24;
-        int height = mc.font.lineHeight * 3 + 18;
-
-        float targetX = screenWidth - width - 15f;
-        float startX = screenWidth + 10f;
-        float x = startX + (targetX - startX) * animOffset;
-        float y = (screenHeight - height) / 2f;
-
-        fillRoundedRect(guiGraphics, x, y, width, height, RADIUS, 0xAA1E1E1E);
-
-        guiGraphics.drawString(mc.font, header, (int)(x + 12), (int)(y + 8), 0xFFFFFF, true);
-        guiGraphics.drawString(mc.font, details, (int)(x + 12), (int)(y + 8 + mc.font.lineHeight + 4), 0xFFFFFF, true);
-        guiGraphics.drawString(mc.font, keys, (int)(x + 12), (int)(y + 8 + (mc.font.lineHeight + 4) * 2), 0xFFFFFF, true);
-    }
-
-    private static float lerp(float current, float target, float speed, float delta) {
-        float diff = target - current;
-        if (Math.abs(diff) < 0.005f) {
-            return target;
+    private static void trackLobby() {
+        if (lobbyToggle.cleared()) {
+            heldSeconds = 0;
+            heldProgress = 0.0f;
+            heldMissing = "";
+            missingLive = false;
+            heldGrace = false;
+            lobbyFill.snap(0.0f);
+            return;
         }
-        float factor = speed * delta;
-        if (factor > 1.0f) factor = 1.0f;
-        return current + diff * factor;
+        if (!lobbyToggle.live()) return;
+
+        float timer = ClientGameData.getInterpolatedLobbyTimer();
+        int maxTimer = ClientGameData.getLobbyMaxTimer();
+        heldGrace = timer <= 0.0f;
+        heldProgress = !heldGrace && maxTimer > 0 ? UiAnim.clamp01(timer / maxTimer) : heldProgress;
+        trackMissing(heldGrace ? "" : ClientGameData.getMissingPlayers());
+        trackSeconds(heldGrace ? ClientGameData.getGraceSeconds() : (int) Math.ceil(timer / 20.0f));
     }
 
-    private static void fillRoundedRect(GuiGraphics graphics, float x, float y, float width, float height, float radius, int color) {
-        float a = (float)(color >> 24 & 255) / 255.0F;
-        float r = (float)(color >> 16 & 255) / 255.0F;
-        float g = (float)(color >> 8 & 255) / 255.0F;
-        float b = (float)(color & 255) / 255.0F;
-
-        Matrix4f matrix = graphics.pose().last().pose();
-
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        RenderSystem.disableCull();
-
-        Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder builder = tesselator.getBuilder();
-        builder.begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-
-        addRect(builder, matrix, x + radius, y, width - radius * 2, height, r, g, b, a);
-        addRect(builder, matrix, x, y + radius, radius, height - radius * 2, r, g, b, a);
-        addRect(builder, matrix, x + width - radius, y + radius, radius, height - radius * 2, r, g, b, a);
-
-        addCorner(builder, matrix, x + radius, y + radius, radius, 180, 270, r, g, b, a);
-        addCorner(builder, matrix, x + width - radius, y + radius, radius, 270, 360, r, g, b, a);
-        addCorner(builder, matrix, x + width - radius, y + height - radius, radius, 0, 90, r, g, b, a);
-        addCorner(builder, matrix, x + radius, y + height - radius, radius, 90, 180, r, g, b, a);
-
-        tesselator.end();
-        RenderSystem.enableCull();
-        RenderSystem.disableBlend();
+    private static void trackMissing(String missing) {
+        missingLive = missing != null && !missing.isEmpty();
+        if (missingLive) heldMissing = missing;
     }
 
-    private static void addRect(BufferBuilder builder, Matrix4f matrix, float x, float y, float width, float height, float r, float g, float b, float a) {
-        builder.vertex(matrix, x, y + height, 0).color(r, g, b, a).endVertex();
-        builder.vertex(matrix, x + width, y + height, 0).color(r, g, b, a).endVertex();
-        builder.vertex(matrix, x + width, y, 0).color(r, g, b, a).endVertex();
-
-        builder.vertex(matrix, x, y + height, 0).color(r, g, b, a).endVertex();
-        builder.vertex(matrix, x + width, y, 0).color(r, g, b, a).endVertex();
-        builder.vertex(matrix, x, y, 0).color(r, g, b, a).endVertex();
+    private static void trackSeconds(int seconds) {
+        if (seconds != heldSeconds) lobbyBeat.snap(1.0f);
+        heldSeconds = seconds;
     }
 
-    private static void addCorner(BufferBuilder builder, Matrix4f matrix, float cx, float cy, float radius, int startAngle, int endAngle, float r, float g, float b, float a) {
-        int segments = 16;
-        float angleStep = (endAngle - startAngle) / (float) segments;
-        float n = 3.0f;
-        for (int i = 0; i < segments; i++) {
-            float theta1 = (float) Math.toRadians(startAngle + i * angleStep);
-            float theta2 = (float) Math.toRadians(startAngle + (i + 1) * angleStep);
+    private static Component warningText(boolean needsTeam) {
+        if (!needsTeam) return Component.translatable("battlecraft.warning.not_ready");
 
-            float cos1 = (float) Math.cos(theta1);
-            float sin1 = (float) Math.sin(theta1);
-            float cos2 = (float) Math.cos(theta2);
-            float sin2 = (float) Math.sin(theta2);
+        int autoAssign = ClientGameData.getAutoAssignSeconds();
+        return autoAssign > 0
+                ? Component.translatable("battlecraft.warning.select_team_timed", autoAssign)
+                : Component.translatable("battlecraft.warning.select_team");
+    }
 
-            float x1 = cx + radius * (float) (Math.signum(cos1) * Math.pow(Math.abs(cos1), 2.0 / n));
-            float y1 = cy + radius * (float) (Math.signum(sin1) * Math.pow(Math.abs(sin1), 2.0 / n));
-            float x2 = cx + radius * (float) (Math.signum(cos2) * Math.pow(Math.abs(cos2), 2.0 / n));
-            float y2 = cy + radius * (float) (Math.signum(sin2) * Math.pow(Math.abs(sin2), 2.0 / n));
+    private static void renderWarning(GuiGraphics graphics, Minecraft mc, float screenWidth, float screenHeight,
+                                      float alpha, boolean needsTeam) {
+        Component text = warningText(needsTeam);
+        float width = UiRender.measure(graphics, mc.font, text, 1.0f) + 20.0f;
+        float height = mc.font.lineHeight + 11.0f;
+        HudBox box = HudLayout.place(HudSlot.WARNING, width, height, screenWidth, screenHeight);
+        float x = box.x();
+        float y = box.y() - (1.0f - UiAnim.easeOut(alpha)) * 6.0f;
+        float shown = alpha * box.alpha();
 
-            builder.vertex(matrix, cx, cy, 0).color(r, g, b, a).endVertex();
-            builder.vertex(matrix, x2, y2, 0).color(r, g, b, a).endVertex();
-            builder.vertex(matrix, x1, y1, 0).color(r, g, b, a).endVertex();
+        float pulse = UiAnim.pulse(1600.0f, 0.55f, 1.0f);
+        HudLayout.push(graphics, box);
+        try {
+            UiVital.card(graphics, x, y, width, height, UiMetrics.radius(height), shown, pulse * 0.5f);
+            UiRender.textCentered(graphics, mc.font, text, x + width / 2.0f, UiRender.centerY(y, height, 1.0f), 1.0f,
+                    UiTheme.alpha(HudLayout.tint(HudSlot.WARNING, HudInk.text()), shown), false);
+        } finally {
+            HudLayout.pop(graphics, box);
         }
+    }
+
+    private static void renderLobby(GuiGraphics graphics, Minecraft mc, float screenWidth, float screenHeight,
+                                    float alpha, float delta) {
+        Component text = lobbyText();
+        float bar = lobbyBar.to(heldGrace ? 0.0f : 1.0f, delta);
+        float width = lobbyWidth.to(lobbyWidth(graphics, mc, text, bar), delta);
+        float height = lobbyHeight.to(mc.font.lineHeight + LOBBY_TEXT_BLOCK + 1.0f + LOBBY_BAR_BLOCK * bar, delta);
+
+        HudBox box = HudLayout.place(HudSlot.LOBBY, width, height, screenWidth, screenHeight);
+        float y = box.y() - (1.0f - UiAnim.easeOut(alpha)) * LOBBY_TRAVEL;
+        float shown = alpha * box.alpha();
+        float beat = lobbyBeat.to(0.0f, delta);
+
+        HudLayout.push(graphics, box);
+        try {
+            UiVital.card(graphics, box.x(), y, width, height, UiMetrics.radius(height), shown, lobbyLift(beat));
+            UiRender.textCentered(graphics, mc.font, text, box.centerX(),
+                    UiRender.centerY(y, mc.font.lineHeight + LOBBY_TEXT_BLOCK, 1.0f), 1.0f,
+                    UiTheme.alpha(HudLayout.tint(HudSlot.LOBBY, lobbyTextColor(bar)), shown), false);
+            renderLobbyBar(graphics, mc, box.centerX(), y, shown * bar, delta);
+            renderMissing(graphics, mc, box.centerX(), y + height + 2.0f, shown, delta);
+        } finally {
+            HudLayout.pop(graphics, box);
+        }
+    }
+
+    private static Component lobbyText() {
+        return heldGrace
+                ? Component.translatable("battlecraft.lobby.grace", heldSeconds)
+                : Component.translatable("battlecraft.lobby.countdown", heldSeconds);
+    }
+
+    private static int lobbyTextColor(float bar) {
+        return UiTheme.mix(HudInk.textDim(), HudInk.text(), bar);
+    }
+
+    private static float lobbyWidth(GuiGraphics graphics, Minecraft mc, Component text, float bar) {
+        float content = Math.max(LOBBY_BAR_WIDTH * bar, UiRender.measure(graphics, mc.font, text, 1.0f));
+        return content + LOBBY_PADDING * 2.0f;
+    }
+
+    private static float lobbyLift(float beat) {
+        float urgent = !heldGrace && heldSeconds <= LOBBY_URGENT_FROM
+                ? UiAnim.pulse(900.0f, 0.0f, 0.45f)
+                : 0.0f;
+        return Math.max(beat * LOBBY_BEAT_LIFT, urgent);
+    }
+
+    private static void renderLobbyBar(GuiGraphics graphics, Minecraft mc, float centerX, float y, float alpha,
+                                       float delta) {
+        float animated = lobbyFill.to(heldProgress, delta);
+        if (alpha <= 0.01f) return;
+
+        float barX = centerX - LOBBY_BAR_WIDTH / 2.0f;
+        float barY = y + mc.font.lineHeight + LOBBY_TEXT_BLOCK - 3.0f;
+        UiGlass.sunken(graphics, barX, barY, LOBBY_BAR_WIDTH, LOBBY_BAR_HEIGHT, LOBBY_BAR_HEIGHT / 2.0f, alpha);
+        UiGlass.progress(graphics, barX, barY, LOBBY_BAR_WIDTH, LOBBY_BAR_HEIGHT, animated, UiAccent.color(), alpha);
+    }
+
+    private static void renderMissing(GuiGraphics graphics, Minecraft mc, float centerX, float top, float alpha,
+                                      float delta) {
+        float shown = missingToggle.update(missingLive, delta) * alpha;
+        if (shown <= 0.01f || heldMissing.isEmpty()) return;
+
+        Component text = Component.translatable("battlecraft.overlay.waiting", heldMissing);
+        float width = UiRender.measure(graphics, mc.font, text, 0.85f) + 16.0f;
+        float height = mc.font.lineHeight * 0.85f + 8.0f;
+        float y = top + (1.0f - UiAnim.easeOut(shown)) * MISSING_TRAVEL;
+
+        UiVital.card(graphics, centerX - width / 2.0f, y, width, height, shown);
+        UiRender.textCentered(graphics, mc.font, text, centerX, UiRender.centerY(y, height, 0.85f), 0.85f,
+                UiTheme.alpha(HudInk.textDim(), shown), false);
+    }
+
+    private static void trackVote() {
+        if (voteToggle.cleared()) {
+            heldVoteRemaining = 0;
+            heldVoteYes = 0;
+            heldVoteRequired = 0;
+            heldVoteTeam = "";
+            heldVoteProgress = 0.0f;
+        }
+        if (!voteToggle.live()) return;
+
+        heldVoteRemaining = ClientGameData.getVoteRemainingSeconds();
+        heldVoteYes = ClientGameData.getYesCount();
+        heldVoteRequired = ClientGameData.getTotalRequired();
+        heldVoteTeam = ClientGameData.getVoteTeam();
+        heldVoteProgress = heldVoteRequired > 0 ? UiAnim.clamp01(heldVoteYes / (float) heldVoteRequired) : 0.0f;
+    }
+
+    public static void previewWarning(GuiGraphics graphics, HudBox box, float alpha) {
+        Minecraft mc = Minecraft.getInstance();
+        Component text = warningText(true);
+        float width = UiRender.measure(graphics, mc.font, text, 1.0f) + 20.0f;
+        float height = mc.font.lineHeight + 11.0f;
+
+        HudLayout.sample(HudSlot.WARNING, width, height);
+        UiVital.card(graphics, box.x(), box.y(), width, height, UiMetrics.radius(height), alpha,
+                UiAnim.pulse(1600.0f, 0.55f, 1.0f) * 0.5f);
+        UiRender.textCentered(graphics, mc.font, text, box.x() + width / 2.0f,
+                UiRender.centerY(box.y(), height, 1.0f), 1.0f,
+                UiTheme.alpha(HudLayout.tint(HudSlot.WARNING, HudInk.text()), alpha), false);
+    }
+
+    public static void previewLobby(GuiGraphics graphics, HudBox box, float alpha) {
+        Minecraft mc = Minecraft.getInstance();
+        int seconds = heldSeconds;
+        boolean grace = heldGrace;
+        if (seconds <= 0) {
+            heldSeconds = SAMPLE_SECONDS;
+            heldGrace = false;
+        }
+        try {
+            paintLobbySample(graphics, mc, box, alpha);
+        } finally {
+            heldSeconds = seconds;
+            heldGrace = grace;
+        }
+    }
+
+    private static void paintLobbySample(GuiGraphics graphics, Minecraft mc, HudBox box, float alpha) {
+        Component text = lobbyText();
+        float width = lobbyWidth(graphics, mc, text, 1.0f);
+        float height = mc.font.lineHeight + LOBBY_TEXT_BLOCK + 1.0f + LOBBY_BAR_BLOCK;
+
+        HudLayout.sample(HudSlot.LOBBY, width, height);
+        UiVital.card(graphics, box.x(), box.y(), width, height, UiMetrics.radius(height), alpha);
+        UiRender.textCentered(graphics, mc.font, text, box.x() + width / 2.0f,
+                UiRender.centerY(box.y(), mc.font.lineHeight + LOBBY_TEXT_BLOCK, 1.0f), 1.0f,
+                UiTheme.alpha(HudLayout.tint(HudSlot.LOBBY, lobbyTextColor(1.0f)), alpha), false);
+        renderLobbyBar(graphics, mc, box.x() + width / 2.0f, box.y(), alpha, UiFrame.delta());
+    }
+
+    public static void previewVote(GuiGraphics graphics, HudBox box, float alpha) {
+        Minecraft mc = Minecraft.getInstance();
+        Component header = Component.translatable("battlecraft.vote.overlay.header", SAMPLE_TEAM);
+        Component details = Component.translatable("battlecraft.vote.overlay.details",
+                SAMPLE_YES, SAMPLE_REQUIRED, SAMPLE_SECONDS);
+        Component keys = Component.translatable("battlecraft.vote.overlay.keys",
+                KeyLabel.of(KeyInputHandler.VOTE_YES), KeyLabel.of(KeyInputHandler.VOTE_NO));
+
+        float width = Math.max(UiRender.measure(graphics, mc.font, header, 1.0f),
+                Math.max(UiRender.measure(graphics, mc.font, details, 1.0f),
+                        UiRender.measure(graphics, mc.font, keys, 1.0f))) + 24.0f;
+        float height = mc.font.lineHeight * 3 + 24.0f;
+        HudLayout.sample(HudSlot.VOTE, width, height);
+        drawVote(graphics, mc, box.x(), box.y(), width, height, alpha, header, details, keys);
+    }
+
+    private static void renderVote(GuiGraphics graphics, Minecraft mc, float screenWidth, float screenHeight, float slide) {
+        trackVote();
+
+        Component header = Component.translatable("battlecraft.vote.overlay.header", heldVoteTeam);
+        Component details = Component.translatable("battlecraft.vote.overlay.details",
+                heldVoteYes, heldVoteRequired, heldVoteRemaining);
+        Component keys = Component.translatable("battlecraft.vote.overlay.keys",
+                KeyLabel.of(KeyInputHandler.VOTE_YES), KeyLabel.of(KeyInputHandler.VOTE_NO));
+
+        float width = Math.max(UiRender.measure(graphics, mc.font, header, 1.0f),
+                Math.max(UiRender.measure(graphics, mc.font, details, 1.0f),
+                        UiRender.measure(graphics, mc.font, keys, 1.0f))) + 24.0f;
+        float height = mc.font.lineHeight * 3 + 24.0f;
+
+        HudBox box = HudLayout.place(HudSlot.VOTE, width, height, screenWidth, screenHeight);
+        float travel = (1.0f - UiAnim.easeOut(slide)) * HudLayout.slideX(HudSlot.VOTE, VOTE_TRAVEL);
+
+        HudLayout.push(graphics, box);
+        try {
+            drawVote(graphics, mc, box.x() + travel, box.y(), width, height, slide * box.alpha(),
+                    header, details, keys);
+        } finally {
+            HudLayout.pop(graphics, box);
+        }
+    }
+
+    private static void drawVote(GuiGraphics graphics, Minecraft mc, float x, float y, float width, float height,
+                                 float shown, Component header, Component details, Component keys) {
+        UiVital.card(graphics, x, y, width, height, UiMetrics.radius(height), shown);
+
+        UiRender.textScaled(graphics, mc.font, header, x + 12.0f, y + 8.0f, 1.0f,
+                UiTheme.alpha(HudLayout.tint(HudSlot.VOTE, HudInk.text()), shown), false);
+        UiRender.textScaled(graphics, mc.font, details, x + 12.0f, y + 10.0f + mc.font.lineHeight, 1.0f,
+                UiTheme.alpha(HudInk.textDim(), shown), false);
+        UiRender.textScaled(graphics, mc.font, keys, x + 12.0f, y + 12.0f + mc.font.lineHeight * 2, 1.0f,
+                UiTheme.alpha(HudInk.textFaint(), shown), false);
+
+        UiGlass.sunken(graphics, x + 12.0f, y + height - 7.0f, width - 24.0f, 2.5f, 1.25f, shown);
+        UiGlass.progress(graphics, x + 12.0f, y + height - 7.0f, width - 24.0f, 2.5f, heldVoteProgress,
+                UiAccent.color(), shown);
     }
 }

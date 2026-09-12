@@ -4,21 +4,28 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
+import com.persiki84.quarrymod.QuarryMod;
+import com.persiki84.shared.WorldFiles;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.storage.LevelResource;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
 public class QuarryDataManager {
-    private final MinecraftServer server;
+    private static final String FILE_NAME = "quarry_blocks.dat";
+
     private final File dataFile;
     private final QuarryBlockManager blockManager;
 
+    // WHY: файл лежал в папке установки сервера, поэтому все миры делили одни карьерные блоки:
+    // WHY: в соседнем мире по тем же координатам оживали чужие неломаемые блоки
     public QuarryDataManager(MinecraftServer server) {
-        this.server = server;
-        this.dataFile = new File(server.getServerDirectory(), "quarry_blocks.dat");
+        this.dataFile = server.getWorldPath(LevelResource.ROOT).resolve(FILE_NAME).toFile();
         this.blockManager = new QuarryBlockManager();
     }
 
@@ -45,6 +52,12 @@ public class QuarryDataManager {
 
         compound.putLong("globalCooldownTime", blockManager.getGlobalCooldownTime());
 
+        ListTag ruleList = new ListTag();
+        for (QuarryBlockRule rule : blockManager.rules()) {
+            ruleList.add(rule.toNBT());
+        }
+        compound.put("blockRules", ruleList);
+
         ListTag pendingRegenList = new ListTag();
         for (Map.Entry<QuarryBlockKey, Long> entry : blockManager.getPendingRegenerations().entrySet()) {
             CompoundTag regenTag = new CompoundTag();
@@ -57,10 +70,26 @@ public class QuarryDataManager {
         }
         compound.put("pendingRegenerations", pendingRegenList);
 
+        store(compound);
+    }
+
+    // WHY: запись шла прямо в целевой файл, и падение посреди неё оставляло обрубок вместо карьера
+    private void store(CompoundTag compound) {
+        Path target = dataFile.toPath();
+        Path temporary = target.resolveSibling(FILE_NAME + ".tmp");
         try {
-            NbtIo.writeCompressed(compound, dataFile);
-        } catch (IOException e) {
-            e.printStackTrace();
+            NbtIo.writeCompressed(compound, temporary.toFile());
+            WorldFiles.moveIntoPlace(temporary, target);
+        } catch (IOException error) {
+            QuarryMod.LOGGER.warn("[quarry] cannot write {}: {}", FILE_NAME, error.toString());
+            deleteQuietly(temporary);
+        }
+    }
+
+    private static void deleteQuietly(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException ignored) {
         }
     }
 
@@ -101,9 +130,20 @@ public class QuarryDataManager {
             }
 
             blockManager.loadData(blocks, customCooldowns, pendingRegenerations, globalCooldown);
-        } catch (IOException e) {
-            e.printStackTrace();
+            blockManager.loadRules(readRules(compound));
+        } catch (IOException | RuntimeException error) {
+            QuarryMod.LOGGER.warn("[quarry] cannot read {}: {}", FILE_NAME, error.toString());
         }
+    }
+
+    private static java.util.List<QuarryBlockRule> readRules(CompoundTag compound) {
+        java.util.List<QuarryBlockRule> rules = new java.util.ArrayList<>();
+        ListTag stored = compound.getList("blockRules", 10);
+        for (int index = 0; index < stored.size(); index++) {
+            QuarryBlockRule rule = QuarryBlockRule.fromNBT(stored.getCompound(index));
+            if (rule != null) rules.add(rule);
+        }
+        return rules;
     }
 
     public QuarryBlockManager getBlockManager() {

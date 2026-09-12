@@ -6,6 +6,8 @@ import com.persiki84.quarrymod.data.QuarryDataManager;
 import com.persiki84.quarrymod.events.QuarryEventHandler;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
+import com.persiki84.battlecraft.modules.ModuleId;
+import com.persiki84.battlecraft.modules.ModuleSwitches;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
@@ -19,7 +21,7 @@ import org.slf4j.Logger;
 @Mod(QuarryMod.MODID)
 public class QuarryMod {
     public static final String MODID = "quarrymod";
-    private static final Logger LOGGER = LogUtils.getLogger();
+    public static final Logger LOGGER = LogUtils.getLogger();
     private static QuarryMod instance;
     private QuarryDataManager dataManager;
 
@@ -51,10 +53,13 @@ public class QuarryMod {
 
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
-        if (dataManager != null) {
-            dataManager.getBlockManager().tickRegenerations(event.getServer());
+        if (event.phase != TickEvent.Phase.END || dataManager == null) return;
+
+        if (!ModuleSwitches.allows(ModuleId.QUARRY)) {
+            dataManager.getBlockManager().restoreAllPending(event.getServer());
+            return;
         }
+        dataManager.getBlockManager().tickRegenerations(event.getServer());
     }
 
     @SubscribeEvent

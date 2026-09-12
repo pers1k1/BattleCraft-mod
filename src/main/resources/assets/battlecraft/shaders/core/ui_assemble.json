@@ -1,0 +1,130 @@
+{
+    "vertex": "battlecraft:ui_assemble",
+    "fragment": "battlecraft:ui_assemble",
+    "attributes": [
+        "Position",
+        "UV0"
+    ],
+    "blend": {
+        "func": "add",
+        "srcrgb": "one",
+        "dstrgb": "1-srcalpha",
+        "srcalpha": "one",
+        "dstalpha": "1-srcalpha"
+    },
+    "samplers": [
+        {
+            "name": "Sampler0"
+        }
+    ],
+    "uniforms": [
+        {
+            "name": "ModelViewMat",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "ProjMat",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "ScreenSize",
+            "type": "float",
+            "count": 2,
+            "values": [
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "name": "Phase",
+            "type": "float",
+            "count": 1,
+            "values": [
+                1.0
+            ]
+        },
+        {
+            "name": "Time",
+            "type": "float",
+            "count": 1,
+            "values": [
+                0.0
+            ]
+        },
+        {
+            "name": "Spark",
+            "type": "float",
+            "count": 4,
+            "values": [
+                1.0,
+                1.0,
+                1.0,
+                0.0
+            ]
+        },
+        {
+            "name": "Sweep",
+            "type": "float",
+            "count": 2,
+            "values": [
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "Origin",
+            "type": "float",
+            "count": 2,
+            "values": [
+                0.5,
+                0.5
+            ]
+        },
+        {
+            "name": "Mode",
+            "type": "float",
+            "count": 1,
+            "values": [
+                0.0
+            ]
+        }
+    ]
+}

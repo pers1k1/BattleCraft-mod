@@ -1,8 +1,11 @@
 package com.persiki84.dmgndctr.network;
 
 import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
+
+import java.util.Optional;
 
 public class PacketHandler {
     private static final String PROTOCOL_VERSION = "1";
@@ -18,6 +21,7 @@ public class PacketHandler {
         INSTANCE.registerMessage(id++, DamagePacket.class,
                 DamagePacket::encode,
                 DamagePacket::decode,
-                DamagePacket::handle);
+                DamagePacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
 }

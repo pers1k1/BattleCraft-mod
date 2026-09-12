@@ -1,7 +1,6 @@
 {
   "quarrymod.prefix": "[QuarryMod] ",
   "quarrymod.error.player_only": "Эту команду может использовать только игрок",
-  "quarrymod.error.no_held_item": "Вы должны держать предмет в руке",
   "quarrymod.command.cooldown.header": "=== Информация о кулдаунах ===",
   "quarrymod.command.cooldown.global": "Глобальный кулдаун: %s сек",
   "quarrymod.command.cooldown.custom": "Кулдаун этого блока: %s сек (кастомный)",
@@ -32,5 +31,24 @@
   "quarrymod.command.list.stat_entry": "%s: %s",
   "quarrymod.command.list.global_cooldown": "Глобальный кулдаун: %s секунд",
   "quarrymod.event.cooldown_remaining": "Блок восстановится через %s секунд!",
-  "quarrymod.event.wrong_tool": "Нужен подходящий инструмент!"
+  "quarrymod.event.wrong_tool": "Нужен подходящий инструмент!",
+  "quarrymod.menu.title": "КАРЬЕР",
+  "quarrymod.menu.tab.cooldown": "Кулдаун",
+  "quarrymod.menu.tab.blocks": "Блоки",
+  "quarrymod.menu.tab.types": "Настройка блоков",
+  "quarrymod.menu.type.cooldown": "%s: кулдаун, с",
+  "quarrymod.menu.type.multiplier": "%s: множитель дропа",
+  "quarrymod.menu.type.global": "Общий",
+  "quarrymod.menu.type.empty": "Типы блоков не заданы",
+  "quarrymod.command.type.cooldown_set": "Кулдаун блока %s: %s",
+  "quarrymod.command.type.multiplier_set": "Множитель блока %s: %s",
+  "quarrymod.command.type.global": "общий",
+  "quarrymod.command.type.unknown": "Этот блок не поддерживается карьером",
+  "quarrymod.menu.global": "Общий кулдаун, с",
+  "quarrymod.menu.count": "Блоков зарегистрировано",
+  "quarrymod.menu.add": "Добавить блок",
+  "quarrymod.menu.remove": "Убрать блок",
+  "quarrymod.menu.info": "Сведения о блоке",
+  "quarrymod.menu.block_cooldown_reset": "Сбросить кулдаун блока",
+  "quarrymod.menu.action.aimed": "По прицелу"
 }

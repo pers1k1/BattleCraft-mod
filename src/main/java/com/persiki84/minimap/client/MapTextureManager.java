@@ -6,13 +6,15 @@ import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.client.gui.GuiGraphics;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.world.level.material.MapColor;
+import org.joml.Matrix4f;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,22 +28,49 @@ public class MapTextureManager {
         public ResourceLocation textureLocation;
         public boolean dirty = false;
 
+        private long lastDrawn = Long.MIN_VALUE;
+
         public MapRegion(int rx, int rz) {
             this.rx = rx;
             this.rz = rz;
-            this.image = new NativeImage(NativeImage.Format.RGBA, 512, 512, false);
-            this.image.fillRect(0, 0, 512, 512, 0x00000000);
-            this.texture = new DynamicTexture(image);
-            this.textureLocation = Minecraft.getInstance().getTextureManager().register("minimap_region_" + rx + "_" + rz, texture);
+        }
+
+        private void load() {
+            lastDrawn = com.persiki84.shared.client.ui.UiFrame.frame();
+            if (texture != null) return;
+
+            image = new NativeImage(NativeImage.Format.RGBA, 512, 512, false);
+            image.fillRect(0, 0, 512, 512, 0);
+            texture = new DynamicTexture(image);
+            textureLocation = Minecraft.getInstance().getTextureManager()
+                    .register("minimap_region_" + rx + "_" + rz, texture);
+            texture.bind();
+            com.mojang.blaze3d.platform.GlStateManager._texParameter(org.lwjgl.opengl.GL11.GL_TEXTURE_2D,
+                    org.lwjgl.opengl.GL11.GL_TEXTURE_WRAP_S, org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE);
+            com.mojang.blaze3d.platform.GlStateManager._texParameter(org.lwjgl.opengl.GL11.GL_TEXTURE_2D,
+                    org.lwjgl.opengl.GL11.GL_TEXTURE_WRAP_T, org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE);
+            loadedRegions++;
+            restoreRegion(this);
+            texture.upload();
+            dirty = false;
         }
 
         public void close() {
-            if (this.texture != null) this.texture.close();
-            if (this.image != null) this.image.close();
+            if (texture == null) return;
+
+            Minecraft.getInstance().getTextureManager().release(textureLocation);
+            texture.close();
+            textureLocation = null;
+            texture = null;
+            image = null;
+            dirty = false;
+            loadedRegions--;
         }
     }
 
     private static final Map<Long, MapRegion> regions = new ConcurrentHashMap<>();
+
+    private static int loadedRegions;
 
     public static void init() {
         clearAll();
@@ -55,54 +84,78 @@ public class MapTextureManager {
         regions.clear();
     }
 
+    private static final int SCAN_RADIUS = 8;
+    private static final int FRESH_LIMIT = 2;
+    private static final int RESCAN_BUDGET = 20;
+    private static final int REGION_BUDGET = 24;
+
     private static int scanIndex = 0;
 
     public static void update() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) return;
 
-        ChunkPos centerChunk = new ChunkPos(new BlockPos((int) mc.player.getX(), 0, (int) mc.player.getZ()));
-        int radius = 8;
-        int diameter = radius * 2 + 1;
-        int totalChunks = diameter * diameter;
+        ChunkPos center = new ChunkPos(new BlockPos((int) mc.player.getX(), 0, (int) mc.player.getZ()));
+        int painted = paintFresh(mc, center);
+        if (painted < FRESH_LIMIT) painted += rescanKnown(mc, center, painted);
+        if (painted > 0) uploadDirtyRegions();
+        trimRegions(center);
+    }
 
-        int chunksUpdatedThisTick = 0;
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dz = -radius; dz <= radius; dz++) {
-                ChunkPos cp = new ChunkPos(centerChunk.x + dx, centerChunk.z + dz);
-                if (!ClientMapData.chunkData.containsKey(cp) && mc.level.hasChunk(cp.x, cp.z)) {
-                    LevelChunk chunk = mc.level.getChunk(cp.x, cp.z);
-                    if (updateChunk(chunk, cp)) {
-                        chunksUpdatedThisTick++;
-                        if (chunksUpdatedThisTick > 2) {
-                            uploadDirtyRegions();
-                            return;
-                        }
-                    }
-                }
-            }
+    private static void trimRegions(ChunkPos center) {
+        if (loadedRegions <= REGION_BUDGET) return;
+
+        int centerRegionX = center.x >> 5;
+        int centerRegionZ = center.z >> 5;
+        long oldestVisible = com.persiki84.shared.client.ui.UiFrame.frame() - 1;
+        MapRegion farthest = null;
+        long worst = -1L;
+        for (MapRegion region : regions.values()) {
+            if (region.texture == null || region.lastDrawn >= oldestVisible) continue;
+
+            long dx = (long) region.rx - centerRegionX;
+            long dz = (long) region.rz - centerRegionZ;
+            long distance = dx * dx + dz * dz;
+            if (distance <= worst) continue;
+
+            worst = distance;
+            farthest = region;
         }
+        if (farthest != null) farthest.close();
+    }
 
-        int chunksCheckedThisTick = 0;
-        while (chunksCheckedThisTick < 20 && chunksUpdatedThisTick < 2) {
-            scanIndex = (scanIndex + 1) % totalChunks;
-            int dx = (scanIndex % diameter) - radius;
-            int dz = (scanIndex / diameter) - radius;
+    private static int paintFresh(Minecraft mc, ChunkPos center) {
+        int painted = 0;
+        for (int dx = -SCAN_RADIUS; dx <= SCAN_RADIUS; dx++) {
+            for (int dz = -SCAN_RADIUS; dz <= SCAN_RADIUS; dz++) {
+                ChunkPos cp = new ChunkPos(center.x + dx, center.z + dz);
+                if (ClientMapData.chunkData.containsKey(cp) || !mc.level.hasChunk(cp.x, cp.z)) continue;
 
-            ChunkPos cp = new ChunkPos(centerChunk.x + dx, centerChunk.z + dz);
-            chunksCheckedThisTick++;
-
-            if (ClientMapData.chunkData.containsKey(cp) && mc.level.hasChunk(cp.x, cp.z)) {
                 LevelChunk chunk = mc.level.getChunk(cp.x, cp.z);
-                if (updateChunk(chunk, cp)) {
-                    chunksUpdatedThisTick++;
-                }
+                if (updateChunk(chunk, cp)) painted++;
+                if (painted > FRESH_LIMIT) return painted;
             }
         }
+        return painted;
+    }
 
-        if (chunksUpdatedThisTick > 0) {
-            uploadDirtyRegions();
+    private static int rescanKnown(Minecraft mc, ChunkPos center, int painted) {
+        int diameter = SCAN_RADIUS * 2 + 1;
+        int total = diameter * diameter;
+        int checked = 0;
+        int found = 0;
+
+        while (checked < RESCAN_BUDGET && painted + found < FRESH_LIMIT) {
+            scanIndex = (scanIndex + 1) % total;
+            ChunkPos cp = new ChunkPos(center.x + (scanIndex % diameter) - SCAN_RADIUS,
+                    center.z + (scanIndex / diameter) - SCAN_RADIUS);
+            checked++;
+            if (!ClientMapData.chunkData.containsKey(cp) || !mc.level.hasChunk(cp.x, cp.z)) continue;
+
+            LevelChunk chunk = mc.level.getChunk(cp.x, cp.z);
+            if (updateChunk(chunk, cp)) found++;
         }
+        return found;
     }
 
     private static void uploadDirtyRegions() {
@@ -121,12 +174,18 @@ public class MapTextureManager {
         uploadDirtyRegions();
     }
 
-    public static void markChunkUpdated(ChunkPos cp) {
-        int[] colors = ClientMapData.chunkData.get(cp);
-        if (colors != null) {
+    // WHY: заливка региона в видеопамять стоит мегабайта на вызов, поэтому пачка чанков
+    // WHY: рисуется целиком и грузится один раз: на полной карте это тысячи заливок подряд
+    public static void markChunksUpdated(java.util.Collection<ChunkPos> positions) {
+        boolean painted = false;
+        for (ChunkPos cp : positions) {
+            int[] colors = ClientMapData.chunkData.get(cp);
+            if (colors == null) continue;
+
             drawChunkToImage(cp, colors);
-            uploadDirtyRegions();
+            painted = true;
         }
+        if (painted) uploadDirtyRegions();
     }
 
     private static void drawChunkToImage(ChunkPos cp, int[] colors) {
@@ -135,8 +194,24 @@ public class MapTextureManager {
         long regionId = ChunkPos.asLong(rx, rz);
         MapRegion region = regions.computeIfAbsent(regionId, k -> new MapRegion(rx, rz));
 
-        int localChunkX = cp.x & 31;
-        int localChunkZ = cp.z & 31;
+        if (region.image == null) return;
+        paintChunk(region, cp.x, cp.z, colors);
+    }
+
+    private static void restoreRegion(MapRegion region) {
+        for (int x = 0; x < 32; x++) {
+            for (int z = 0; z < 32; z++) {
+                int chunkX = region.rx * 32 + x;
+                int chunkZ = region.rz * 32 + z;
+                int[] colors = ClientMapData.chunkData.get(new ChunkPos(chunkX, chunkZ));
+                if (colors != null) paintChunk(region, chunkX, chunkZ, colors);
+            }
+        }
+    }
+
+    private static void paintChunk(MapRegion region, int chunkX, int chunkZ, int[] colors) {
+        int localChunkX = chunkX & 31;
+        int localChunkZ = chunkZ & 31;
         int pixelStartX = localChunkX * 16;
         int pixelStartZ = localChunkZ * 16;
 
@@ -150,99 +225,20 @@ public class MapTextureManager {
                     int a = 255;
                     int abgr = (a << 24) | (b << 16) | (g << 8) | r;
                     region.image.setPixelRGBA(pixelStartX + x, pixelStartZ + z, abgr);
+                } else {
+                    region.image.setPixelRGBA(pixelStartX + x, pixelStartZ + z, 0);
                 }
             }
         }
         region.dirty = true;
     }
 
+    private static boolean inTeam() {
+        return Minecraft.getInstance().player != null && Minecraft.getInstance().player.getTeam() != null;
+    }
+
     private static boolean updateChunk(LevelChunk chunk, ChunkPos cp) {
-        int[] newColors = new int[256];
-        int startX = cp.getMinBlockX();
-        int startZ = cp.getMinBlockZ();
-        BlockPos.MutableBlockPos mpos = new BlockPos.MutableBlockPos();
-
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                int worldX = startX + x;
-                int worldZ = startZ + z;
-
-                int y = Math.min(chunk.getMaxBuildHeight() - 1, chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x, z));
-                BlockState state;
-                MapColor mapColor;
-
-                do {
-                    mpos.set(worldX, y, worldZ);
-                    state = chunk.getBlockState(mpos);
-                    mapColor = state.getMapColor(chunk.getLevel(), mpos);
-                    y--;
-                } while (mapColor == MapColor.NONE && y > chunk.getMinBuildHeight());
-                y++;
-
-                int yNorth = y;
-                if (z > 0) {
-                    int ny = Math.min(chunk.getMaxBuildHeight() - 1, chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x, z - 1));
-                    do {
-                        mpos.set(worldX, ny, worldZ - 1);
-                        BlockState nstate = chunk.getBlockState(mpos);
-                        MapColor ncolor = nstate.getMapColor(chunk.getLevel(), mpos);
-                        if (ncolor != MapColor.NONE) break;
-                        ny--;
-                    } while (ny > chunk.getMinBuildHeight());
-                    yNorth = ny;
-                }
-
-                int color = mapColor.col;
-                boolean isSnow = (mapColor == MapColor.SNOW);
-
-                if (isSnow) {
-                    if (y - 1 > chunk.getMinBuildHeight()) {
-                        mpos.set(worldX, y - 1, worldZ);
-                        BlockState underState = chunk.getBlockState(mpos);
-                        if (underState.is(net.minecraft.tags.BlockTags.LEAVES)) {
-                            MapColor underColor = underState.getMapColor(chunk.getLevel(), mpos);
-                            int leafCol = underColor.col;
-                            int r1 = (leafCol >> 16) & 0xFF;
-                            int g1 = (leafCol >> 8) & 0xFF;
-                            int b1 = leafCol & 0xFF;
-                            int rBlend = (int) (r1 * 0.5 + 220 * 0.5);
-                            int gBlend = (int) (g1 * 0.5 + 229 * 0.5);
-                            int bBlend = (int) (b1 * 0.5 + 235 * 0.5);
-                            color = (rBlend << 16) | (gBlend << 8) | bBlend;
-                        } else {
-                            color = 0xDCE5EB;
-                        }
-                    } else {
-                        color = 0xDCE5EB;
-                    }
-                }
-
-                int r = (color >> 16) & 0xFF;
-                int g = (color >> 8) & 0xFF;
-                int b = color & 0xFF;
-
-                int heightDiff = y - yNorth;
-                double shade = 1.0;
-                if (heightDiff > 0) {
-                    shade = 1.0 + Math.min(4, heightDiff) * 0.08;
-                } else if (heightDiff < 0) {
-                    shade = 1.0 + Math.max(-4, heightDiff) * 0.08;
-                } else {
-                    if ((worldX + worldZ) % 2 == 0) shade = 0.96;
-                }
-
-                if (mapColor == MapColor.WATER) {
-                    shade = 1.0;
-                }
-
-                r = Math.min(255, (int)(r * shade));
-                g = Math.min(255, (int)(g * shade));
-                b = Math.min(255, (int)(b * shade));
-
-                int shadedColor = (r << 16) | (g << 8) | b;
-                newColors[x + z * 16] = shadedColor;
-            }
-        }
+        int[] newColors = com.persiki84.minimap.MapPainter.paint(chunk);
 
         int[] oldColors = ClientMapData.chunkData.get(cp);
         if (oldColors != null && java.util.Arrays.equals(oldColors, newColors)) {
@@ -250,9 +246,10 @@ public class MapTextureManager {
         }
 
         ClientMapData.chunkData.put(cp, newColors);
+        ClientMapStorage.touch();
         drawChunkToImage(cp, newColors);
 
-        if (ClientMapData.serverHasMod) {
+        if (ClientMapData.serverTakesChunks() && inTeam()) {
             String dim = Minecraft.getInstance().level.dimension().location().toString().replace(":", "_");
             java.util.List<com.persiki84.minimap.network.MapChunkSyncPacket.ChunkData> list = new java.util.ArrayList<>();
             list.add(new com.persiki84.minimap.network.MapChunkSyncPacket.ChunkData(cp.x, cp.z, newColors));
@@ -261,30 +258,41 @@ public class MapTextureManager {
         return true;
     }
 
-    public static void renderMap(GuiGraphics guiGraphics, double mapX, double mapZ, float zoom, int screenCenterX, int screenCenterY, int screenW, int screenH) {
-        double scale = zoom;
-
-        RenderSystem.setShader(GameRenderer::getPositionTexShader);
-        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-
-        int maxW = Minecraft.getInstance().getWindow().getGuiScaledWidth();
-        int maxH = Minecraft.getInstance().getWindow().getGuiScaledHeight();
+    public static void renderMap(GuiGraphics guiGraphics, double mapX, double mapZ, float zoom,
+                                 float centerX, float centerY, float clipX0, float clipY0, float clipX1, float clipY1) {
+        float size = 512.0f * zoom;
 
         for (MapRegion region : regions.values()) {
-            double regionWorldX = region.rx * 512.0;
-            double regionWorldZ = region.rz * 512.0;
+            float x = (float) (centerX + (region.rx * 512.0 - mapX) * zoom);
+            float y = (float) (centerY + (region.rz * 512.0 - mapZ) * zoom);
 
-            double screenStartTexX = screenCenterX + (regionWorldX - mapX) * scale;
-            double screenStartTexY = screenCenterY + (regionWorldZ - mapZ) * scale;
-            double renderWidth = 512 * scale;
-            double renderHeight = 512 * scale;
-
-            if (screenStartTexX + renderWidth < 0 || screenStartTexX > maxW || screenStartTexY + renderHeight < 0 || screenStartTexY > maxH) {
+            if (x + size < clipX0 || x > clipX1 || y + size < clipY0 || y > clipY1) {
                 continue;
             }
 
-            RenderSystem.setShaderTexture(0, region.textureLocation);
-            guiGraphics.blit(region.textureLocation, (int)screenStartTexX, (int)screenStartTexY, 0, 0, (int)renderWidth, (int)renderHeight, (int)renderWidth, (int)renderHeight);
+            region.load();
+            drawRegion(guiGraphics, region, x, y, size);
         }
+    }
+
+    private static void drawRegion(GuiGraphics guiGraphics, MapRegion region, float x, float y, float size) {
+        RenderSystem.setShader(GameRenderer::getPositionTexShader);
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.setShaderTexture(0, region.textureLocation);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+
+        Matrix4f matrix = guiGraphics.pose().last().pose();
+        Tesselator tesselator = Tesselator.getInstance();
+        BufferBuilder builder = tesselator.getBuilder();
+
+        builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        builder.vertex(matrix, x, y + size, 0.0F).uv(0.0F, 1.0F).endVertex();
+        builder.vertex(matrix, x + size, y + size, 0.0F).uv(1.0F, 1.0F).endVertex();
+        builder.vertex(matrix, x + size, y, 0.0F).uv(1.0F, 0.0F).endVertex();
+        builder.vertex(matrix, x, y, 0.0F).uv(0.0F, 0.0F).endVertex();
+        tesselator.end();
+
+        com.persiki84.shared.client.ui.UiRender.standardBlend();
     }
 }

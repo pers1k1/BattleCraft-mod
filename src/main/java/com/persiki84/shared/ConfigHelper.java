@@ -12,7 +12,4 @@ public final class ConfigHelper {
         spec.save();
     }
 
-    public static void save(ForgeConfigSpec spec) {
-        spec.save();
-    }
 }

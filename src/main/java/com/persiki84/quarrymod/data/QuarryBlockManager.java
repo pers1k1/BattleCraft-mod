@@ -21,6 +21,7 @@ public class QuarryBlockManager {
     private final Map<QuarryBlockKey, QuarryBlock> quarryBlocks = new ConcurrentHashMap<>();
     private final Map<QuarryBlockKey, Long> customCooldowns = new ConcurrentHashMap<>();
     private final Map<QuarryBlockKey, Long> pendingRegenerations = new ConcurrentHashMap<>();
+    private final Map<ResourceLocation, QuarryBlockRule> blockRules = new ConcurrentHashMap<>();
 
     private long globalCooldownTime = 20000;
     private static final long MIN_COOLDOWN = 1000;
@@ -36,6 +37,17 @@ public class QuarryBlockManager {
         BLOCK_DROPS.put(Blocks.REDSTONE_ORE, new ItemStack(Items.REDSTONE, 4));
         BLOCK_DROPS.put(Blocks.LAPIS_ORE, new ItemStack(Items.LAPIS_LAZULI, 6));
         BLOCK_DROPS.put(Blocks.COPPER_ORE, new ItemStack(Items.RAW_COPPER, 3));
+        BLOCK_DROPS.put(Blocks.DEEPSLATE_DIAMOND_ORE, new ItemStack(Items.DIAMOND, 1));
+        BLOCK_DROPS.put(Blocks.DEEPSLATE_COAL_ORE, new ItemStack(Items.COAL, 1));
+        BLOCK_DROPS.put(Blocks.DEEPSLATE_IRON_ORE, new ItemStack(Items.IRON_INGOT, 1));
+        BLOCK_DROPS.put(Blocks.DEEPSLATE_GOLD_ORE, new ItemStack(Items.GOLD_INGOT, 1));
+        BLOCK_DROPS.put(Blocks.DEEPSLATE_EMERALD_ORE, new ItemStack(Items.EMERALD, 1));
+        BLOCK_DROPS.put(Blocks.DEEPSLATE_REDSTONE_ORE, new ItemStack(Items.REDSTONE, 4));
+        BLOCK_DROPS.put(Blocks.DEEPSLATE_LAPIS_ORE, new ItemStack(Items.LAPIS_LAZULI, 6));
+        BLOCK_DROPS.put(Blocks.DEEPSLATE_COPPER_ORE, new ItemStack(Items.RAW_COPPER, 3));
+        BLOCK_DROPS.put(Blocks.NETHER_QUARTZ_ORE, new ItemStack(Items.QUARTZ, 2));
+        BLOCK_DROPS.put(Blocks.NETHER_GOLD_ORE, new ItemStack(Items.GOLD_NUGGET, 4));
+        BLOCK_DROPS.put(Blocks.ANCIENT_DEBRIS, new ItemStack(Items.NETHERITE_SCRAP, 1));
     }
 
     public boolean setGlobalCooldown(long seconds) {
@@ -64,7 +76,47 @@ public class QuarryBlockManager {
     }
 
     private long getCooldownTime(BlockPos pos, String dimension) {
-        return customCooldowns.getOrDefault(new QuarryBlockKey(pos, dimension), globalCooldownTime);
+        Long custom = customCooldowns.get(new QuarryBlockKey(pos, dimension));
+        if (custom != null) return custom;
+
+        QuarryBlock block = quarryBlocks.get(new QuarryBlockKey(pos, dimension));
+        if (block == null) return globalCooldownTime;
+
+        QuarryBlockRule rule = blockRules.get(blockId(block.getOriginalState().getBlock()));
+        if (rule == null || rule.cooldownSeconds() == QuarryBlockRule.GLOBAL_COOLDOWN) return globalCooldownTime;
+        return rule.cooldownSeconds() * 1000L;
+    }
+
+    private static ResourceLocation blockId(Block block) {
+        return net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(block);
+    }
+
+    public QuarryBlockRule rule(Block block) {
+        ResourceLocation id = blockId(block);
+        return id == null ? null : blockRules.get(id);
+    }
+
+    public QuarryBlockRule ruleOrCreate(Block block) {
+        ResourceLocation id = blockId(block);
+        if (id == null) return null;
+        return blockRules.computeIfAbsent(id, QuarryBlockRule::new);
+    }
+
+    public List<QuarryBlockRule> rules() {
+        List<QuarryBlockRule> known = new ArrayList<>();
+        for (Block block : BLOCK_DROPS.keySet()) {
+            QuarryBlockRule rule = ruleOrCreate(block);
+            if (rule != null) known.add(rule);
+        }
+        known.sort((left, right) -> left.block().toString().compareTo(right.block().toString()));
+        return known;
+    }
+
+    public void loadRules(List<QuarryBlockRule> stored) {
+        blockRules.clear();
+        for (QuarryBlockRule rule : stored) {
+            blockRules.put(rule.block(), rule);
+        }
     }
 
     public long getGlobalCooldown() {
@@ -97,7 +149,12 @@ public class QuarryBlockManager {
     }
 
     public ItemStack getDropForBlock(Block block) {
-        return BLOCK_DROPS.getOrDefault(block, ItemStack.EMPTY).copy();
+        ItemStack drop = BLOCK_DROPS.getOrDefault(block, ItemStack.EMPTY).copy();
+        if (drop.isEmpty()) return drop;
+
+        QuarryBlockRule rule = rule(block);
+        if (rule != null) drop.setCount(drop.getCount() * rule.multiplier());
+        return drop;
     }
 
     public boolean isValidQuarryBlock(Block block) {
@@ -113,6 +170,17 @@ public class QuarryBlockManager {
             pendingRegenerations.put(key, System.currentTimeMillis() + cooldownTime);
             spawnBreakParticles(level, pos);
         }
+    }
+
+    // WHY: сломанный блок стоит бедроком, пока не отработает регенерация, поэтому выключение
+    // WHY: модуля обязано разобрать очередь, а не бросить карту в бедроке навсегда
+    public void restoreAllPending(MinecraftServer server) {
+        if (pendingRegenerations.isEmpty()) return;
+
+        for (QuarryBlockKey key : new ArrayList<>(pendingRegenerations.keySet())) {
+            pendingRegenerations.put(key, 0L);
+        }
+        tickRegenerations(server);
     }
 
     public void tickRegenerations(MinecraftServer server) {

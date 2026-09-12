@@ -8,6 +8,31 @@
     "SculkShriekerMixin",
     "ServerLevelSoundMixin"
   ],
+  "client": [
+    "AbstractWidgetMixin",
+    "ChatComponentMixin",
+    "ChatScreenMixin",
+    "ConnectScreenAccessor",
+    "CreateWorldScreenMixin",
+    "DebugRendererAccessor",
+    "EditBoxMixin",
+    "FontMixin",
+    "FramerateMixin",
+    "GameRendererAccessor",
+    "GuiGraphicsMixin",
+    "ItemInHandLayerMixin",
+    "ItemStackMixin",
+    "KeyboardHandlerMixin",
+    "LevelLoadingScreenAccessor",
+    "LocalPlayerMixin",
+    "MinecraftOverlayMixin",
+    "NameTagMixin",
+    "PostChainAccessor",
+    "ProgressScreenAccessor",
+    "ScreenMixin",
+    "TabButtonMixin",
+    "TabNavigationBarMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

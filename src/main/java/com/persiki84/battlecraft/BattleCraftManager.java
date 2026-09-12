@@ -2,7 +2,6 @@ package com.persiki84.battlecraft;
 
 import com.persiki84.killreward.KillRewardMod;
 import net.minecraft.ChatFormatting;
-import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
@@ -20,6 +19,8 @@ import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
 import com.persiki84.battlecraft.network.PacketHandler;
+import com.persiki84.battlecraft.network.S2CLobbyRosterPacket;
+import com.persiki84.battlecraft.network.S2CSurrenderVotePacket;
 import com.persiki84.battlecraft.network.S2CSyncGamePhasePacket;
 
 import java.util.*;
@@ -65,6 +66,13 @@ public class BattleCraftManager {
     private final Set<UUID> readyPlayers = new HashSet<>();
     private final Map<String, ActiveVote> activeVotes = new HashMap<>();
     private final Map<String, Long> voteCooldowns = new HashMap<>();
+    private final Map<UUID, Long> undecidedSince = new HashMap<>();
+    private final Map<UUID, Long> teamSwitchAt = new HashMap<>();
+    private final Map<UUID, Long> readyToggleAt = new HashMap<>();
+    private static final long REJOIN_CHOICE_MS = 10_000L;
+
+    private final java.util.Set<java.util.UUID> graced = new java.util.HashSet<>();
+    private long joinGraceUntil = 0;
     private int lobbyTimer = 0;
     private int lobbyMaxTimer = 0;
     private boolean softDisabled = false;
@@ -72,6 +80,7 @@ public class BattleCraftManager {
 
     private BattleCraftManager() {
         this.config = BattleCraftConfig.load();
+        this.softDisabled = !config.modEnabled;
         MinecraftForge.EVENT_BUS.register(this);
         resetState();
     }
@@ -97,6 +106,8 @@ public class BattleCraftManager {
 
     public void setSoftDisabled(boolean disabled) {
         this.softDisabled = disabled;
+        config.modEnabled = !disabled;
+        config.save();
         if (disabled) {
             resetState();
         }
@@ -107,51 +118,129 @@ public class BattleCraftManager {
 
     public void selectTeam(ServerPlayer player, String teamName) {
         if (softDisabled) return;
-        if (phase != GamePhase.LOBBY) {
-            player.sendSystemMessage(Component.translatable("battlecraft.error.team_select_locked").withStyle(ChatFormatting.RED));
-            return;
-        }
 
         MinecraftServer server = player.getServer();
-        if (server == null) return;
+        if (server == null || !acceptsChoices(player)) return;
 
-        Scoreboard scoreboard = server.getScoreboard();
-        PlayerTeam targetTeam = scoreboard.getPlayerTeam(teamName);
+        PlayerTeam targetTeam = server.getScoreboard().getPlayerTeam(teamName);
         if (targetTeam == null) {
-            player.sendSystemMessage(Component.translatable("battlecraft.error.invalid_team").withStyle(ChatFormatting.RED));
+            deny(player, Component.translatable("battlecraft.error.invalid_team"));
             return;
         }
+        if (!admits(player, teamName, server)) return;
 
-        String ip = getCleanIp(player);
-        for (PlayerSession session : sessions.values()) {
-            if (session.ipAddress.equals(ip) && !session.uuid.equals(player.getUUID())) {
-                player.sendSystemMessage(Component.translatable("battlecraft.error.ip_blocked").withStyle(ChatFormatting.RED));
-                return;
-            }
-        }
-
-        scoreboard.addPlayerToTeam(player.getScoreboardName(), targetTeam);
+        server.getScoreboard().addPlayerToTeam(player.getScoreboardName(), targetTeam);
+        teamSwitchAt.put(player.getUUID(), System.currentTimeMillis());
+        undecidedSince.remove(player.getUUID());
         player.sendSystemMessage(Component.translatable("battlecraft.success.team_selected", teamName).withStyle(ChatFormatting.GREEN));
 
         checkLobbyStart(server);
         syncToAll(server);
     }
 
-    public void toggleReady(ServerPlayer player) {
-        if (softDisabled || phase != GamePhase.LOBBY) return;
-        UUID uuid = player.getUUID();
-        if (readyPlayers.contains(uuid)) {
-            readyPlayers.remove(uuid);
-        } else {
-            if (player.getTeam() != null) {
-                readyPlayers.add(uuid);
-            } else {
-                player.sendSystemMessage(Component.translatable("battlecraft.error.select_team_first").withStyle(ChatFormatting.RED));
-                return;
+    private boolean acceptsChoices(ServerPlayer player) {
+        if (phase == GamePhase.LOBBY) return true;
+        if (phase == GamePhase.ACTIVE && player.getTeam() == null) return true;
+
+        deny(player, Component.translatable("battlecraft.error.team_select_locked"));
+        return false;
+    }
+
+    private boolean admits(ServerPlayer player, String teamName, MinecraftServer server) {
+        net.minecraft.world.scores.Team current = player.getTeam();
+        if (current != null && current.getName().equals(teamName)) {
+            deny(player, Component.translatable("battlecraft.error.already_in_team", teamName));
+            return false;
+        }
+
+        long cooldown = switchCooldownRemaining(player.getUUID());
+        if (current != null && cooldown > 0) {
+            deny(player, Component.translatable("battlecraft.error.switch_cooldown", seconds(cooldown)));
+            return false;
+        }
+        if (!LobbyRoster.hasRoom(server, teamPool(server), teamName)) {
+            deny(player, Component.translatable("battlecraft.error.team_full", teamName));
+            return false;
+        }
+        return ownsAddress(player);
+    }
+
+    private boolean ownsAddress(ServerPlayer player) {
+        String ip = getCleanIp(player);
+        for (PlayerSession session : sessions.values()) {
+            if (session.ipAddress.equals(ip) && !session.uuid.equals(player.getUUID())) {
+                deny(player, Component.translatable("battlecraft.error.ip_blocked"));
+                return false;
             }
         }
+        return true;
+    }
+
+    private void deny(ServerPlayer player, Component reason) {
+        player.sendSystemMessage(reason.copy().withStyle(ChatFormatting.RED));
+    }
+
+    private long switchCooldownRemaining(UUID uuid) {
+        Long last = teamSwitchAt.get(uuid);
+        if (last == null) return 0;
+        return Math.max(0, config.teamSwitchCooldownSeconds * 1000L - (System.currentTimeMillis() - last));
+    }
+
+    private long choiceRemaining(ServerPlayer player) {
+        if (player.getTeam() != null) return 0;
+        Long since = undecidedSince.get(player.getUUID());
+        if (since == null) return 0;
+        return Math.max(0, choiceDeadline() - (System.currentTimeMillis() - since));
+    }
+
+    private List<String> teamPool(MinecraftServer server) {
+        return LobbyRoster.pool(server);
+    }
+
+    private long choiceDeadline() {
+        int limit = phase == GamePhase.ACTIVE ? config.matchJoinChoiceSeconds : config.autoAssignSeconds;
+        return limit * 1000L;
+    }
+
+    private static int seconds(long millis) {
+        return (int) Math.ceil(millis / 1000.0);
+    }
+
+    private static int ticks(long millis) {
+        return (int) (millis / 50L);
+    }
+
+    public void toggleReady(ServerPlayer player) {
+        if (softDisabled || phase != GamePhase.LOBBY) return;
+
+        UUID uuid = player.getUUID();
+        boolean ready = readyPlayers.contains(uuid);
+        if (!ready && player.getTeam() == null) {
+            deny(player, Component.translatable("battlecraft.error.select_team_first"));
+            return;
+        }
+
+        long cooldown = readyCooldownRemaining(uuid);
+        if (cooldown > 0) {
+            deny(player, Component.translatable("battlecraft.error.ready_cooldown", seconds(cooldown)));
+            return;
+        }
+
+        if (ready) {
+            readyPlayers.remove(uuid);
+        } else {
+            readyPlayers.add(uuid);
+        }
+        readyToggleAt.put(uuid, System.currentTimeMillis());
+
         checkLobbyStart(player.getServer());
         syncToAll(player.getServer());
+    }
+
+    private long readyCooldownRemaining(UUID uuid) {
+        Long last = readyToggleAt.get(uuid);
+        if (last == null) return 0;
+        return Math.max(0, config.readyToggleCooldownSeconds * 1000L - (System.currentTimeMillis() - last));
     }
 
     public void startSurrenderVote(ServerPlayer player) {
@@ -161,24 +250,7 @@ public class BattleCraftManager {
         if (team == null) return;
 
         String teamName = team.getName();
-        long now = System.currentTimeMillis();
-
-        if (now - matchStartTime < config.surrenderMinTime * 1000L) {
-            long remaining = (config.surrenderMinTime * 1000L - (now - matchStartTime)) / 1000L;
-            player.sendSystemMessage(Component.translatable("battlecraft.error.surrender_too_early", remaining).withStyle(ChatFormatting.RED));
-            return;
-        }
-
-        if (voteCooldowns.getOrDefault(teamName, 0L) > now) {
-            long remaining = (voteCooldowns.get(teamName) - now) / 1000L;
-            player.sendSystemMessage(Component.translatable("battlecraft.error.vote_cooldown", remaining).withStyle(ChatFormatting.RED));
-            return;
-        }
-
-        if (activeVotes.containsKey(teamName)) {
-            player.sendSystemMessage(Component.translatable("battlecraft.error.vote_active").withStyle(ChatFormatting.RED));
-            return;
-        }
+        if (!voteAllowed(player, teamName)) return;
 
         ActiveVote vote = new ActiveVote(teamName, config.surrenderVoteTimeout * 1000L);
         vote.yesVotes.add(player.getUUID());
@@ -186,6 +258,26 @@ public class BattleCraftManager {
 
         broadcastToTeam(player.getServer(), teamName, Component.translatable("battlecraft.vote.started", player.getName().getString()).withStyle(ChatFormatting.GOLD));
         syncToAll(player.getServer());
+    }
+
+    private boolean voteAllowed(ServerPlayer player, String teamName) {
+        long now = System.currentTimeMillis();
+
+        if (now - matchStartTime < config.surrenderMinTime * 1000L) {
+            deny(player, Component.translatable("battlecraft.error.surrender_too_early",
+                    seconds(config.surrenderMinTime * 1000L - (now - matchStartTime))));
+            return false;
+        }
+        if (voteCooldowns.getOrDefault(teamName, 0L) > now) {
+            deny(player, Component.translatable("battlecraft.error.vote_cooldown",
+                    seconds(voteCooldowns.get(teamName) - now)));
+            return false;
+        }
+        if (activeVotes.containsKey(teamName)) {
+            deny(player, Component.translatable("battlecraft.error.vote_active"));
+            return false;
+        }
+        return true;
     }
 
     public void castVote(ServerPlayer player, boolean yes) {
@@ -216,29 +308,60 @@ public class BattleCraftManager {
     }
 
     public boolean forceStart(MinecraftServer server, net.minecraft.commands.CommandSourceStack source) {
-        if (softDisabled) return false;
-
-        if (com.persiki84.capturepoints.capture.CapturePointManager.getAllPoints().isEmpty() ||
-            com.persiki84.capturepoints.capture.CapturePointManager.getAllFinalPoints().isEmpty()) {
-            source.sendFailure(Component.translatable("battlecraft.error.no_points_setup"));
+        if (phase == GamePhase.ACTIVE) {
+            source.sendFailure(Component.translatable("battlecraft.error.match_running"));
             return false;
         }
 
-        int teamCount = server.getScoreboard().getPlayerTeams().size();
-        if (teamCount < 2) {
-            source.sendFailure(Component.translatable("battlecraft.error.not_enough_teams"));
+        MatchRequirements.Status blocking =
+                MatchRequirements.firstUnmet(requirements(server), MatchRequirements.Stage.SETUP);
+        if (blocking != null) {
+            source.sendFailure(blocking.describe());
             return false;
         }
 
         phase = GamePhase.ACTIVE;
         matchStartTime = System.currentTimeMillis();
-        KillRewardMod.modEnabled = true;
+        KillRewardMod.setMatchActive(true);
 
         executeConsoleCommands(server, config.startCommands);
 
-        server.getPlayerList().broadcastSystemMessage(Component.translatable("battlecraft.match.started").withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD), false);
+        persistMatch(server);
         syncToAll(server);
         return true;
+    }
+
+    @SubscribeEvent
+    public void onServerStarting(net.minecraftforge.event.server.ServerStartingEvent event) {
+        restoreMatch(event.getServer());
+    }
+
+    @SubscribeEvent
+    public void onServerStopping(net.minecraftforge.event.server.ServerStoppingEvent event) {
+        persistMatch(event.getServer());
+    }
+
+    // WHY: менеджер живёт всё время процесса, поэтому мир без match.dat обязан обнулить состояние:
+    // WHY: иначе в одиночной игре фаза и готовые прошлого мира доезжали в следующий
+    private void restoreMatch(MinecraftServer server) {
+        MatchStore.Snapshot saved = MatchStore.load(server);
+        if (saved == null) {
+            resetState();
+            return;
+        }
+
+        phase = saved.phase();
+        matchStartTime = phase == GamePhase.ACTIVE ? System.currentTimeMillis() - saved.elapsedMillis() : 0;
+        readyPlayers.clear();
+        readyPlayers.addAll(saved.ready());
+        KillRewardMod.setMatchActive(phase == GamePhase.ACTIVE);
+    }
+
+    private void persistMatch(MinecraftServer server) {
+        long elapsed = phase == GamePhase.ACTIVE && matchStartTime > 0
+                ? System.currentTimeMillis() - matchStartTime
+                : 0L;
+        MatchStore.save(server, phase, elapsed, readyPlayers);
     }
 
     public void stopMatch(MinecraftServer server, String winnerTeam) {
@@ -267,6 +390,7 @@ public class BattleCraftManager {
          server.getPlayerList().broadcastSystemMessage(msg, false);
 
          resetState();
+         persistMatch(server);
          syncToAll(server);
     }
 
@@ -284,90 +408,182 @@ public class BattleCraftManager {
         readyPlayers.clear();
         activeVotes.clear();
         voteCooldowns.clear();
+        undecidedSince.clear();
+        teamSwitchAt.clear();
+        readyToggleAt.clear();
+        graced.clear();
+        joinGraceUntil = 0;
         lobbyTimer = 0;
         lobbyMaxTimer = 0;
-        KillRewardMod.modEnabled = false;
+        KillRewardMod.setMatchActive(false);
     }
 
     private void checkLobbyStart(MinecraftServer server) {
-        int readyCount = 0;
+        int readyCount = countReady(server);
         int totalPlayers = server.getPlayerList().getPlayerCount();
 
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (player.getTeam() != null && readyPlayers.contains(player.getUUID())) {
-                readyCount++;
-            }
+        if (holdsCountdown(server) || readyCount < 1) {
+            stopCountdown();
+            return;
         }
 
-        if (readyCount >= 1 && readyCount == totalPlayers) {
-            if (lobbyTimer > config.lobbyFastStartTime * 20 || lobbyTimer <= 0) {
-                lobbyTimer = config.lobbyFastStartTime * 20;
-                lobbyMaxTimer = lobbyTimer;
-                syncToAll(server);
-            }
-        } else {
-            if (readyCount >= 1) {
-                if (lobbyTimer <= 0) {
-                    lobbyTimer = config.lobbyTimeLimit * 20;
-                    lobbyMaxTimer = lobbyTimer;
-                    syncToAll(server);
-                }
-            } else {
-                if (lobbyTimer > 0) {
-                    lobbyTimer = 0;
-                    lobbyMaxTimer = 0;
-                    syncToAll(server);
-                }
-            }
+        if (readyCount == totalPlayers) {
+            startCountdown(config.lobbyFastStartTime * 20, true);
+            return;
         }
+        startCountdown(config.lobbyTimeLimit * 20, false);
+    }
+
+    public int readyCount(MinecraftServer server) {
+        return countReady(server);
+    }
+
+    public void clearJoinGrace() {
+        joinGraceUntil = 0L;
+    }
+
+    public int graceSecondsLeft() {
+        return (int) Math.max(0L, (joinGraceUntil - System.currentTimeMillis()) / 1000L);
+    }
+
+    private int countReady(MinecraftServer server) {
+        int readyCount = 0;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (player.getTeam() != null && readyPlayers.contains(player.getUUID())) readyCount++;
+        }
+        return readyCount;
+    }
+
+    private void stopCountdown() {
+        lobbyTimer = 0;
+        lobbyMaxTimer = 0;
+    }
+
+    private void startCountdown(int ticks, boolean shortens) {
+        if (lobbyTimer > 0 && !(shortens && lobbyTimer > ticks)) return;
+
+        lobbyTimer = ticks;
+        lobbyMaxTimer = ticks;
+    }
+
+    private boolean holdsCountdown(MinecraftServer server) {
+        List<MatchRequirements.Status> statuses = requirements(server);
+        return !MatchRequirements.satisfied(statuses, MatchRequirements.Stage.SETUP)
+                || !MatchRequirements.satisfied(statuses, MatchRequirements.Stage.LOBBY);
+    }
+
+    public List<MatchRequirements.Status> requirements(MinecraftServer server) {
+        return MatchRequirements.check(server, this);
+    }
+
+    // WHY: грейс продлевался каждым входом, поэтому один перезаходящий игрок обнулял отсчёт
+    // WHY: бесконечно; метка выбора команды, наоборот, не пережидала перезаход и швыряла в команду
+    // WHY: мгновенно - теперь она лишь не даёт вернувшемуся меньше REJOIN_CHOICE_MS на решение
+    public void noteJoin(ServerPlayer player) {
+        MinecraftServer server = player.getServer();
+        if (server == null || phase == GamePhase.ENDED) return;
+
+        long now = System.currentTimeMillis();
+        long earliest = now - Math.max(0L, choiceDeadline() - REJOIN_CHOICE_MS);
+        undecidedSince.merge(player.getUUID(), now, (stored, fresh) -> Math.max(stored, earliest));
+        if (phase != GamePhase.LOBBY || !graced.add(player.getUUID())) return;
+
+        joinGraceUntil = now + config.joinGraceSeconds * 1000L;
+        server.getPlayerList().broadcastSystemMessage(
+                Component.translatable("battlecraft.lobby.waiting_for", player.getName().getString())
+                        .withStyle(ChatFormatting.YELLOW), false);
+    }
+
+    private void assignOverduePlayers(MinecraftServer server) {
+        if (teamPool(server).isEmpty()) return;
+        long now = System.currentTimeMillis();
+
+        for (ServerPlayer player : LobbyRoster.withoutTeam(server, teamPool(server))) {
+            Long since = undecidedSince.putIfAbsent(player.getUUID(), now);
+            if (since == null || now - since < choiceDeadline()) continue;
+
+            assignToNeediest(server, player);
+        }
+    }
+
+    private void assignToNeediest(MinecraftServer server, ServerPlayer player) {
+        String team = LobbyRoster.neediestTeam(server, teamPool(server));
+        if (team == null) return;
+
+        server.getScoreboard().addPlayerToTeam(player.getScoreboardName(),
+                server.getScoreboard().getPlayerTeam(team));
+        undecidedSince.remove(player.getUUID());
+        teamSwitchAt.put(player.getUUID(), System.currentTimeMillis());
+        player.sendSystemMessage(Component.translatable("battlecraft.lobby.auto_assigned", team)
+                .withStyle(ChatFormatting.YELLOW));
+        syncToAll(server);
     }
 
     private void autoBalanceTeams(MinecraftServer server) {
-        List<ServerPlayer> unassigned = new ArrayList<>();
-        Map<PlayerTeam, Integer> teamCounts = new HashMap<>();
-        
         Scoreboard scoreboard = server.getScoreboard();
-        for (String teamName : config.teams) {
-            PlayerTeam pt = scoreboard.getPlayerTeam(teamName);
-            if (pt != null) {
-                teamCounts.put(pt, 0);
-            }
-        }
-        
-        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-            if (p.getTeam() != null && readyPlayers.contains(p.getUUID())) {
-                PlayerTeam pt = scoreboard.getPlayerTeam(p.getTeam().getName());
-                if (pt != null && teamCounts.containsKey(pt)) {
-                    teamCounts.put(pt, teamCounts.get(pt) + 1);
-                }
-            } else {
-                unassigned.add(p);
-            }
-        }
-        
+        Map<PlayerTeam, Integer> teamCounts = countTeams(scoreboard, server);
+
+        List<ServerPlayer> unassigned = LobbyRoster.withoutTeam(server, teamPool(server));
         Collections.shuffle(unassigned);
-        for (ServerPlayer p : unassigned) {
-            PlayerTeam smallest = null;
-            int min = Integer.MAX_VALUE;
-            for (Map.Entry<PlayerTeam, Integer> e : teamCounts.entrySet()) {
-                if (e.getValue() < min) {
-                    min = e.getValue();
-                    smallest = e.getKey();
-                }
-            }
-            if (smallest != null) {
-                scoreboard.addPlayerToTeam(p.getScoreboardName(), smallest);
-                teamCounts.put(smallest, min + 1);
-            }
+
+        for (ServerPlayer player : unassigned) {
+            PlayerTeam smallest = smallestTeam(teamCounts);
+            if (smallest == null) return;
+
+            scoreboard.addPlayerToTeam(player.getScoreboardName(), smallest);
+            teamCounts.put(smallest, teamCounts.get(smallest) + 1);
+            undecidedSince.remove(player.getUUID());
         }
     }
 
+    private Map<PlayerTeam, Integer> countTeams(Scoreboard scoreboard, MinecraftServer server) {
+        Map<PlayerTeam, Integer> counts = new HashMap<>();
+        for (String teamName : teamPool(server)) {
+            PlayerTeam team = scoreboard.getPlayerTeam(teamName);
+            if (team != null) counts.put(team, 0);
+        }
+
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            net.minecraft.world.scores.Team team = player.getTeam();
+            if (team == null) continue;
+
+            PlayerTeam playerTeam = scoreboard.getPlayerTeam(team.getName());
+            if (playerTeam != null && counts.containsKey(playerTeam)) {
+                counts.put(playerTeam, counts.get(playerTeam) + 1);
+            }
+        }
+        return counts;
+    }
+
+    private static PlayerTeam smallestTeam(Map<PlayerTeam, Integer> counts) {
+        PlayerTeam smallest = null;
+        int min = Integer.MAX_VALUE;
+        for (Map.Entry<PlayerTeam, Integer> entry : counts.entrySet()) {
+            if (entry.getValue() < min) {
+                min = entry.getValue();
+                smallest = entry.getKey();
+            }
+        }
+        return smallest;
+    }
+
     private void checkVoteResults(MinecraftServer server, String teamName) {
+        checkVoteResults(server, teamName, null);
+    }
+
+    // WHY: Forge шлёт выход до удаления из PlayerList, поэтому уходящий ещё числился онлайн и
+    // WHY: голосование за сдачу зависало до таймаута, хотя все оставшиеся уже проголосовали
+    private void checkVoteResults(MinecraftServer server, String teamName, java.util.UUID leaving) {
         ActiveVote vote = activeVotes.get(teamName);
         if (vote == null) return;
 
         List<ServerPlayer> teamPlayers = getOnlineTeamPlayers(server, teamName);
         int onlineCount = teamPlayers.size();
+        if (leaving != null) {
+            for (ServerPlayer member : teamPlayers) {
+                if (member.getUUID().equals(leaving)) onlineCount--;
+            }
+        }
 
         if (vote.noVotes.size() > 0) {
             activeVotes.remove(teamName);
@@ -412,14 +628,11 @@ public class BattleCraftManager {
     }
 
     private String getCleanIp(ServerPlayer player) {
-        String ip = player.connection.connection.getRemoteAddress().toString();
-        if (ip.contains("/")) {
-            ip = ip.substring(ip.indexOf("/") + 1);
+        java.net.SocketAddress address = player.connection.connection.getRemoteAddress();
+        if (address instanceof java.net.InetSocketAddress inet && inet.getAddress() != null) {
+            return inet.getAddress().getHostAddress();
         }
-        if (ip.contains(":")) {
-            ip = ip.substring(0, ip.indexOf(":"));
-        }
-        return ip;
+        return address.toString();
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
@@ -451,26 +664,61 @@ public class BattleCraftManager {
     @SubscribeEvent
     public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (softDisabled) return;
-        if (event.getEntity() instanceof ServerPlayer player) {
-            UUID uuid = player.getUUID();
-            PlayerSession session = sessions.get(uuid);
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
 
-            if (session != null) {
-                MinecraftServer server = player.getServer();
-                if (server != null) {
-                    Scoreboard scoreboard = server.getScoreboard();
-                    PlayerTeam team = scoreboard.getPlayerTeam(session.teamName);
-                    if (team != null) {
-                        scoreboard.addPlayerToTeam(player.getScoreboardName(), team);
-                    }
-                }
-                if (session.inventoryData != null) {
-                    player.getInventory().load(session.inventoryData.getList("Inventory", 10));
-                }
-                sessions.remove(uuid);
-            }
-            syncToPlayer(player);
+        MinecraftServer server = player.getServer();
+        if (server == null) return;
+
+        noteJoin(player);
+        PlayerSession session = sessions.remove(player.getUUID());
+        if (session != null) {
+            restoreSession(server, player, session);
+        } else if (phase == GamePhase.LOBBY) {
+            leaveTeam(server, player);
         }
+        syncToAll(server);
+    }
+
+    private void restoreSession(MinecraftServer server, ServerPlayer player, PlayerSession session) {
+        PlayerTeam team = server.getScoreboard().getPlayerTeam(session.teamName);
+        if (team != null) {
+            server.getScoreboard().addPlayerToTeam(player.getScoreboardName(), team);
+        }
+        if (session.inventoryData != null) {
+            player.getInventory().load(session.inventoryData.getList("Inventory", 10));
+        }
+        undecidedSince.remove(player.getUUID());
+    }
+
+    private void leaveTeam(MinecraftServer server, ServerPlayer player) {
+        PlayerTeam team = server.getScoreboard().getPlayersTeam(player.getScoreboardName());
+        if (team == null) return;
+
+        server.getScoreboard().removePlayerFromTeam(player.getScoreboardName(), team);
+        readyPlayers.remove(player.getUUID());
+        readyToggleAt.remove(player.getUUID());
+    }
+
+    @SubscribeEvent
+    public void onCommand(net.minecraftforge.event.CommandEvent event) {
+        if (softDisabled) return;
+
+        net.minecraft.commands.CommandSourceStack source = event.getParseResults().getContext().getSource();
+        if (source.hasPermission(4)) return;
+        if (!changesTeamMembership(event.getParseResults().getReader().getString())) return;
+
+        event.setCanceled(true);
+        source.sendFailure(Component.translatable("battlecraft.error.team_command_blocked"));
+    }
+
+    private static boolean changesTeamMembership(String command) {
+        String text = command.trim();
+        if (text.startsWith("/")) text = text.substring(1);
+        if (text.startsWith("minecraft:")) text = text.substring("minecraft:".length());
+
+        String[] parts = text.split("\\s+");
+        if (parts.length < 2 || !parts[0].equals("team")) return false;
+        return parts[1].equals("join") || parts[1].equals("leave") || parts[1].equals("empty");
     }
 
     @SubscribeEvent
@@ -489,7 +737,7 @@ public class BattleCraftManager {
 
                     MinecraftServer server = player.getServer();
                     if (server != null) {
-                        checkVoteResults(server, team.getName());
+                        checkVoteResults(server, team.getName(), player.getUUID());
                     }
                 }
             }
@@ -507,64 +755,100 @@ public class BattleCraftManager {
         MinecraftServer server = event.getServer();
         if (server == null) return;
 
-        if (phase == GamePhase.LOBBY && lobbyTimer > 0) {
-            lobbyTimer--;
-            if (lobbyTimer % 20 == 0) {
-                int secs = lobbyTimer / 20;
-                if (secs <= 5 || secs % 10 == 0) {
-                    server.getPlayerList().broadcastSystemMessage(Component.translatable("battlecraft.lobby.countdown", secs).withStyle(ChatFormatting.YELLOW), false);
-                }
-                syncToAll(server);
-            }
-            if (lobbyTimer <= 0) {
-                autoBalanceTeams(server);
-                if (!forceStart(server)) {
-                    lobbyTimer = 0;
-                }
-            }
+        if (server.getTickCount() % 20 == 0 && phase != GamePhase.ENDED) {
+            assignOverduePlayers(server);
+            checkLobbyStart(server);
+            syncToAll(server);
         }
 
-        long now = System.currentTimeMillis();
-        boolean voteChanged = false;
-        Iterator<Map.Entry<String, ActiveVote>> it = activeVotes.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<String, ActiveVote> entry = it.next();
-            ActiveVote vote = entry.getValue();
-            if (now >= vote.endTime) {
-                voteCooldowns.put(entry.getKey(), now + config.voteCooldown * 1000L);
-                it.remove();
-                server.getPlayerList().broadcastSystemMessage(Component.translatable("battlecraft.vote.timeout", entry.getKey()).withStyle(ChatFormatting.RED), false);
-                voteChanged = true;
-            }
+        tickLobbyCountdown(server);
+        expireVotes(server);
+    }
+
+    private void tickLobbyCountdown(MinecraftServer server) {
+        if (phase != GamePhase.LOBBY || lobbyTimer <= 0) return;
+
+        lobbyTimer--;
+        int secs = lobbyTimer / 20;
+        if (lobbyTimer % 20 == 0 && (secs <= 5 || secs % 10 == 0)) {
+            server.getPlayerList().broadcastSystemMessage(
+                    Component.translatable("battlecraft.lobby.countdown", secs).withStyle(ChatFormatting.YELLOW), false);
         }
-        if (voteChanged) {
-            syncToAll(server);
+
+        if (lobbyTimer <= 0) {
+            autoBalanceTeams(server);
+            if (!forceStart(server)) lobbyTimer = 0;
         }
     }
 
-    public void syncToPlayer(ServerPlayer player) {
-        net.minecraft.world.scores.Team team = player.getTeam();
-        String teamName = team != null ? team.getName() : "";
-        ActiveVote vote = activeVotes.get(teamName);
-        boolean hasVote = vote != null;
-        String vTeam = hasVote ? vote.teamName : "";
-        int yes = hasVote ? vote.yesVotes.size() : 0;
-        int req = hasVote ? getOnlineTeamPlayers(player.getServer(), teamName).size() : 0;
-        long end = hasVote ? vote.endTime : 0;
+    private void expireVotes(MinecraftServer server) {
+        long now = System.currentTimeMillis();
+        boolean changed = false;
 
-        List<String> missing = new ArrayList<>();
-        boolean isReady = readyPlayers.contains(player.getUUID());
-        if (phase == GamePhase.LOBBY && player.getServer() != null) {
-            for (ServerPlayer p : player.getServer().getPlayerList().getPlayers()) {
-                if (p.getTeam() == null || !readyPlayers.contains(p.getUUID())) {
-                    missing.add(p.getScoreboardName());
-                }
-            }
+        Iterator<Map.Entry<String, ActiveVote>> it = activeVotes.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, ActiveVote> entry = it.next();
+            if (now < entry.getValue().endTime) continue;
+
+            voteCooldowns.put(entry.getKey(), now + config.voteCooldown * 1000L);
+            it.remove();
+            server.getPlayerList().broadcastSystemMessage(
+                    Component.translatable("battlecraft.vote.timeout", entry.getKey()).withStyle(ChatFormatting.RED), false);
+            changed = true;
         }
-        String missingStr = String.join(", ", missing);
+        if (changed) syncToAll(server);
+    }
+
+private void syncRoster(MinecraftServer server) {
+        if (server == null) return;
+
+        List<S2CLobbyRosterPacket.Member> members = new ArrayList<>();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            net.minecraft.world.scores.Team team = player.getTeam();
+            String teamName = team == null ? null : team.getName();
+            members.add(new S2CLobbyRosterPacket.Member(player.getUUID(), player.getName().getString(),
+                    teamName, readyPlayers.contains(player.getUUID())));
+        }
+
+        List<String> teams = teamPool(server);
+        S2CLobbyRosterPacket packet = new S2CLobbyRosterPacket(teams, members,
+                LobbyRoster.slotsPerTeam(server, teams));
+        PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(), packet);
+    }
+
+    public void syncToPlayer(ServerPlayer player) {
+        long now = System.currentTimeMillis();
+        int matchTicks = phase == GamePhase.ACTIVE && matchStartTime > 0 ? ticks(now - matchStartTime) : 0;
 
         PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player),
-                new S2CSyncGamePhasePacket(phase, hasVote, vTeam, yes, req, end, softDisabled, lobbyTimer, lobbyMaxTimer, missingStr, isReady));
+                new S2CSyncGamePhasePacket(phase, softDisabled, readyPlayers.contains(player.getUUID()),
+                        lobbyTimer, lobbyMaxTimer, ticks(Math.max(0, joinGraceUntil - now)),
+                        ticks(choiceRemaining(player)), ticks(switchCooldownRemaining(player.getUUID())),
+                        ticks(readyCooldownRemaining(player.getUUID())), matchTicks, missingNames(player)));
+
+        PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), voteStateFor(player));
+    }
+
+    private String missingNames(ServerPlayer player) {
+        if (phase != GamePhase.LOBBY || player.getServer() == null) return "";
+
+        List<String> missing = new ArrayList<>();
+        for (ServerPlayer other : player.getServer().getPlayerList().getPlayers()) {
+            if (other.getTeam() == null || !readyPlayers.contains(other.getUUID())) {
+                missing.add(other.getScoreboardName());
+            }
+        }
+        return String.join(", ", missing);
+    }
+
+    private S2CSurrenderVotePacket voteStateFor(ServerPlayer player) {
+        net.minecraft.world.scores.Team team = player.getTeam();
+        ActiveVote vote = team == null ? null : activeVotes.get(team.getName());
+        if (vote == null) return new S2CSurrenderVotePacket(false, "", 0, 0, 0);
+
+        return new S2CSurrenderVotePacket(true, vote.teamName, vote.yesVotes.size(),
+                getOnlineTeamPlayers(player.getServer(), team.getName()).size(),
+                ticks(Math.max(0, vote.endTime - System.currentTimeMillis())));
     }
 
     public void syncToAll(MinecraftServer server) {
@@ -572,5 +856,6 @@ public class BattleCraftManager {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             syncToPlayer(player);
         }
+        syncRoster(server);
     }
 }

@@ -7,6 +7,7 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -43,23 +44,35 @@ public class SellManager {
 
     public static SellResult sellAllItems(Player player) {
         SellResult result = new SellResult();
-        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
-            ItemStack stack = player.getInventory().getItem(i);
-            if (stack.isEmpty()) continue;
-            String itemName = getItemName(stack);
-            SellPrice price = SELL_PRICES.get(itemName);
-            if (price == null) continue;
-            int count = stack.getCount();
-            int currencyEarned = count * price.price;
-            player.getInventory().setItem(i, ItemStack.EMPTY);
-            result.totalItemsSold += count;
-            result.totalCurrencyEarned += currencyEarned;
-            result.itemsSold.put(itemName, result.itemsSold.getOrDefault(itemName, 0) + count);
-        }
+        sellFrom(player.getInventory().items, result);
+        sellFrom(player.getInventory().offhand, result);
+
         if (result.totalCurrencyEarned > 0) {
             giveCurrencyToPlayer(player, result.totalCurrencyEarned);
         }
         return result;
+    }
+
+    // WHY: цена задаётся без верхней границы, а сумма считалась в int уже после очистки слота:
+    // WHY: полный инвентарь дорогих предметов уходил в минус, вещи пропадали, денег не было
+    private static void sellFrom(List<ItemStack> slots, SellResult result) {
+        for (int slot = 0; slot < slots.size(); slot++) {
+            ItemStack stack = slots.get(slot);
+            if (stack.isEmpty()) continue;
+
+            String itemName = getItemName(stack);
+            SellPrice price = SELL_PRICES.get(itemName);
+            if (price == null) continue;
+
+            int count = stack.getCount();
+            long earned = result.totalCurrencyEarned + (long) count * price.price;
+            if (earned > Integer.MAX_VALUE) return;
+
+            slots.set(slot, ItemStack.EMPTY);
+            result.totalItemsSold += count;
+            result.totalCurrencyEarned = (int) earned;
+            result.itemsSold.put(itemName, result.itemsSold.getOrDefault(itemName, 0) + count);
+        }
     }
 
     private static String getItemName(ItemStack stack) {
@@ -79,6 +92,10 @@ public class SellManager {
             return ForgeRegistries.ITEMS.getValue(rl);
         }
         return Items.EMERALD;
+    }
+
+    public static String getCurrencyId() {
+        return currencyItemName;
     }
 
     public static boolean setCurrency(String itemId) {
@@ -139,33 +156,23 @@ public class SellManager {
         }
     }
 
+    // WHY: выручка выдавалась одной кучей, а writeItem пишет размер стака байтом: полный инвентарь
+    // WHY: руды давал дроп с невозможным количеством, который клиент показывал неверно
     private static void giveCurrencyToPlayer(Player player, int amount) {
         Item item = getCurrencyItem();
-        ItemStack currencyStack = new ItemStack(item, amount);
-        if (!player.getInventory().add(currencyStack)) {
-            player.spawnAtLocation(currencyStack);
+        int perStack = Math.max(1, new ItemStack(item).getMaxStackSize());
+
+        for (int left = amount; left > 0; left -= perStack) {
+            ItemStack payout = new ItemStack(item, Math.min(left, perStack));
+            if (!player.getInventory().add(payout)) {
+                player.spawnAtLocation(payout);
+            }
         }
         player.level().playSound(null, player.blockPosition(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0f, 1.0f);
     }
 
     public static Map<String, SellPrice> getSellPrices() {
         return SELL_PRICES;
-    }
-
-    public static Component createSellMessage(SellResult result) {
-        if (result.totalItemsSold == 0) {
-            return Component.translatable("sellmod.sell.no_items").withStyle(ChatFormatting.RED);
-        }
-        Component currencyName = getCurrencyItem().getDescription();
-        MutableComponent message = Component.translatable("sellmod.sell.success").withStyle(ChatFormatting.GREEN)
-                .append(Component.translatable("sellmod.sell.items_sold", result.totalItemsSold).withStyle(ChatFormatting.YELLOW))
-                .append(Component.translatable("sellmod.sell.money_earned", result.totalCurrencyEarned, currencyName).withStyle(ChatFormatting.GREEN));
-        for (Map.Entry<String, Integer> entry : result.itemsSold.entrySet()) {
-            Component displayName = getDisplayName(entry.getKey());
-            message = message.copy()
-                    .append(Component.translatable("sellmod.sell.item_detail", displayName, entry.getValue()).withStyle(ChatFormatting.GRAY));
-        }
-        return message;
     }
 
     private static Component getDisplayName(String itemName) {

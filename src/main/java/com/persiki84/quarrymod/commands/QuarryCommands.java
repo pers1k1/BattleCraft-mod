@@ -1,5 +1,7 @@
 package com.persiki84.quarrymod.commands;
 
+import com.persiki84.battlecraft.BattleCraftCommands;
+import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -7,6 +9,7 @@ import com.persiki84.quarrymod.QuarryMod;
 import com.persiki84.quarrymod.data.QuarryBlock;
 import com.persiki84.quarrymod.data.QuarryBlockKey;
 import com.persiki84.quarrymod.data.QuarryBlockManager;
+import com.persiki84.quarrymod.data.QuarryBlockRule;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -27,6 +30,7 @@ public class QuarryCommands {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("quarry")
                 .requires(source -> source.hasPermission(2))
+                .executes(context -> BattleCraftCommands.openMenu(context, ModuleMenuStates.QUARRY))
                 .then(Commands.literal("add")
                         .executes(QuarryCommands::addQuarryBlock))
                 .then(Commands.literal("remove")
@@ -45,7 +49,79 @@ public class QuarryCommands {
                                         .executes(QuarryCommands::setBlockCooldown)))
                         .then(Commands.literal("reset")
                                 .executes(QuarryCommands::resetBlockCooldown)))
+                .then(typeBranch())
         );
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> typeBranch() {
+        return Commands.literal("type")
+                .then(Commands.argument("block", net.minecraft.commands.arguments.ResourceLocationArgument.id())
+                        .suggests(QuarryCommands::suggestTypes)
+                        .then(Commands.literal("cooldown")
+                                .then(Commands.argument("seconds",
+                                                IntegerArgumentType.integer(-1, QuarryBlockRule.MAX_COOLDOWN_SECONDS))
+                                        .executes(QuarryCommands::setTypeCooldown)))
+                        .then(Commands.literal("multiplier")
+                                .then(Commands.argument("value", IntegerArgumentType.integer(
+                                                QuarryBlockRule.MIN_MULTIPLIER, QuarryBlockRule.MAX_MULTIPLIER))
+                                        .executes(QuarryCommands::setTypeMultiplier))));
+    }
+
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestTypes(
+            CommandContext<CommandSourceStack> context, com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        for (QuarryBlockRule rule : blockManager().rules()) {
+            ids.add(rule.block().toString());
+        }
+        return net.minecraft.commands.SharedSuggestionProvider.suggest(ids, builder);
+    }
+
+    private static QuarryBlockManager blockManager() {
+        return QuarryMod.getInstance().getDataManager().getBlockManager();
+    }
+
+    private static QuarryBlockRule requestedRule(CommandContext<CommandSourceStack> context) {
+        net.minecraft.resources.ResourceLocation id =
+                net.minecraft.commands.arguments.ResourceLocationArgument.getId(context, "block");
+        net.minecraft.world.level.block.Block block =
+                net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(id);
+        if (block == null || !blockManager().isValidQuarryBlock(block)) return null;
+        return blockManager().ruleOrCreate(block);
+    }
+
+    private static int setTypeCooldown(CommandContext<CommandSourceStack> context) {
+        QuarryBlockRule rule = requestedRule(context);
+        if (rule == null) return refuseType(context);
+
+        rule.cooldown(IntegerArgumentType.getInteger(context, "seconds"));
+        QuarryMod.getInstance().getDataManager().save();
+        return reportRule(context, "quarrymod.command.type.cooldown_set", rule,
+                rule.cooldownSeconds() == QuarryBlockRule.GLOBAL_COOLDOWN
+                        ? Component.translatable("quarrymod.command.type.global")
+                        : Component.literal(String.valueOf(rule.cooldownSeconds())));
+    }
+
+    private static int setTypeMultiplier(CommandContext<CommandSourceStack> context) {
+        QuarryBlockRule rule = requestedRule(context);
+        if (rule == null) return refuseType(context);
+
+        rule.multiplier(IntegerArgumentType.getInteger(context, "value"));
+        QuarryMod.getInstance().getDataManager().save();
+        return reportRule(context, "quarrymod.command.type.multiplier_set", rule,
+                Component.literal(String.valueOf(rule.multiplier())));
+    }
+
+    private static int reportRule(CommandContext<CommandSourceStack> context, String key,
+                                  QuarryBlockRule rule, Component value) {
+        context.getSource().sendSuccess(() -> Component.translatable(key,
+                com.persiki84.shared.Names.block(rule.block().toString()), value)
+                .withStyle(ChatFormatting.GREEN), true);
+        return 1;
+    }
+
+    private static int refuseType(CommandContext<CommandSourceStack> context) {
+        context.getSource().sendFailure(Component.translatable("quarrymod.command.type.unknown"));
+        return 0;
     }
 
     private static int getCooldownInfo(CommandContext<CommandSourceStack> context) {

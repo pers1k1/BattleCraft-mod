@@ -5,6 +5,8 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import com.persiki84.battlecraft.modules.ModuleId;
+import com.persiki84.battlecraft.modules.ModuleSwitches;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
@@ -57,7 +59,13 @@ public class ImmortalityHandler {
         immortalPlayers.remove(player.getUUID());
     }
 
+    public static boolean moduleAllowed() {
+        return ModuleSwitches.allows(ModuleId.IMMORTALITY);
+    }
+
     public static boolean isImmortal(ServerPlayer player) {
+        if (!moduleAllowed()) return false;
+
         if (!enabled) return false;
 
         Long endTime = immortalPlayers.get(player.getUUID());
@@ -80,6 +88,13 @@ public class ImmortalityHandler {
     }
 
     public static void clearAll() {
+        immortalPlayers.clear();
+    }
+
+    // WHY: ссылка на сервер держала весь мир после выхода в меню, а список неуязвимых переезжал
+    // WHY: в следующий мир и доигрывал там остаток секунд
+    public static void forgetServer() {
+        currentServer = null;
         immortalPlayers.clear();
     }
 
@@ -129,7 +144,7 @@ public class ImmortalityHandler {
                 CompoundTag tag = net.minecraft.nbt.NbtIo.readCompressed(fis);
 
                 enabled = tag.getBoolean("enabled");
-                duration = tag.getInt("duration");
+                duration = Math.max(1, tag.getInt("duration"));
             }
 
             ImmortalityMod.LOGGER.info("Loaded immortality config: enabled={}, duration={}", enabled, duration);
@@ -141,7 +156,7 @@ public class ImmortalityHandler {
     @SubscribeEvent
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            if (enabled) {
+            if (enabled && moduleAllowed()) {
                 giveImmortality(player);
                 player.sendSystemMessage(
                         Component.translatable("immortality.respawn.given", duration)

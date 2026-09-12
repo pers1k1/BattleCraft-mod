@@ -9,6 +9,8 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 public class MapMarkerSyncPacket {
+    public static final int MAX_ENTRIES = 512;
+
     public static class MarkerData {
         public final UUID playerId;
         public final String playerName;
@@ -46,7 +48,7 @@ public class MapMarkerSyncPacket {
     }
 
     public static MapMarkerSyncPacket decode(FriendlyByteBuf buf) {
-        int size = buf.readInt();
+        int size = Math.min(Math.max(buf.readInt(), 0), MAX_ENTRIES);
         List<MarkerData> markers = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             markers.add(new MarkerData(buf.readUUID(), buf.readUtf(), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readBoolean()));

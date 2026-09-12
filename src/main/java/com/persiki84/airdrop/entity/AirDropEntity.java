@@ -30,6 +30,9 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkHooks;
 
 public class AirDropEntity extends Entity {
+    private static final int TICKS_PER_SECOND = 20;
+    private static final int SMOKE_PER_TICK = 2;
+    private static final double LEVELING_HEIGHT = 10.0;
 
     private static final EntityDataAccessor<Float> FALL_SPEED =
             SynchedEntityData.defineId(AirDropEntity.class, EntityDataSerializers.FLOAT);
@@ -37,7 +40,7 @@ public class AirDropEntity extends Entity {
             SynchedEntityData.defineId(AirDropEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> OPENED =
             SynchedEntityData.defineId(AirDropEntity.class, EntityDataSerializers.BOOLEAN);
-    private static final EntityDataAccessor<Integer> LANDED_TICK =
+    private static final EntityDataAccessor<Integer> LANDED_AGE =
             SynchedEntityData.defineId(AirDropEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> FLYING_ANIM_TICKS =
             SynchedEntityData.defineId(AirDropEntity.class, EntityDataSerializers.INT);
@@ -65,7 +68,7 @@ public class AirDropEntity extends Entity {
         entityData.define(FALL_SPEED, 0.15F);
         entityData.define(LANDED, false);
         entityData.define(OPENED, false);
-        entityData.define(LANDED_TICK, 0);
+        entityData.define(LANDED_AGE, 0);
         entityData.define(FLYING_ANIM_TICKS, 600);
         entityData.define(LEVELING, false);
     }
@@ -74,69 +77,90 @@ public class AirDropEntity extends Entity {
     public void tick() {
         super.tick();
 
-        if (!level().isClientSide) {
-            this.setNoGravity(true);
-
-            if (isOpened()) {
-                com.persiki84.minimap.MapManager.removeWorldMarker(getId());
-            } else {
-                com.persiki84.minimap.MapManager.setWorldMarker(getId(), getX(), getZ(), "airdrop.map.marker");
-            }
-
-            if (!isLanded()) {
-                int groundY = level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                        (int) Math.floor(getX()), (int) Math.floor(getZ()));
-                setLeveling((getY() - groundY) <= 10.0);
-
-                double fall = getFallSpeed();
-                double yBefore = this.getY();
-                this.move(MoverType.SELF, new Vec3(0.0, -fall, 0.0));
-                double yAfter = this.getY();
-
-                boolean blocked = yAfter > (yBefore - fall + 1.0E-6);
-                if (blocked && (this.onGround() || this.verticalCollision)) {
-                    this.setDeltaMovement(Vec3.ZERO);
-                    setLanded(true);
-                    entityData.set(LANDED_TICK, tickCount);
-                }
-            } else {
-                int sinceLanded = tickCount - entityData.get(LANDED_TICK);
-                int openDelay = AirDropConfig.SERVER.autoOpenDelayTicks.get();
-
-                if (!isOpened() && sinceLanded >= openDelay) {
-                    setOpened(true);
-                }
-
-                boolean isEmpty = inventory.isEmpty();
-                int despawnTime = isEmpty
-                        ? AirDropConfig.SERVER.despawnEmptySeconds.get() * 20
-                        : AirDropConfig.SERVER.despawnFilledSeconds.get() * 20;
-
-                if (sinceLanded >= despawnTime) {
-                    if (!isEmpty) {
-                        level().getServer().getPlayerList().broadcastSystemMessage(
-                                Component.translatable("airdrop.despawn.time_up").withStyle(ChatFormatting.RED), false);
-                    } else {
-                        level().getServer().getPlayerList().broadcastSystemMessage(
-                                Component.translatable("airdrop.despawn.empty").withStyle(ChatFormatting.GRAY), false);
-                    }
-                    this.discard();
-                    return;
-                }
-
-                if (!isEmpty && !warnedDespawn) {
-                    int warnTime = AirDropConfig.SERVER.notificationSecondsBeforeDespawn.get() * 20;
-                    if (despawnTime - sinceLanded <= warnTime) {
-                        int secondsLeft = (despawnTime - sinceLanded) / 20;
-                        level().getServer().getPlayerList().broadcastSystemMessage(
-                                Component.translatable("airdrop.despawn.warning", secondsLeft).withStyle(ChatFormatting.RED), false);
-                        warnedDespawn = true;
-                    }
-                }
-            }
+        if (level().isClientSide) {
+            clientTick();
             return;
         }
+        serverTick();
+    }
 
+    private void serverTick() {
+        this.setNoGravity(true);
+        traceOnMap();
+
+        if (!isLanded()) {
+            descend();
+        } else {
+            rest();
+        }
+    }
+
+    private void traceOnMap() {
+        if (isOpened()) {
+            com.persiki84.minimap.MapManager.removeWorldMarker(getId());
+        } else {
+            com.persiki84.minimap.MapManager.setWorldMarker(getId(), getX(), getZ(), "airdrop.map.marker");
+        }
+    }
+
+    private void descend() {
+        int groundY = level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                (int) Math.floor(getX()), (int) Math.floor(getZ()));
+        setLeveling((getY() - groundY) <= LEVELING_HEIGHT);
+
+        double fall = getFallSpeed();
+        double yBefore = this.getY();
+        this.move(MoverType.SELF, new Vec3(0.0, -fall, 0.0));
+
+        boolean blocked = this.getY() > (yBefore - fall + 1.0E-6);
+        if (blocked && (this.onGround() || this.verticalCollision)) {
+            this.setDeltaMovement(Vec3.ZERO);
+            setLanded(true);
+            entityData.set(LANDED_AGE, 0);
+        }
+    }
+
+    private void rest() {
+        int sinceLanded = entityData.get(LANDED_AGE) + 1;
+        entityData.set(LANDED_AGE, sinceLanded);
+
+        if (!isOpened() && sinceLanded >= AirDropConfig.SERVER.autoOpenDelayTicks.get()) {
+            setOpened(true);
+        }
+
+        boolean isEmpty = inventory.isEmpty();
+        int despawnTime = (isEmpty
+                ? AirDropConfig.SERVER.despawnEmptySeconds.get()
+                : AirDropConfig.SERVER.despawnFilledSeconds.get()) * TICKS_PER_SECOND;
+
+        if (sinceLanded >= despawnTime) {
+            broadcast(isEmpty ? "airdrop.despawn.empty" : "airdrop.despawn.time_up",
+                    isEmpty ? ChatFormatting.GRAY : ChatFormatting.RED);
+            this.discard();
+            return;
+        }
+        warnBeforeDespawn(sinceLanded, despawnTime, isEmpty);
+    }
+
+    private void warnBeforeDespawn(int sinceLanded, int despawnTime, boolean isEmpty) {
+        if (isEmpty || warnedDespawn) return;
+
+        int warnTime = AirDropConfig.SERVER.notificationSecondsBeforeDespawn.get() * TICKS_PER_SECOND;
+        int left = despawnTime - sinceLanded;
+        if (left > warnTime) return;
+
+        level().getServer().getPlayerList().broadcastSystemMessage(
+                Component.translatable("airdrop.despawn.warning", left / TICKS_PER_SECOND)
+                        .withStyle(ChatFormatting.RED), false);
+        warnedDespawn = true;
+    }
+
+    private void broadcast(String key, ChatFormatting color) {
+        level().getServer().getPlayerList().broadcastSystemMessage(
+                Component.translatable(key).withStyle(color), false);
+    }
+
+    private void clientTick() {
         if (!isLanded()) {
             if (!flyingAnimationState.isStarted()) flyingAnimationState.start(tickCount);
         } else {
@@ -148,13 +172,12 @@ public class AirDropEntity extends Entity {
             openingAnimationState.start(tickCount);
         }
         clientPrevOpened = openedNow;
+        if (openedNow) return;
 
-        if (!openedNow) {
-            for (int i = 0; i < 2; i++) {
-                double ox = (this.random.nextDouble() - 0.5) * 0.5;
-                double oz = (this.random.nextDouble() - 0.5) * 0.5;
-                level().addParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, getX() + ox, getY() + 1.3, getZ() + oz, 0.0, 0.07, 0.0);
-            }
+        for (int i = 0; i < SMOKE_PER_TICK; i++) {
+            double ox = (this.random.nextDouble() - 0.5) * 0.5;
+            double oz = (this.random.nextDouble() - 0.5) * 0.5;
+            level().addParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, getX() + ox, getY() + 1.3, getZ() + oz, 0.0, 0.07, 0.0);
         }
     }
 
@@ -183,7 +206,7 @@ public class AirDropEntity extends Entity {
         if (tag.contains("FallSpeed")) setFallSpeed(tag.getFloat("FallSpeed"));
         if (tag.contains("Landed")) setLanded(tag.getBoolean("Landed"));
         if (tag.contains("Opened")) setOpened(tag.getBoolean("Opened"));
-        if (tag.contains("LandedTick")) entityData.set(LANDED_TICK, tag.getInt("LandedTick"));
+        if (tag.contains("LandedAge")) entityData.set(LANDED_AGE, tag.getInt("LandedAge"));
         if (tag.contains("FlyingAnimTicks")) setFlyingAnimTicks(tag.getInt("FlyingAnimTicks"));
         if (tag.contains("WarnedDespawn")) warnedDespawn = tag.getBoolean("WarnedDespawn");
 
@@ -205,7 +228,7 @@ public class AirDropEntity extends Entity {
         tag.putFloat("FallSpeed", getFallSpeed());
         tag.putBoolean("Landed", isLanded());
         tag.putBoolean("Opened", isOpened());
-        tag.putInt("LandedTick", entityData.get(LANDED_TICK));
+        tag.putInt("LandedAge", entityData.get(LANDED_AGE));
         tag.putInt("FlyingAnimTicks", getFlyingAnimTicks());
         tag.putBoolean("WarnedDespawn", warnedDespawn);
 
@@ -268,7 +291,7 @@ public class AirDropEntity extends Entity {
                 return InteractionResult.CONSUME;
             }
             else {
-                int sinceLanded = tickCount - entityData.get(LANDED_TICK);
+                int sinceLanded = entityData.get(LANDED_AGE);
                 int totalDelay = AirDropConfig.SERVER.autoOpenDelayTicks.get();
                 int ticksLeft = totalDelay - sinceLanded;
                 if (ticksLeft > 0) {

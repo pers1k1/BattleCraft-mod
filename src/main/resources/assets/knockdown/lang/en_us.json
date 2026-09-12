@@ -1,14 +1,12 @@
 {
   "knockdown.prefix": "[KnockDown] ",
   "knockdown.error.player_only": "This command can only be used by a player",
-  "knockdown.error.no_held_item": "You must hold an item in your hand",
   "item.knockdown.injector": "Injector",
   "key.knockdown.revive": "Revive Player",
   "key.categories.knockdown": "Knockdown Mod",
   "knockdown.msg.too_weak": "You are too weak...",
   "knockdown.msg.heavily_wounded": "You are heavily wounded!",
   "knockdown.msg.injector_cooldown": "Injector recharging...",
-  "knockdown.msg.self_saved": "You have been saved!",
   "knockdown.hud.bleeding": "Bleeding out: %ss",
   "knockdown.hud.injector_using": "Using injector...",
   "knockdown.hud.being_revived": "Being revived...",
@@ -20,5 +18,11 @@
   "knockdown.action.surrender": "Surrender...",
   "knockdown.prompt.surrender": "[%s] to surrender",
   "knockdown.prompt.revive_injector": "[%s] to revive yourself with the injector",
-  "knockdown.prompt.revive": "[%s] to revive"
+  "knockdown.prompt.revive": "[%s] to revive",
+  "knockdown.menu.title": "KNOCKDOWN",
+  "knockdown.menu.tab.times": "Timings",
+  "knockdown.menu.bleed_time": "Bleed out, s",
+  "knockdown.menu.revive_time": "Revive by hand, s",
+  "knockdown.menu.injector_time": "Injector, s",
+  "knockdown.menu.cooldown_time": "Fatigue, s"
 }

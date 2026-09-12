@@ -1,0 +1,166 @@
+package com.persiki84.zones.event;
+
+import com.persiki84.zones.Zone;
+import com.persiki84.zones.ZoneLookup;
+import com.persiki84.zones.ZoneRule;
+import com.persiki84.zones.ZonesMod;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import com.persiki84.battlecraft.modules.ModuleId;
+import com.persiki84.battlecraft.modules.ModuleSwitches;
+import net.minecraft.world.entity.player.Player;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.item.ItemTossEvent;
+import net.minecraftforge.event.entity.living.MobSpawnEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.event.level.ExplosionEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Mod.EventBusSubscriber(modid = ZonesMod.MOD_ID)
+public final class ZoneRuleGuard {
+    private static final long DENIAL_COOLDOWN_MS = 1500L;
+
+    private static final Map<UUID, Long> lastDenial = new ConcurrentHashMap<>();
+
+    private ZoneRuleGuard() {}
+
+    private static boolean muted() {
+        return !ModuleSwitches.allows(ModuleId.ZONES);
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void onBlockBreak(BlockEvent.BreakEvent event) {
+        if (event.getLevel().isClientSide() || muted()) return;
+
+        Player player = event.getPlayer();
+        if (player != null && player.isCreative()) return;
+
+        Zone zone = zoneBarring(ZoneRule.BLOCK_BREAK, player, event.getPos());
+        if (zone == null) return;
+
+        event.setCanceled(true);
+        refuse(player, zone, "zones.rule.denied.block_break");
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void onBlockPlace(BlockEvent.EntityPlaceEvent event) {
+        if (event.getLevel().isClientSide() || muted()) return;
+
+        Entity placer = event.getEntity();
+        if (placer instanceof Player player && player.isCreative()) return;
+
+        Zone zone = zoneBarring(ZoneRule.BLOCK_PLACE, placer, event.getPos());
+        if (zone == null) return;
+
+        event.setCanceled(true);
+        if (placer instanceof Player player) refuse(player, zone, "zones.rule.denied.block_place");
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void onInteract(PlayerInteractEvent.RightClickBlock event) {
+        if (event.getLevel().isClientSide || muted()) return;
+
+        Player player = event.getEntity();
+        if (player.isCreative()) return;
+
+        Zone zone = zoneForbiddingAt(ZoneRule.INTERACT, event.getPos());
+        if (zone == null) return;
+
+        event.setCanceled(true);
+        refuse(player, zone, "zones.rule.denied.interact");
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void onItemToss(ItemTossEvent event) {
+        Player player = event.getPlayer();
+        if (player.level().isClientSide || player.isCreative() || muted()) return;
+
+        Zone zone = ZoneLookup.forbidding(ZoneRule.ITEM_DROP, player.getX(), player.getY(), player.getZ());
+        if (zone == null) return;
+
+        event.setCanceled(true);
+        returnToOwner(player, event);
+        refuse(player, zone, "zones.rule.denied.item_drop");
+    }
+
+    private static void returnToOwner(Player player, ItemTossEvent event) {
+        if (!player.getInventory().add(event.getEntity().getItem())) {
+            player.level().addFreshEntity(event.getEntity());
+        }
+    }
+
+    @SubscribeEvent
+    public static void onMobSpawn(MobSpawnEvent.FinalizeSpawn event) {
+        if (muted()) return;
+
+        if (ZoneLookup.forbids(ZoneRule.MOB_SPAWN, event.getX(), event.getY(), event.getZ())) {
+            event.setSpawnCancelled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onExplosion(ExplosionEvent.Detonate event) {
+        if (event.getLevel().isClientSide || muted()) return;
+
+        stripShieldedBlocks(event.getAffectedBlocks());
+        stripShieldedEntities(event.getAffectedEntities());
+    }
+
+    private static void stripShieldedBlocks(List<BlockPos> affected) {
+        affected.removeIf(pos -> ZoneLookup.forbids(ZoneRule.EXPLOSIONS,
+                pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5));
+    }
+
+    private static void stripShieldedEntities(List<Entity> affected) {
+        affected.removeIf(entity -> ZoneLookup.forbids(ZoneRule.EXPLOSIONS,
+                entity.getX(), entity.getY(), entity.getZ()));
+    }
+
+    @SubscribeEvent
+    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || muted()) return;
+        if (!(event.player instanceof ServerPlayer player)) return;
+
+        if (ZoneLookup.forbids(ZoneRule.HUNGER, player.getX(), player.getY(), player.getZ())) {
+            player.getFoodData().setExhaustion(0.0f);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        lastDenial.remove(event.getEntity().getUUID());
+    }
+
+    private static Zone zoneForbiddingAt(ZoneRule rule, BlockPos pos) {
+        return ZoneLookup.forbidding(rule, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+    }
+
+    private static Zone zoneBarring(ZoneRule rule, Entity actor, BlockPos pos) {
+        return ZoneLookup.barring(rule, actor, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+    }
+
+    private static void refuse(Player player, Zone zone, String key) {
+        if (!(player instanceof ServerPlayer server) || !offCooldown(server)) return;
+
+        server.sendSystemMessage(Component.translatable(key,
+                Component.literal(zone.id()).withStyle(ChatFormatting.YELLOW)).withStyle(ChatFormatting.RED));
+    }
+
+    private static boolean offCooldown(ServerPlayer player) {
+        long now = System.currentTimeMillis();
+        Long previous = lastDenial.put(player.getUUID(), now);
+        return previous == null || now - previous >= DENIAL_COOLDOWN_MS;
+    }
+}

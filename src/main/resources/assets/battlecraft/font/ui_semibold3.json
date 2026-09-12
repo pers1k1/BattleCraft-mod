@@ -1,0 +1,14 @@
+{
+  "providers": [
+    {
+      "type": "ttf",
+      "file": "battlecraft:ui_semibold.ttf",
+      "shift": [
+        0,
+        0.5
+      ],
+      "size": 8.5,
+      "oversample": 3.0
+    }
+  ]
+}

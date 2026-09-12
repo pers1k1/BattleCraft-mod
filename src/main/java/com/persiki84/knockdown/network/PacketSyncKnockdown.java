@@ -56,8 +56,7 @@ public class PacketSyncKnockdown {
         public static void handle(PacketSyncKnockdown msg) {
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
             if (mc.level != null) {
-                Player localPlayer = (Player) mc.level.getEntity(msg.entityId);
-                if (localPlayer != null) {
+                if (mc.level.getEntity(msg.entityId) instanceof Player localPlayer) {
                     localPlayer.getCapability(KnockdownProvider.KNOCKDOWN_CAP).ifPresent(cap -> {
                         cap.setKnocked(msg.isKnocked);
                         cap.setReviveProgress(msg.reviveProgress);

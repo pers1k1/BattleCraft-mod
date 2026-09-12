@@ -1,12 +1,12 @@
 package com.persiki84.airdrop.loot;
 
+import com.persiki84.airdrop.AirDropMod;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
@@ -18,7 +18,11 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class AirDropLootManager {
     private static final Map<ResourceLocation, List<LootEntry>> TABLES = new HashMap<>();
@@ -32,35 +36,44 @@ public class AirDropLootManager {
 
     public static void reload(Path configDir) {
         TABLES.clear();
-        File folder = configDir.resolve("airdrop_loot").toFile();
-        if (!folder.exists()) folder.mkdirs();
+        File folder = folder(configDir);
 
-        File[] files = folder.listFiles((d, name) -> name.endsWith(".json"));
+        File[] files = folder.listFiles((directory, name) -> name.endsWith(".json"));
         if (files == null) return;
 
-        for (File f : files) {
-            try (FileReader reader = new FileReader(f)) {
-                JsonElement json = JsonParser.parseReader(reader);
-                if (json.isJsonArray()) {
-                    List<LootEntry> list = new ArrayList<>();
-                    for (JsonElement e : json.getAsJsonArray()) {
-                        JsonObject obj = e.getAsJsonObject();
-                        ResourceLocation id = new ResourceLocation(obj.get("item").getAsString());
-                        int min = obj.get("min").getAsInt();
-                        int max = obj.get("max").getAsInt();
-                        float chance = obj.get("chance").getAsFloat();
-
-                        String nbt = obj.has("nbt") ? obj.get("nbt").getAsString() : null;
-
-                        list.add(new LootEntry(id, min, max, chance, nbt));
-                    }
-                    String name = f.getName().replace(".json", "");
-                    TABLES.put(new ResourceLocation("airdrop", name), list);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+        for (File file : files) {
+            List<LootEntry> parsed = readTable(file);
+            if (parsed != null) TABLES.put(new ResourceLocation("airdrop", file.getName().replace(".json", "")), parsed);
         }
+    }
+
+    private static File folder(Path configDir) {
+        File folder = configDir.resolve("airdrop_loot").toFile();
+        if (!folder.exists()) folder.mkdirs();
+        return folder;
+    }
+
+    private static List<LootEntry> readTable(File file) {
+        try (FileReader reader = new FileReader(file)) {
+            JsonElement json = JsonParser.parseReader(reader);
+            if (!json.isJsonArray()) return null;
+
+            List<LootEntry> list = new ArrayList<>();
+            for (JsonElement element : json.getAsJsonArray()) {
+                list.add(readEntry(element.getAsJsonObject()));
+            }
+            return list;
+        } catch (Exception error) {
+            AirDropMod.LOGGER.warn("[airdrop] cannot read loot table {}: {}", file.getName(), error.toString());
+            return null;
+        }
+    }
+
+    private static LootEntry readEntry(JsonObject object) {
+        return new LootEntry(new ResourceLocation(object.get("item").getAsString()),
+                object.get("min").getAsInt(), object.get("max").getAsInt(),
+                object.get("chance").getAsFloat(),
+                object.has("nbt") ? object.get("nbt").getAsString() : null);
     }
 
     public static List<LootEntry> getTable(ResourceLocation id) {
@@ -72,27 +85,44 @@ public class AirDropLootManager {
     }
 
     public static void saveTable(ResourceLocation id, Path configDir) {
-        File folder = configDir.resolve("airdrop_loot").toFile();
-        if (!folder.exists()) folder.mkdirs();
-
-        File file = new File(folder, id.getPath() + ".json");
+        File file = new File(folder(configDir), id.getPath() + ".json");
         try (FileWriter writer = new FileWriter(file)) {
-            JsonArray arr = new JsonArray();
-            for (LootEntry e : getTable(id)) {
-                JsonObject obj = new JsonObject();
-                obj.addProperty("item", e.itemId().toString());
-                obj.addProperty("min", e.min());
-                obj.addProperty("max", e.max());
-                obj.addProperty("chance", e.chance());
-                if (e.nbt() != null && !e.nbt().isEmpty()) {
-                    obj.addProperty("nbt", e.nbt());
-                }
-                arr.add(obj);
+            JsonArray array = new JsonArray();
+            for (LootEntry entry : getTable(id)) {
+                array.add(writeEntry(entry));
             }
-            GSON.toJson(arr, writer);
-        } catch (Exception e) {
-            e.printStackTrace();
+            GSON.toJson(array, writer);
+        } catch (Exception error) {
+            AirDropMod.LOGGER.warn("[airdrop] cannot write loot table {}: {}", file.getName(), error.toString());
         }
+    }
+
+    private static JsonObject writeEntry(LootEntry entry) {
+        JsonObject object = new JsonObject();
+        object.addProperty("item", entry.itemId().toString());
+        object.addProperty("min", entry.min());
+        object.addProperty("max", entry.max());
+        object.addProperty("chance", entry.chance());
+        if (entry.nbt() != null && !entry.nbt().isEmpty()) object.addProperty("nbt", entry.nbt());
+        return object;
+    }
+
+    public static ItemStack stackOf(LootEntry entry, int count) {
+        ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.get(entry.itemId()), count);
+        if (entry.nbt() == null || entry.nbt().isEmpty()) return stack;
+
+        try {
+            stack.setTag(TagParser.parseTag(entry.nbt()));
+        } catch (Exception error) {
+            AirDropMod.LOGGER.warn("[airdrop] bad nbt for {}: {}", entry.itemId(), error.toString());
+        }
+        return stack;
+    }
+
+    public static LootEntry describing(LootEntry entry, ItemStack stack) {
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        String nbt = stack.hasTag() ? stack.getTag().toString() : null;
+        return new LootEntry(id, entry.min(), entry.max(), entry.chance(), nbt);
     }
 
     public static void fillInventory(RandomSource rand, Container container, ResourceLocation tableId) {
@@ -100,35 +130,28 @@ public class AirDropLootManager {
         if (pool == null || pool.isEmpty()) return;
 
         container.clearContent();
-
-        List<Integer> slots = new ArrayList<>();
-        for (int i = 0; i < container.getContainerSize(); i++) slots.add(i);
-        java.util.Collections.shuffle(slots);
+        List<Integer> slots = shuffledSlots(container, rand);
 
         int slotIndex = 0;
-
-        for (LootEntry e : pool) {
-            if (rand.nextFloat() <= e.chance()) {
-                int count = e.min();
-                if (e.max() > e.min()) {
-                    count += rand.nextInt(e.max() - e.min() + 1);
-                }
-
-                ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.get(e.itemId()), count);
-
-                if (e.nbt() != null && !e.nbt().isEmpty()) {
-                    try {
-                        CompoundTag tag = TagParser.parseTag(e.nbt());
-                        stack.setTag(tag);
-                    } catch (Exception ex) {
-                        System.err.println("AirDrop: Failed to parse NBT for item " + e.itemId());
-                    }
-                }
-
-                if (slotIndex < slots.size()) {
-                    container.setItem(slots.get(slotIndex++), stack);
-                }
-            }
+        for (LootEntry entry : pool) {
+            if (rand.nextFloat() > entry.chance() || slotIndex >= slots.size()) continue;
+            container.setItem(slots.get(slotIndex++), stackOf(entry, rolledCount(entry, rand)));
         }
+    }
+
+    private static List<Integer> shuffledSlots(Container container, RandomSource rand) {
+        List<Integer> slots = new ArrayList<>();
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            slots.add(slot);
+        }
+        for (int index = slots.size() - 1; index > 0; index--) {
+            Collections.swap(slots, index, rand.nextInt(index + 1));
+        }
+        return slots;
+    }
+
+    private static int rolledCount(LootEntry entry, RandomSource rand) {
+        if (entry.max() <= entry.min()) return entry.min();
+        return entry.min() + rand.nextInt(entry.max() - entry.min() + 1);
     }
 }

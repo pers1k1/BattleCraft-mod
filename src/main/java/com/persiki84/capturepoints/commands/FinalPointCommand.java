@@ -1,17 +1,21 @@
 package com.persiki84.capturepoints.commands;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.persiki84.battlecraft.BattleCraftCommands;
 import com.persiki84.capturepoints.capture.FinalCapturePoint;
 import com.persiki84.capturepoints.capture.CapturePointManager;
 import com.persiki84.capturepoints.event.BlockProtectionHandler;
-import com.persiki84.capturepoints.network.FinalPointSyncPacket;
-import com.persiki84.capturepoints.network.PacketHandler;
+import com.persiki84.capturepoints.menu.CapturePointMenuState;
 import com.persiki84.capturepoints.util.TeamUtil;
+import com.persiki84.shared.zone.ZoneArea;
+import com.persiki84.shared.zone.ZoneShape;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
@@ -24,10 +28,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraftforge.network.PacketDistributor;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
 public class FinalPointCommand {
     private static final SuggestionProvider<CommandSourceStack> FINAL_POINT_SUGGESTIONS = (context, builder) ->
@@ -37,28 +39,61 @@ public class FinalPointCommand {
             SharedSuggestionProvider.suggest(context.getSource().getServer().getScoreboard().getTeamNames(), builder);
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext context) {
-        dispatcher.register(Commands.literal("finalpoint")
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("finalpoint")
                 .requires(source -> source.hasPermission(2))
-                .then(Commands.literal("create")
-                        .then(Commands.argument("name", StringArgumentType.string())
-                                .then(Commands.argument("position", BlockPosArgument.blockPos())
-                                        .then(Commands.argument("radius", IntegerArgumentType.integer(1, 100))
-                                                .then(Commands.argument("captureTimeSeconds", IntegerArgumentType.integer(1))
-                                                        .then(Commands.argument("cooldownSeconds", IntegerArgumentType.integer(0))
-                                                                .executes(FinalPointCommand::createPoint)))))))
+                .executes(source -> BattleCraftCommands.openMenu(source, CapturePointMenuState.MENU_ID));
+
+        addLifecycleBranches(root);
+        addGeometryBranches(root);
+        addTimingBranches(root);
+        addCommandBlockBranches(root);
+        addRewardBranches(root, context);
+        addToggleBranches(root);
+        CaptureTuningCommands.addBranches(root, FINAL_POINT_SUGGESTIONS, CapturePointManager::getFinalPoint);
+
+        dispatcher.register(root);
+    }
+
+    private static void addLifecycleBranches(LiteralArgumentBuilder<CommandSourceStack> root) {
+        root.then(createBranch())
                 .then(Commands.literal("remove")
                         .then(Commands.argument("name", StringArgumentType.string())
                                 .suggests(FINAL_POINT_SUGGESTIONS)
                                 .executes(FinalPointCommand::removePoint)))
                 .then(Commands.literal("list")
                         .executes(FinalPointCommand::listPoints))
+                .then(Commands.literal("resetall")
+                        .executes(FinalPointCommand::resetAllFinalPoints))
                 .then(Commands.literal("setowner")
                         .then(Commands.argument("pointName", StringArgumentType.string())
                                 .suggests(FINAL_POINT_SUGGESTIONS)
                                 .then(Commands.argument("teamName", StringArgumentType.string())
                                         .suggests(SCOREBOARD_TEAM_SUGGESTIONS)
-                                        .executes(FinalPointCommand::setOwner))))
-                .then(Commands.literal("addcommandblock")
+                                        .executes(FinalPointCommand::setOwner))));
+    }
+
+    private static void addGeometryBranches(LiteralArgumentBuilder<CommandSourceStack> root) {
+        root.then(radiusBranch())
+                .then(shapeBranch())
+                .then(heightBranch())
+                .then(resetHeightBranch());
+    }
+
+    private static void addTimingBranches(LiteralArgumentBuilder<CommandSourceStack> root) {
+        root.then(Commands.literal("setcapturetime")
+                        .then(Commands.argument("name", StringArgumentType.string())
+                                .suggests(FINAL_POINT_SUGGESTIONS)
+                                .then(Commands.argument("seconds", IntegerArgumentType.integer(1))
+                                        .executes(FinalPointCommand::setCaptureTime))))
+                .then(Commands.literal("setcooldown")
+                        .then(Commands.argument("name", StringArgumentType.string())
+                                .suggests(FINAL_POINT_SUGGESTIONS)
+                                .then(Commands.argument("seconds", IntegerArgumentType.integer(0))
+                                        .executes(FinalPointCommand::setCooldown))));
+    }
+
+    private static void addCommandBlockBranches(LiteralArgumentBuilder<CommandSourceStack> root) {
+        root.then(Commands.literal("addcommandblock")
                         .then(Commands.argument("name", StringArgumentType.string())
                                 .suggests(FINAL_POINT_SUGGESTIONS)
                                 .then(Commands.argument("position", BlockPosArgument.blockPos())
@@ -75,8 +110,11 @@ public class FinalPointCommand {
                 .then(Commands.literal("clearcommandblocks")
                         .then(Commands.argument("name", StringArgumentType.string())
                                 .suggests(FINAL_POINT_SUGGESTIONS)
-                                .executes(FinalPointCommand::clearCommandBlocks)))
-                .then(Commands.literal("setreward")
+                                .executes(FinalPointCommand::clearCommandBlocks)));
+    }
+
+    private static void addRewardBranches(LiteralArgumentBuilder<CommandSourceStack> root, CommandBuildContext context) {
+        root.then(Commands.literal("setreward")
                         .then(Commands.argument("name", StringArgumentType.string())
                                 .suggests(FINAL_POINT_SUGGESTIONS)
                                 .then(Commands.argument("item", ItemArgument.item(context))
@@ -85,48 +123,78 @@ public class FinalPointCommand {
                 .then(Commands.literal("removereward")
                         .then(Commands.argument("name", StringArgumentType.string())
                                 .suggests(FINAL_POINT_SUGGESTIONS)
-                                .executes(FinalPointCommand::removeReward)))
-                .then(Commands.literal("setradius")
-                        .then(Commands.argument("name", StringArgumentType.string())
-                                .suggests(FINAL_POINT_SUGGESTIONS)
-                                .then(Commands.argument("radius", IntegerArgumentType.integer(1, 100))
-                                        .executes(FinalPointCommand::setRadius))))
-                .then(Commands.literal("setcapturetime")
-                        .then(Commands.argument("name", StringArgumentType.string())
-                                .suggests(FINAL_POINT_SUGGESTIONS)
-                                .then(Commands.argument("seconds", IntegerArgumentType.integer(1))
-                                        .executes(FinalPointCommand::setCaptureTime))))
-                .then(Commands.literal("setcooldown")
-                        .then(Commands.argument("name", StringArgumentType.string())
-                                .suggests(FINAL_POINT_SUGGESTIONS)
-                                .then(Commands.argument("seconds", IntegerArgumentType.integer(0))
-                                        .executes(FinalPointCommand::setCooldown))))
-                .then(Commands.literal("resetall")
-                        .executes(FinalPointCommand::resetAllFinalPoints))
-                .then(Commands.literal("protection")
+                                .executes(FinalPointCommand::removeReward)));
+    }
+
+    private static void addToggleBranches(LiteralArgumentBuilder<CommandSourceStack> root) {
+        root.then(Commands.literal("protection")
                         .then(Commands.literal("enable")
                                 .executes(FinalPointCommand::enableProtection))
                         .then(Commands.literal("disable")
                                 .executes(FinalPointCommand::disableProtection))
                         .then(Commands.literal("status")
-                                .executes(FinalPointCommand::protectionStatus)))
-                
+                                .executes(PointCommands::protectionStatus)))
                 .then(Commands.literal("serverviewmarkers")
-                        .then(Commands.argument("enabled", com.mojang.brigadier.arguments.BoolArgumentType.bool())
+                        .then(Commands.argument("enabled", BoolArgumentType.bool())
                                 .executes(FinalPointCommand::setServerMarkers)))
-                
                 .then(Commands.literal("markers")
-                        .then(Commands.argument("enabled", com.mojang.brigadier.arguments.BoolArgumentType.bool())
-                                .executes(FinalPointCommand::setLocalMarkers))));
+                        .then(Commands.argument("enabled", BoolArgumentType.bool())
+                                .executes(PointCommands::setLocalMarkers)));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> createBranch() {
+        return Commands.literal("create")
+                .then(Commands.argument("name", StringArgumentType.string())
+                        .then(Commands.argument("position", BlockPosArgument.blockPos())
+                                .then(Commands.argument("radius", IntegerArgumentType.integer(1, 100))
+                                        .then(Commands.argument("captureTimeSeconds", IntegerArgumentType.integer(1))
+                                                .then(Commands.argument("cooldownSeconds", IntegerArgumentType.integer(0))
+                                                        .executes(FinalPointCommand::createPoint)
+                                                        .then(Commands.argument(ShapeArguments.ARGUMENT_NAME, StringArgumentType.word())
+                                                                .suggests(ShapeArguments.SUGGESTIONS)
+                                                                .executes(FinalPointCommand::createPoint)))))));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> radiusBranch() {
+        return Commands.literal("setradius")
+                .then(Commands.argument("name", StringArgumentType.string())
+                        .suggests(FINAL_POINT_SUGGESTIONS)
+                        .then(Commands.argument("radius", IntegerArgumentType.integer(1, 100))
+                                .executes(FinalPointCommand::setRadius)));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> shapeBranch() {
+        return Commands.literal("setshape")
+                .then(Commands.argument("name", StringArgumentType.string())
+                        .suggests(FINAL_POINT_SUGGESTIONS)
+                        .then(Commands.argument(ShapeArguments.ARGUMENT_NAME, StringArgumentType.word())
+                                .suggests(ShapeArguments.SUGGESTIONS)
+                                .executes(FinalPointCommand::setShape)));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> heightBranch() {
+        return Commands.literal("setheight")
+                .then(Commands.argument("name", StringArgumentType.string())
+                        .suggests(FINAL_POINT_SUGGESTIONS)
+                        .then(Commands.argument("up", IntegerArgumentType.integer(0))
+                                .then(Commands.argument("down", IntegerArgumentType.integer(0))
+                                        .executes(FinalPointCommand::setHeight))));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> resetHeightBranch() {
+        return Commands.literal("resetheight")
+                .then(Commands.argument("name", StringArgumentType.string())
+                        .suggests(FINAL_POINT_SUGGESTIONS)
+                        .executes(FinalPointCommand::resetHeight));
     }
 
     private static int createPoint(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         String name = StringArgumentType.getString(context, "name");
+        if (nameTaken(context, name)) return 0;
 
-        if (CapturePointManager.getFinalPoint(name) != null || CapturePointManager.getCapturePoint(name) != null) {
-            context.getSource().sendFailure(
-                    Component.translatable("capturepoints.error.final_point_exists", name).withStyle(ChatFormatting.RED)
-            );
+        ZoneShape shape = ShapeArguments.readOrDefault(context, ZoneShape.CIRCLE);
+        if (shape == null) {
+            context.getSource().sendFailure(Component.translatable("capturepoints.error.unknown_shape").withStyle(ChatFormatting.RED));
             return 0;
         }
 
@@ -135,10 +203,9 @@ public class FinalPointCommand {
         int captureTimeSeconds = IntegerArgumentType.getInteger(context, "captureTimeSeconds");
         int cooldownSeconds = IntegerArgumentType.getInteger(context, "cooldownSeconds");
 
-        int captureTimeTicks = captureTimeSeconds * 20;
-        int cooldownTicks = cooldownSeconds * 20;
-
-        FinalCapturePoint point = new FinalCapturePoint(name, pos, radius, captureTimeTicks, cooldownTicks);
+        ZoneArea area = new ZoneArea(shape, pos, radius, ZoneArea.DEFAULT_HEIGHT, ZoneArea.DEFAULT_HEIGHT);
+        FinalCapturePoint point = new FinalCapturePoint(name, area, captureTimeSeconds * 20, cooldownSeconds * 20);
+        point.setDimension(context.getSource().getLevel().dimension());
         CapturePointManager.addFinalPoint(point);
 
         context.getSource().sendSuccess(() ->
@@ -146,6 +213,16 @@ public class FinalPointCommand {
                         name, captureTimeSeconds, cooldownSeconds
                 ).withStyle(ChatFormatting.GREEN), true);
         return 1;
+    }
+
+    private static boolean nameTaken(CommandContext<CommandSourceStack> context, String name) {
+        if (CapturePointManager.getFinalPoint(name) == null && CapturePointManager.getCapturePoint(name) == null) {
+            return false;
+        }
+
+        context.getSource().sendFailure(
+                Component.translatable("capturepoints.error.final_point_exists", name).withStyle(ChatFormatting.RED));
+        return true;
     }
 
     private static int removePoint(CommandContext<CommandSourceStack> context) {
@@ -185,7 +262,7 @@ public class FinalPointCommand {
             context.getSource().sendSuccess(() ->
                     Component.empty()
                             .append(Component.literal(pointName).withStyle(ChatFormatting.YELLOW, ChatFormatting.BOLD))
-                            .append(Component.literal(String.format(": [%d, %d, %d] Radius: %d, Owner: ", pos.getX(), pos.getY(), pos.getZ(), point.getRadius())).withStyle(ChatFormatting.GRAY))
+                            .append(Component.literal(String.format(": [%d, %d, %d] %s %.1f, Owner: ", pos.getX(), pos.getY(), pos.getZ(), point.getShape().id(), point.getSize())).withStyle(ChatFormatting.GRAY))
                             .append(Component.literal(owner).withStyle(ChatFormatting.YELLOW))
                             .append(Component.literal(", Command blocks: ").withStyle(ChatFormatting.GRAY))
                             .append(Component.literal(String.valueOf(cmdBlocks)).withStyle(ChatFormatting.AQUA)),
@@ -221,27 +298,31 @@ public class FinalPointCommand {
 
         point.setOwnerTeam(teamName);
         CapturePointManager.cancelCaptureForPoint(pointName);
-        CapturePointManager.save(null);
+        CapturePointManager.persist();
         CapturePointManager.syncFinalPoints();
 
+        announceOwner(context, server, pointName, teamName);
+        return 1;
+    }
+
+    private static void announceOwner(CommandContext<CommandSourceStack> context, MinecraftServer server, String pointName, String teamName) {
         ChatFormatting teamColor = TeamUtil.getTeamColor(server, teamName);
+
         context.getSource().sendSuccess(() ->
                 Component.translatable("capturepoints.success.final_owner_set",
                         Component.literal(pointName).withStyle(ChatFormatting.YELLOW),
                         Component.literal(teamName).withStyle(teamColor)
                 ).withStyle(ChatFormatting.GREEN), true);
 
-        if (server != null) {
-            server.getPlayerList().broadcastSystemMessage(
-                    Component.translatable("capturepoints.info.final_owner_broadcast",
-                            Component.literal(pointName).withStyle(ChatFormatting.AQUA),
-                            Component.literal(teamName).withStyle(teamColor)
-                    ).withStyle(ChatFormatting.YELLOW),
-                    false
-            );
-        }
+        if (server == null) return;
 
-        return 1;
+        server.getPlayerList().broadcastSystemMessage(
+                Component.translatable("capturepoints.info.final_owner_broadcast",
+                        Component.literal(pointName).withStyle(ChatFormatting.AQUA),
+                        Component.literal(teamName).withStyle(teamColor)
+                ).withStyle(ChatFormatting.YELLOW),
+                false
+        );
     }
 
     private static int addCommandBlock(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -255,7 +336,7 @@ public class FinalPointCommand {
         }
 
         point.addCommandBlock(pos);
-        CapturePointManager.save(null);
+        CapturePointManager.persist();
 
         context.getSource().sendSuccess(() ->
                 Component.translatable("capturepoints.success.cmd_block_added",
@@ -275,7 +356,7 @@ public class FinalPointCommand {
         }
 
         point.removeCommandBlock(pos);
-        CapturePointManager.save(null);
+        CapturePointManager.persist();
 
         context.getSource().sendSuccess(() ->
                 Component.translatable("capturepoints.success.cmd_block_removed",
@@ -305,6 +386,11 @@ public class FinalPointCommand {
                         Component.literal(name).withStyle(ChatFormatting.YELLOW)
                 ).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD), false);
 
+        sendCommandBlockEntries(context, blocks);
+        return 1;
+    }
+
+    private static void sendCommandBlockEntries(CommandContext<CommandSourceStack> context, List<BlockPos> blocks) {
         for (int i = 0; i < blocks.size(); i++) {
             BlockPos pos = blocks.get(i);
             int index = i + 1;
@@ -314,8 +400,6 @@ public class FinalPointCommand {
                     ).withStyle(ChatFormatting.GRAY), false
             );
         }
-
-        return 1;
     }
 
     private static int clearCommandBlocks(CommandContext<CommandSourceStack> context) {
@@ -328,7 +412,7 @@ public class FinalPointCommand {
         }
 
         point.clearCommandBlocks();
-        CapturePointManager.save(null);
+        CapturePointManager.persist();
 
         context.getSource().sendSuccess(() ->
                 Component.translatable("capturepoints.success.cmd_blocks_cleared").withStyle(ChatFormatting.GREEN), true);
@@ -348,7 +432,7 @@ public class FinalPointCommand {
 
         point.setReward(item);
         point.setRewardAmount(amount);
-        CapturePointManager.save(null);
+        CapturePointManager.persist();
 
         String itemName = item.getHoverName().getString();
         context.getSource().sendSuccess(() ->
@@ -369,7 +453,7 @@ public class FinalPointCommand {
 
         point.setReward(new ItemStack(Items.AIR));
         point.setRewardAmount(0);
-        CapturePointManager.save(null);
+        CapturePointManager.persist();
 
         context.getSource().sendSuccess(() ->
                 Component.translatable("capturepoints.success.final_reward_removed",
@@ -388,12 +472,76 @@ public class FinalPointCommand {
             return 0;
         }
 
-        point.setRadius(radius);
-        CapturePointManager.save(null);
+        point.setSize(radius);
+        CapturePointManager.persist();
+        CapturePointManager.syncFinalPoints();
 
         context.getSource().sendSuccess(() ->
                 Component.translatable("capturepoints.success.final_radius_set", radius
                 ).withStyle(ChatFormatting.GREEN), true);
+        return 1;
+    }
+
+    private static int setShape(CommandContext<CommandSourceStack> context) {
+        String name = StringArgumentType.getString(context, "name");
+        ZoneShape shape = ShapeArguments.read(context);
+
+        if (shape == null) {
+            context.getSource().sendFailure(Component.translatable("capturepoints.error.unknown_shape").withStyle(ChatFormatting.RED));
+            return 0;
+        }
+
+        FinalCapturePoint point = CapturePointManager.getFinalPoint(name);
+        if (point == null) {
+            context.getSource().sendFailure(Component.translatable("capturepoints.error.final_point_not_found_short").withStyle(ChatFormatting.RED));
+            return 0;
+        }
+
+        point.setShape(shape);
+        CapturePointManager.persist();
+        CapturePointManager.syncFinalPoints();
+
+        context.getSource().sendSuccess(() ->
+                Component.translatable("capturepoints.success.final_shape_set", shape.id()).withStyle(ChatFormatting.GREEN), true);
+        return 1;
+    }
+
+    private static int setHeight(CommandContext<CommandSourceStack> context) {
+        String name = StringArgumentType.getString(context, "name");
+        int up = IntegerArgumentType.getInteger(context, "up");
+        int down = IntegerArgumentType.getInteger(context, "down");
+
+        FinalCapturePoint point = CapturePointManager.getFinalPoint(name);
+        if (point == null) {
+            context.getSource().sendFailure(Component.translatable("capturepoints.error.final_point_not_found_short").withStyle(ChatFormatting.RED));
+            return 0;
+        }
+
+        point.setHeightUp(up);
+        point.setHeightDown(down);
+        CapturePointManager.persist();
+        CapturePointManager.syncFinalPoints();
+
+        context.getSource().sendSuccess(() ->
+                Component.translatable("capturepoints.success.final_height_set", name, up, down).withStyle(ChatFormatting.GREEN), true);
+        return 1;
+    }
+
+    private static int resetHeight(CommandContext<CommandSourceStack> context) {
+        String name = StringArgumentType.getString(context, "name");
+
+        FinalCapturePoint point = CapturePointManager.getFinalPoint(name);
+        if (point == null) {
+            context.getSource().sendFailure(Component.translatable("capturepoints.error.final_point_not_found_short").withStyle(ChatFormatting.RED));
+            return 0;
+        }
+
+        point.resetHeight();
+        CapturePointManager.persist();
+        CapturePointManager.syncFinalPoints();
+
+        context.getSource().sendSuccess(() ->
+                Component.translatable("capturepoints.success.final_height_reset", name).withStyle(ChatFormatting.GREEN), true);
         return 1;
     }
 
@@ -408,7 +556,7 @@ public class FinalPointCommand {
         }
 
         point.setCaptureTime(seconds * 20);
-        CapturePointManager.save(null);
+        CapturePointManager.persist();
 
         context.getSource().sendSuccess(() ->
                 Component.translatable("capturepoints.success.final_capture_time_set", seconds
@@ -427,7 +575,7 @@ public class FinalPointCommand {
         }
 
         point.setCooldown(seconds * 20);
-        CapturePointManager.save(null);
+        CapturePointManager.persist();
 
         context.getSource().sendSuccess(() ->
                 Component.translatable("capturepoints.success.final_cooldown_set", seconds
@@ -479,32 +627,10 @@ public class FinalPointCommand {
         return 1;
     }
 
-    private static int protectionStatus(CommandContext<CommandSourceStack> context) {
-        boolean enabled = BlockProtectionHandler.isProtectionEnabled();
-        Component statusText = enabled
-                ? Component.translatable("capturepoints.status.enabled").withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
-                : Component.translatable("capturepoints.status.disabled").withStyle(ChatFormatting.RED, ChatFormatting.BOLD);
-
-        context.getSource().sendSuccess(() ->
-                Component.translatable("capturepoints.info.protection_status", statusText).withStyle(ChatFormatting.YELLOW), false);
-        return 1;
-    }
-
     private static int setServerMarkers(CommandContext<CommandSourceStack> context) {
         boolean enabled = com.mojang.brigadier.arguments.BoolArgumentType.getBool(context, "enabled");
         CapturePointManager.setGlobalFinalMarkers(enabled);
         context.getSource().sendSuccess(() -> Component.literal("Server view markers for final points set to " + enabled).withStyle(ChatFormatting.GREEN), true);
-        return 1;
-    }
-
-    private static int setLocalMarkers(CommandContext<CommandSourceStack> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-        boolean enabled = com.mojang.brigadier.arguments.BoolArgumentType.getBool(context, "enabled");
-        net.minecraft.server.level.ServerPlayer player = context.getSource().getPlayerOrException();
-        com.persiki84.capturepoints.network.PacketHandler.INSTANCE.send(
-                net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
-                new com.persiki84.capturepoints.network.LocalMarkerOverridePacket(enabled)
-        );
-        context.getSource().sendSuccess(() -> Component.literal("Local markers visibility set to " + enabled).withStyle(ChatFormatting.GREEN), false);
         return 1;
     }
 

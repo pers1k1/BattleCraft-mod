@@ -6,6 +6,8 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
+import com.persiki84.battlecraft.modules.ModuleId;
+import com.persiki84.battlecraft.modules.ModuleSwitches;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -19,6 +21,19 @@ public class EffectHandler {
 
     private final Map<UUID, Map<String, Integer>> warmupTimers = new HashMap<>();
     private final Map<UUID, Map<MobEffect, Integer>> lingerTimers = new HashMap<>();
+
+    // WHY: таймеры лежат по UUID и не снимались ни на выходе, ни на остановке сервера
+    @SubscribeEvent
+    public void onPlayerLogout(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        warmupTimers.remove(event.getEntity().getUUID());
+        lingerTimers.remove(event.getEntity().getUUID());
+    }
+
+    @SubscribeEvent
+    public void onServerStopping(net.minecraftforge.event.server.ServerStoppingEvent event) {
+        warmupTimers.clear();
+        lingerTimers.clear();
+    }
 
     public static void markDirty() {
         dirty = true;
@@ -36,7 +51,9 @@ public class EffectHandler {
                     cache.computeIfAbsent(parts[0], k -> new ArrayList<>())
                             .add(new PotionEntry(eff, Integer.parseInt(parts[2]), parts[3].equals("DEBUFF")));
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception error) {
+                ItemModifiersMod.LOGGER.warn("[itemmodifiers] bad effect line {}: {}", line, error.toString());
+            }
         }
         dirty = false;
     }
@@ -45,6 +62,7 @@ public class EffectHandler {
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || event.player.level().isClientSide) return;
         if (!ModifierConfig.MOD_ENABLED.get()) return;
+        if (!ModuleSwitches.allows(ModuleId.ITEM_MODIFIERS)) return;
         if (event.player.tickCount % 10 != 0) return;
 
         if (dirty) refreshCache();

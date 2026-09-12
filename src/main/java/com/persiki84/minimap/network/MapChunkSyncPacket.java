@@ -2,7 +2,6 @@ package com.persiki84.minimap.network;
 
 import com.persiki84.minimap.server.ServerMapStorage;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.ArrayList;
@@ -10,6 +9,10 @@ import java.util.List;
 import java.util.function.Supplier;
 
 public class MapChunkSyncPacket {
+    public static final int MAX_CHUNKS = 64;
+    public static final int DIMENSION_LIMIT = 64;
+    public static final int CHUNK_COLORS = 256;
+
     public final String dimension;
     public final List<ChunkData> chunks;
 
@@ -18,9 +21,11 @@ public class MapChunkSyncPacket {
         this.chunks = chunks;
     }
 
+    // WHY: размер приходит от клиента и до чтения тела задавал ёмкость списка: одним пакетом
+    // WHY: с varint на полтора миллиарда сервер уходил в OutOfMemory, поэтому размер зажат
     public MapChunkSyncPacket(FriendlyByteBuf buf) {
-        this.dimension = buf.readUtf();
-        int size = buf.readVarInt();
+        this.dimension = buf.readUtf(DIMENSION_LIMIT);
+        int size = Math.min(Math.max(buf.readVarInt(), 0), MAX_CHUNKS);
         this.chunks = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             int x = buf.readInt();

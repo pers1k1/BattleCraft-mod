@@ -5,7 +5,6 @@ import com.persiki84.minimap.network.MapWorldMarkerSyncPacket;
 import com.persiki84.minimap.network.PacketHandler;
 import com.persiki84.minimap.network.PlayerPositionSyncPacket;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.scores.PlayerTeam;
 import net.minecraftforge.network.PacketDistributor;
 
 import java.util.*;
@@ -16,12 +15,15 @@ public class MapManager {
     private static final Map<UUID, MapMarkerSyncPacket.MarkerData> activeTeamMarkers = new ConcurrentHashMap<>();
     private static final Map<Integer, MapWorldMarkerSyncPacket.WorldMarker> worldMarkers = new ConcurrentHashMap<>();
 
+    private static boolean worldDirty;
+
     public static void setWorldMarker(int id, double x, double z, String key) {
         worldMarkers.put(id, new MapWorldMarkerSyncPacket.WorldMarker(x, z, key));
+        worldDirty = true;
     }
 
     public static void removeWorldMarker(int id) {
-        worldMarkers.remove(id);
+        if (worldMarkers.remove(id) != null) worldDirty = true;
     }
 
     public static void syncWorldMarkers(ServerPlayer target) {
@@ -99,9 +101,10 @@ public class MapManager {
     public static void tick(net.minecraft.server.MinecraftServer server) {
         if (server.getTickCount() % 10 != 0) return;
 
-        MapWorldMarkerSyncPacket worldPacket = new MapWorldMarkerSyncPacket(new ArrayList<>(worldMarkers.values()));
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), worldPacket);
+        if (worldDirty) {
+            worldDirty = false;
+            PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(),
+                    new MapWorldMarkerSyncPacket(new ArrayList<>(worldMarkers.values())));
         }
 
         Map<String, List<ServerPlayer>> teams = new HashMap<>();

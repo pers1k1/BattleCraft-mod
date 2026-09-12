@@ -1,5 +1,7 @@
 package com.persiki84.knockdown.command;
 
+import com.persiki84.battlecraft.BattleCraftCommands;
+import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.knockdown.config.KnockdownConfig;
 import com.persiki84.shared.ConfigHelper;
 import com.mojang.brigadier.CommandDispatcher;
@@ -13,6 +15,7 @@ public class KnockdownCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("knockdown")
                 .requires(source -> source.hasPermission(2))
+                .executes(context -> BattleCraftCommands.openMenu(context, ModuleMenuStates.KNOCKDOWN))
                 .then(Commands.literal("config")
                         .then(Commands.literal("bleed_time")
                                 .then(Commands.argument("seconds", IntegerArgumentType.integer(5))

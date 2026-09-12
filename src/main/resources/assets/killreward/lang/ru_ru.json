@@ -19,5 +19,17 @@
   "killreward.info_amount": "Количество: ",
   "killreward.info_teamkills": "Награда за союзников: ",
   "killreward.yes": "Да",
-  "killreward.no": "Нет"
+  "killreward.no": "Нет",
+  "killreward.kill_rewarded": "Убит %s, получено %sx %s",
+  "killreward.menu.title": "НАГРАДА ЗА УБИЙСТВО",
+  "killreward.menu.tab.reward": "Награда",
+  "killreward.menu.enabled": "Мод включён",
+  "killreward.menu.item": "Предмет",
+  "killreward.menu.held": "Предмет в руке",
+  "killreward.menu.pick": "Назначить наградой",
+  "killreward.menu.action.pick": "Назначить",
+  "killreward.menu.empty_hand": "Рука пуста",
+  "killreward.menu.amount": "Количество",
+  "killreward.menu.team_kills": "За союзников",
+  "killreward.unknown_item": "Нет такого предмета: %s"
 }

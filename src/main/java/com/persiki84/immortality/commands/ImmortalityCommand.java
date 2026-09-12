@@ -1,5 +1,7 @@
 package com.persiki84.immortality.commands;
 
+import com.persiki84.battlecraft.BattleCraftCommands;
+import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -18,6 +20,7 @@ public class ImmortalityCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("immortality")
                 .requires(source -> source.hasPermission(2))
+                .executes(context -> BattleCraftCommands.openMenu(context, ModuleMenuStates.IMMORTALITY))
                 .then(Commands.literal("enable")
                         .executes(ImmortalityCommand::enable))
                 .then(Commands.literal("disable")

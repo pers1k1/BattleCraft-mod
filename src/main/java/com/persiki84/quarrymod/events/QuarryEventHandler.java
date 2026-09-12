@@ -5,6 +5,8 @@ import com.persiki84.quarrymod.data.QuarryBlockManager;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import com.persiki84.battlecraft.modules.ModuleId;
+import com.persiki84.battlecraft.modules.ModuleSwitches;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -18,6 +20,8 @@ public class QuarryEventHandler {
 
     @SubscribeEvent
     public void onBlockBreak(BlockEvent.BreakEvent event) {
+        if (!ModuleSwitches.allows(ModuleId.QUARRY)) return;
+
         if (event.getLevel() instanceof ServerLevel level) {
             BlockPos pos = event.getPos();
             Player player = event.getPlayer();

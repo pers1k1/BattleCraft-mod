@@ -1,14 +1,12 @@
 {
   "knockdown.prefix": "[KnockDown] ",
   "knockdown.error.player_only": "Эту команду может использовать только игрок",
-  "knockdown.error.no_held_item": "Вы должны держать предмет в руке",
   "item.knockdown.injector": "Инъектор",
   "key.knockdown.revive": "Поднять игрока",
   "key.categories.knockdown": "Нокдаун Мод",
   "knockdown.msg.too_weak": "Вы слишком слабы...",
   "knockdown.msg.heavily_wounded": "Вы тяжело ранены!",
   "knockdown.msg.injector_cooldown": "Инъектор перезаряжается...",
-  "knockdown.msg.self_saved": "Вы спасены!",
   "knockdown.hud.bleeding": "Истекаете кровью: %sс",
   "knockdown.hud.injector_using": "Использование инъектора...",
   "knockdown.hud.being_revived": "Вас поднимают...",
@@ -20,5 +18,11 @@
   "knockdown.action.surrender": "Сдаться...",
   "knockdown.prompt.surrender": "[%s] чтобы сдаться",
   "knockdown.prompt.revive_injector": "[%s] чтобы встать с помощью инъектора",
-  "knockdown.prompt.revive": "[%s] чтобы поднять"
+  "knockdown.prompt.revive": "[%s] чтобы поднять",
+  "knockdown.menu.title": "НОКДАУН",
+  "knockdown.menu.tab.times": "Тайминги",
+  "knockdown.menu.bleed_time": "Истечение кровью, с",
+  "knockdown.menu.revive_time": "Подъём руками, с",
+  "knockdown.menu.injector_time": "Шприц, с",
+  "knockdown.menu.cooldown_time": "Усталость, с"
 }

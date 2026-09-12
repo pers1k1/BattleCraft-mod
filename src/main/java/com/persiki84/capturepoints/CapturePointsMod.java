@@ -2,10 +2,16 @@ package com.persiki84.capturepoints;
 
 import com.mojang.logging.LogUtils;
 import com.persiki84.capturepoints.capture.CapturePoint;
+import com.persiki84.battlecraft.modules.ModuleId;
+import com.persiki84.battlecraft.modules.ModuleSwitches;
 import com.persiki84.capturepoints.capture.CapturePointManager;
+import com.persiki84.capturepoints.capture.CaptureRewards;
+import com.persiki84.capturepoints.capture.CaptureSessions;
 import com.persiki84.capturepoints.capture.FinalCapturePoint;
 import com.persiki84.capturepoints.client.CaptureHudOverlay;
 import com.persiki84.capturepoints.client.KeyBindings;
+import com.persiki84.capturepoints.client.menu.CapturePointManagerScreen;
+import com.persiki84.capturepoints.menu.CapturePointMenuState;
 import com.persiki84.capturepoints.commands.CapturePointCommand;
 import com.persiki84.capturepoints.commands.FinalPointCommand;
 import com.persiki84.capturepoints.commands.ResetCooldownCommand;
@@ -15,7 +21,7 @@ import com.persiki84.capturepoints.network.FinalPointSyncPacket;
 import com.persiki84.capturepoints.network.GlobalMarkerSyncPacket;
 import com.persiki84.capturepoints.network.PacketHandler;
 import com.persiki84.capturepoints.network.PointSyncData;
-import net.minecraft.server.level.ServerLevel;
+import com.persiki84.shared.client.menu.MenuScreens;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
@@ -55,41 +61,45 @@ public class CapturePointsMod {
 
     private void commonSetup(final FMLCommonSetupEvent event) {
         PacketHandler.register();
+        CapturePointMenuState.register();
         LOGGER.info("Capture Points Mod initialized!");
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
+        MenuScreens.register(CapturePointMenuState.MENU_ID, CapturePointManagerScreen::new);
         LOGGER.info("Client setup complete");
     }
 
     @SubscribeEvent
     public void onServerStarted(ServerStartedEvent event) {
-        for (ServerLevel level : event.getServer().getAllLevels()) {
-            CapturePointManager.load(level);
-        }
-
+        CapturePointManager.load(event.getServer());
         syncAllPlayers(event.getServer());
     }
 
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
         CapturePointManager.cleanupAllHolograms();
-        for (ServerLevel level : event.getServer().getAllLevels()) {
-            CapturePointManager.save(level);
-        }
+        CapturePointManager.persist();
     }
 
+    // WHY: выключенный модуль просто переставал тикать, и захваты замирали живыми: участники
+    // WHY: навсегда числились захватывающими, а прогресс висел на экране до перезапуска
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase == TickEvent.Phase.END) {
-            CapturePointManager.tick();
+        if (event.phase != TickEvent.Phase.END) return;
+
+        if (!ModuleSwitches.allows(ModuleId.CAPTURE_POINTS)) {
+            CaptureSessions.cancelAll();
+            return;
         }
+        CapturePointManager.tick();
     }
 
     @SubscribeEvent
     public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             syncPlayerData(player);
+            CaptureRewards.flush(player);
         }
     }
 
@@ -104,13 +114,14 @@ public class CapturePointsMod {
     public void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             syncPlayerData(player);
+            CaptureRewards.flush(player);
         }
     }
 
     private void syncPlayerData(ServerPlayer player) {
         Map<String, PointSyncData> pointOwners = new HashMap<>();
         for (CapturePoint point : CapturePointManager.getAllPoints()) {
-            pointOwners.put(point.getName(), new PointSyncData(point.getOwnerTeam(), point.getPosition()));
+            pointOwners.put(point.getName(), PointSyncData.of(point));
         }
 
         PacketHandler.INSTANCE.send(
@@ -120,7 +131,7 @@ public class CapturePointsMod {
 
         Map<String, PointSyncData> finalPointOwners = new HashMap<>();
         for (FinalCapturePoint point : CapturePointManager.getAllFinalPoints()) {
-            finalPointOwners.put(point.getName(), new PointSyncData(point.getOwnerTeam(), point.getPosition()));
+            finalPointOwners.put(point.getName(), PointSyncData.of(point));
         }
 
         PacketHandler.INSTANCE.send(
@@ -140,12 +151,12 @@ public class CapturePointsMod {
     private void syncAllPlayers(net.minecraft.server.MinecraftServer server) {
         Map<String, PointSyncData> pointOwners = new HashMap<>();
         for (CapturePoint point : CapturePointManager.getAllPoints()) {
-            pointOwners.put(point.getName(), new PointSyncData(point.getOwnerTeam(), point.getPosition()));
+            pointOwners.put(point.getName(), PointSyncData.of(point));
         }
 
         Map<String, PointSyncData> finalPointOwners = new HashMap<>();
         for (FinalCapturePoint point : CapturePointManager.getAllFinalPoints()) {
-            finalPointOwners.put(point.getName(), new PointSyncData(point.getOwnerTeam(), point.getPosition()));
+            finalPointOwners.put(point.getName(), PointSyncData.of(point));
         }
 
         GlobalMarkerSyncPacket markerPacket = new GlobalMarkerSyncPacket(CapturePointManager.isGlobalCaptureMarkers(), CapturePointManager.isGlobalFinalMarkers());

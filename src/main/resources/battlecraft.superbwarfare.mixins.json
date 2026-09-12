@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.persiki84.battlecraft.mixin.superb",
+  "plugin": "com.persiki84.battlecraft.compat.superb.SuperbWarfarePlugin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "battlecraft.refmap.json",
+  "client": [
+    "ThermalImagingMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

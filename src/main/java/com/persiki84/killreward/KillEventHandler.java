@@ -13,7 +13,7 @@ public class KillEventHandler {
 
     @SubscribeEvent
     public void onPlayerKill(LivingDeathEvent event) {
-        if (!KillRewardMod.modEnabled) return;
+        if (!KillRewardMod.rewardsEnabled()) return;
 
         if (event.isCanceled()) return;
 
@@ -29,10 +29,10 @@ public class KillEventHandler {
             }
         }
 
-        giveReward(killer);
+        giveReward(killer, victim.getName().getString());
     }
 
-    private void giveReward(ServerPlayer player) {
+    private void giveReward(ServerPlayer player, String victimName) {
         var item = KillRewardMod.getRewardItem();
         if (item != null) {
             ItemStack reward = new ItemStack(item, KillRewardMod.rewardAmount);
@@ -42,10 +42,9 @@ public class KillEventHandler {
                 player.drop(reward, false);
             }
 
-            player.displayClientMessage(
-                    Component.translatable("killreward.reward_received", KillRewardMod.rewardAmount, itemName)
-                            .withStyle(ChatFormatting.GREEN),
-                    true
+            player.sendSystemMessage(
+                    Component.translatable("killreward.kill_rewarded", victimName,
+                            KillRewardMod.rewardAmount, itemName).withStyle(ChatFormatting.GREEN)
             );
 
             KillRewardMod.LOGGER.info("KillReward: Игрок {} получил {}x {}",

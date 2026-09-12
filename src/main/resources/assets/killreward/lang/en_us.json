@@ -19,5 +19,17 @@
   "killreward.info_amount": "Amount: ",
   "killreward.info_teamkills": "Team kills: ",
   "killreward.yes": "Yes",
-  "killreward.no": "No"
+  "killreward.no": "No",
+  "killreward.kill_rewarded": "Killed %s, received %sx %s",
+  "killreward.menu.title": "KILL REWARD",
+  "killreward.menu.tab.reward": "Reward",
+  "killreward.menu.enabled": "Mod enabled",
+  "killreward.menu.item": "Item",
+  "killreward.menu.held": "Item in hand",
+  "killreward.menu.pick": "Use as reward",
+  "killreward.menu.action.pick": "Apply",
+  "killreward.menu.empty_hand": "Hand is empty",
+  "killreward.menu.amount": "Amount",
+  "killreward.menu.team_kills": "Team kills",
+  "killreward.unknown_item": "No such item: %s"
 }

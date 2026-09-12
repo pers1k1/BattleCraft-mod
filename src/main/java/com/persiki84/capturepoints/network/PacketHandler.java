@@ -98,6 +98,15 @@ public class PacketHandler {
 
         INSTANCE.registerMessage(
                 id(),
+                MatchVictoryPacket.class,
+                MatchVictoryPacket::encode,
+                MatchVictoryPacket::decode,
+                MatchVictoryPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT)
+        );
+
+        INSTANCE.registerMessage(
+                id(),
                 LocalMarkerOverridePacket.class,
                 LocalMarkerOverridePacket::encode,
                 LocalMarkerOverridePacket::decode,

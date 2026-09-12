@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.function.Supplier;
 
 public class MapWorldMarkerSyncPacket {
+    public static final int MAX_ENTRIES = 512;
+
     public static class WorldMarker {
         public final double x;
         public final double z;
@@ -36,7 +38,7 @@ public class MapWorldMarkerSyncPacket {
     }
 
     public static MapWorldMarkerSyncPacket decode(FriendlyByteBuf buf) {
-        int size = buf.readInt();
+        int size = Math.min(Math.max(buf.readInt(), 0), MAX_ENTRIES);
         List<WorldMarker> markers = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             markers.add(new WorldMarker(buf.readDouble(), buf.readDouble(), buf.readUtf()));

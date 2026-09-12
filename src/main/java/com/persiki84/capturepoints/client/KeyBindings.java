@@ -6,7 +6,6 @@ import com.persiki84.capturepoints.network.CaptureStartPacket;
 import com.persiki84.capturepoints.network.PacketHandler;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -29,8 +28,7 @@ public class KeyBindings {
         if (CAPTURE_KEY.consumeClick()) {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null && mc.level != null) {
-                BlockPos playerPos = mc.player.blockPosition();
-                PacketHandler.INSTANCE.sendToServer(new CaptureStartPacket(playerPos));
+                PacketHandler.INSTANCE.sendToServer(new CaptureStartPacket());
             }
         }
     }

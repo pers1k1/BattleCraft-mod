@@ -1,0 +1,146 @@
+{
+  "ui.future.click": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/future/ui_click",
+        "stream": false
+      }
+    ]
+  },
+  "ui.future.confirm": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/future/ui_confirm",
+        "stream": false
+      }
+    ]
+  },
+  "ui.future.deny": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/future/ui_deny",
+        "stream": false
+      }
+    ]
+  },
+  "ui.future.drag_end": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/future/ui_drag_end",
+        "stream": false
+      }
+    ]
+  },
+  "ui.future.drag_start": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/future/ui_drag_start",
+        "stream": false
+      }
+    ]
+  },
+  "ui.future.hover": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/future/ui_hover",
+        "stream": false
+      }
+    ]
+  },
+  "ui.future.notify": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/future/ui_notify",
+        "stream": false
+      }
+    ]
+  },
+  "ui.future.toggle_off": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/future/ui_toggle_off",
+        "stream": false
+      }
+    ]
+  },
+  "ui.future.toggle_on": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/future/ui_toggle_on",
+        "stream": false
+      }
+    ]
+  },
+  "ui.pop.click": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/pop/ui_click",
+        "stream": false
+      }
+    ]
+  },
+  "ui.pop.confirm": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/pop/ui_confirm",
+        "stream": false
+      }
+    ]
+  },
+  "ui.pop.deny": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/pop/ui_deny",
+        "stream": false
+      }
+    ]
+  },
+  "ui.pop.drag_end": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/pop/ui_drag_end",
+        "stream": false
+      }
+    ]
+  },
+  "ui.pop.drag_start": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/pop/ui_drag_start",
+        "stream": false
+      }
+    ]
+  },
+  "ui.pop.hover": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/pop/ui_hover",
+        "stream": false
+      }
+    ]
+  },
+  "ui.pop.notify": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/pop/ui_notify",
+        "stream": false
+      }
+    ]
+  },
+  "ui.pop.toggle_off": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/pop/ui_toggle_off",
+        "stream": false
+      }
+    ]
+  },
+  "ui.pop.toggle_on": {
+    "sounds": [
+      {
+        "name": "battlecraft:ui/pop/ui_toggle_on",
+        "stream": false
+      }
+    ]
+  }
+}

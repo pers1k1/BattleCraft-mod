@@ -9,6 +9,8 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 public class PlayerPositionSyncPacket {
+    public static final int MAX_ENTRIES = 512;
+
     public static class PlayerPos {
         public final UUID playerId;
         public final String playerName;
@@ -43,7 +45,7 @@ public class PlayerPositionSyncPacket {
     }
 
     public static PlayerPositionSyncPacket decode(FriendlyByteBuf buf) {
-        int size = buf.readInt();
+        int size = Math.min(Math.max(buf.readInt(), 0), MAX_ENTRIES);
         List<PlayerPos> players = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             players.add(new PlayerPos(buf.readUUID(), buf.readUtf(), buf.readDouble(), buf.readDouble(), buf.readFloat()));

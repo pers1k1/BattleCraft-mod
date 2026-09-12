@@ -1,10 +1,12 @@
 package com.persiki84.capturepoints.client;
 
-import com.mojang.blaze3d.vertex.PoseStack;
+import com.persiki84.battlecraft.BattleCraftManager;
+import com.persiki84.battlecraft.client.ClientGameData;
 import com.persiki84.capturepoints.CapturePointsMod;
+import com.persiki84.minimap.client.ClientMapData;
+import com.persiki84.minimap.client.MapRenderUtil;
+import com.persiki84.minimap.network.MapMarkerSyncPacket;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -19,92 +21,119 @@ import java.util.List;
 import java.util.Map;
 
 @Mod.EventBusSubscriber(modid = CapturePointsMod.MOD_ID, value = Dist.CLIENT)
-public class MarkerRenderer {
-    public static final List<ProjectedMarker> markersToRender = new ArrayList<>();
+public final class MarkerRenderer {
+    private static final double MARKER_RANGE = 1500.0;
+    private static final int SELF_MARKER_COLOR = 0xFF55FFFF;
+    private static final double POINT_LIFT = 1.5;
+
+    private static final List<ProjectedMarker> pool = new ArrayList<>();
+    private static final List<ProjectedMarker> visible = new ArrayList<>();
+    private static final Vector4f scratch = new Vector4f();
+
+    private static float screenWidth;
+    private static float screenHeight;
+
+    private MarkerRenderer() {}
+
+    public static List<ProjectedMarker> visible() {
+        return visible;
+    }
 
     @SubscribeEvent
     public static void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES) return;
 
-        markersToRender.clear();
-
+        visible.clear();
         if (!ClientCaptureData.isLocalMarkersEnabled()) return;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        Vec3 cameraPos = event.getCamera().getPosition();
-        Matrix4f viewMatrix = new Matrix4f(event.getPoseStack().last().pose());
-        Matrix4f projMatrix = new Matrix4f(event.getProjectionMatrix());
+        screenWidth = mc.getWindow().getGuiScaledWidth();
+        screenHeight = mc.getWindow().getGuiScaledHeight();
 
-        boolean isBattlecraftActive = !com.persiki84.battlecraft.client.ClientGameData.isSoftDisabled() &&
-                com.persiki84.battlecraft.client.ClientGameData.getCurrentPhase() == com.persiki84.battlecraft.BattleCraftManager.GamePhase.ACTIVE;
+        Vec3 camera = event.getCamera().getPosition();
+        Matrix4f view = event.getPoseStack().last().pose();
+        Matrix4f projection = event.getProjectionMatrix();
 
-        if (isBattlecraftActive && ClientCaptureData.isServerCaptureMarkers()) {
-            projectMarkers(mc, cameraPos, viewMatrix, projMatrix, ClientCaptureData.getAllPointOwners(), false);
-        }
-
-        if (isBattlecraftActive && ClientCaptureData.isServerFinalMarkers() && ClientCaptureData.areAllPointsCapturedBySameTeam()) {
-            projectMarkers(mc, cameraPos, viewMatrix, projMatrix, ClientCaptureData.getAllFinalPointOwners(), true);
-        }
-
-        projectPlayerMarkers(mc, cameraPos, viewMatrix, projMatrix);
+        projectPoints(camera, view, projection);
+        projectPlayerMarkers(mc, camera, view, projection);
     }
 
-    private static void projectPlayerMarkers(Minecraft mc, Vec3 cameraPos, Matrix4f viewMatrix, Matrix4f projMatrix) {
-        for (com.persiki84.minimap.network.MapMarkerSyncPacket.MarkerData marker : com.persiki84.minimap.client.ClientMapData.getMarkers()) {
-            if (!com.persiki84.minimap.client.ClientMapData.showOtherMarkers && !marker.playerName.equals(mc.player.getScoreboardName())) continue;
-            double dx = marker.x - cameraPos.x;
-            double dy = marker.y - cameraPos.y;
-            double dz = marker.z - cameraPos.z;
+    private static void projectPoints(Vec3 camera, Matrix4f view, Matrix4f projection) {
+        boolean running = !ClientGameData.isSoftDisabled()
+                && ClientGameData.getCurrentPhase() == BattleCraftManager.GamePhase.ACTIVE;
+        if (!running) return;
 
-            double distSq = dx * dx + dy * dy + dz * dz;
-            double dist = Math.sqrt(distSq);
-            if (dist > 1500) continue;
-
-            Vector4f vec = new Vector4f((float) dx, (float) dy, (float) dz, 0.0f);
-            vec.mul(viewMatrix);
-            vec.w = 1.0f;
-            vec.mul(projMatrix);
-
-            if (vec.w() > 0) {
-                float screenX = (vec.x() / vec.w() + 1.0f) * 0.5f * mc.getWindow().getGuiScaledWidth();
-                float screenY = (1.0f - vec.y() / vec.w()) * 0.5f * mc.getWindow().getGuiScaledHeight();
-                
-                boolean isSelf = !marker.isTeam && marker.playerName.equals(mc.player.getScoreboardName());
-                String displayName = isSelf ? null : marker.playerName;
-                int color = marker.isTeam ? com.persiki84.minimap.client.MapRenderUtil.getPlayerTeamColor(marker.playerName) : 0xFF55FFFF;
-                markersToRender.add(new ProjectedMarker(displayName, null, false, dist, screenX, screenY, color));
-            }
+        if (ClientCaptureData.isServerCaptureMarkers()) {
+            projectPointRow(camera, view, projection, ClientCaptureData.getAllPointOwners(), false);
+        }
+        if (ClientCaptureData.isServerFinalMarkers() && ClientCaptureData.areAllPointsCapturedBySameTeam()) {
+            projectPointRow(camera, view, projection, ClientCaptureData.getAllFinalPointOwners(), true);
         }
     }
 
-    private static void projectMarkers(Minecraft mc, Vec3 cameraPos, Matrix4f viewMatrix, Matrix4f projMatrix, Map<String, String> points, boolean isFinal) {
+    private static void projectPointRow(Vec3 camera, Matrix4f view, Matrix4f projection,
+                                        Map<String, String> points, boolean isFinal) {
         for (Map.Entry<String, String> entry : points.entrySet()) {
-            String pointName = entry.getKey();
-            String owner = entry.getValue();
-
-            BlockPos pos = isFinal ? ClientCaptureData.getFinalPointPosition(pointName) : ClientCaptureData.getPointPosition(pointName);
+            String name = entry.getKey();
+            BlockPos pos = isFinal
+                    ? ClientCaptureData.getFinalPointPosition(name)
+                    : ClientCaptureData.getPointPosition(name);
             if (pos == null) continue;
 
-            double dx = pos.getX() + 0.5 - cameraPos.x;
-            double dy = pos.getY() + 1.5 - cameraPos.y;
-            double dz = pos.getZ() + 0.5 - cameraPos.z;
+            double distance = project(pos.getX() + 0.5, pos.getY() + POINT_LIFT, pos.getZ() + 0.5,
+                    camera, view, projection);
+            if (distance < 0.0) continue;
 
-            double distSq = dx * dx + dy * dy + dz * dz;
-            double dist = Math.sqrt(distSq);
-            if (dist > 1500) continue;
-
-            Vector4f vec = new Vector4f((float) dx, (float) dy, (float) dz, 1.0f);
-            vec.mul(viewMatrix);
-            vec.mul(projMatrix);
-
-            if (vec.w() > 0) {
-                float screenX = (vec.x() / vec.w() + 1.0f) * 0.5f * mc.getWindow().getGuiScaledWidth();
-                float screenY = (1.0f - vec.y() / vec.w()) * 0.5f * mc.getWindow().getGuiScaledHeight();
-                
-                markersToRender.add(new ProjectedMarker(pointName, owner, isFinal, dist, screenX, screenY));
-            }
+            visible.add(claim().set(name, entry.getValue(), isFinal, distance, screenX(), screenY(), null));
         }
+    }
+
+    private static void projectPlayerMarkers(Minecraft mc, Vec3 camera, Matrix4f view, Matrix4f projection) {
+        String self = mc.player.getScoreboardName();
+
+        for (MapMarkerSyncPacket.MarkerData marker : ClientMapData.getMarkers()) {
+            boolean own = marker.playerName.equals(self);
+            if (!ClientMapData.showOtherMarkers && !own) continue;
+
+            double distance = project(marker.x, marker.y, marker.z, camera, view, projection);
+            if (distance < 0.0) continue;
+
+            String label = !marker.isTeam && own ? null : marker.playerName;
+            int color = marker.isTeam ? MapRenderUtil.getPlayerTeamColor(marker.playerName) : SELF_MARKER_COLOR;
+            visible.add(claim().set(label, null, false, distance, screenX(), screenY(), color));
+        }
+    }
+
+    private static double project(double x, double y, double z, Vec3 camera, Matrix4f view, Matrix4f projection) {
+        double dx = x - camera.x;
+        double dy = y - camera.y;
+        double dz = z - camera.z;
+
+        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (distance > MARKER_RANGE) return -1.0;
+
+        scratch.set((float) dx, (float) dy, (float) dz, 1.0f);
+        scratch.mul(view);
+        scratch.mul(projection);
+        return scratch.w() > 0.0f ? distance : -1.0;
+    }
+
+    private static float screenX() {
+        return (scratch.x() / scratch.w() + 1.0f) * 0.5f * screenWidth;
+    }
+
+    private static float screenY() {
+        return (1.0f - scratch.y() / scratch.w()) * 0.5f * screenHeight;
+    }
+
+    private static ProjectedMarker claim() {
+        int used = visible.size();
+        if (used < pool.size()) return pool.get(used);
+
+        ProjectedMarker created = new ProjectedMarker();
+        pool.add(created);
+        return created;
     }
 }

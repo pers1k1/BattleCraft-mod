@@ -1,8 +1,9 @@
 package com.persiki84.itemmodifiers;
 
 import net.minecraft.resources.ResourceLocation;
+import com.persiki84.battlecraft.modules.ModuleId;
+import com.persiki84.battlecraft.modules.ModuleSwitches;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraftforge.event.ItemAttributeModifierEvent;
@@ -51,6 +52,7 @@ public class AttributeHandler {
     @SubscribeEvent
     public void onItemAttribute(ItemAttributeModifierEvent event) {
         if (!ModifierConfig.MOD_ENABLED.get()) return;
+        if (!ModuleSwitches.allows(ModuleId.ITEM_MODIFIERS)) return;
 
         ItemStack stack = event.getItemStack();
         ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(stack.getItem());

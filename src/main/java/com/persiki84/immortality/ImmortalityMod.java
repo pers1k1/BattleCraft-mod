@@ -7,10 +7,8 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
-import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
 
 @Mod(ImmortalityMod.MOD_ID)
@@ -19,8 +17,6 @@ public class ImmortalityMod {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public ImmortalityMod() {
-        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
-
         MinecraftForge.EVENT_BUS.register(this);
 
         LOGGER.info("Immortality Mod initialized!");
@@ -35,7 +31,15 @@ public class ImmortalityMod {
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
         ImmortalityHandler.save();
+        ImmortalityHandler.forgetServer();
         LOGGER.info("Immortality config saved");
+    }
+
+    @SubscribeEvent
+    public void onPlayerLogout(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            ImmortalityHandler.removeImmortality(player);
+        }
     }
 
     @SubscribeEvent

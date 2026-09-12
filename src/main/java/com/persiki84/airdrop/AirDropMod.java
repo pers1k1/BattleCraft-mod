@@ -15,6 +15,7 @@ import net.minecraftforge.fml.loading.FMLPaths;
 @Mod(AirDropMod.MOD_ID)
 public class AirDropMod {
     public static final String MOD_ID = "airdrop";
+    public static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
     public AirDropMod() {
         AirDropConfig.register();

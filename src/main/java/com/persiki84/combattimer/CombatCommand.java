@@ -1,5 +1,7 @@
 package com.persiki84.combattimer;
 
+import com.persiki84.battlecraft.BattleCraftCommands;
+import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -12,6 +14,7 @@ public class CombatCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("kt")
                 .requires(source -> source.hasPermission(2))
+                .executes(context -> BattleCraftCommands.openMenu(context, ModuleMenuStates.COMBAT))
 
                 .then(Commands.literal("settime")
                         .then(Commands.argument("seconds", IntegerArgumentType.integer(5, 300))

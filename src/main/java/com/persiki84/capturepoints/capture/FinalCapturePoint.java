@@ -1,5 +1,6 @@
 package com.persiki84.capturepoints.capture;
 
+import com.persiki84.shared.zone.ZoneArea;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -13,8 +14,8 @@ import java.util.List;
 public class FinalCapturePoint extends CapturePoint {
     private List<BlockPos> commandBlockPositions;
 
-    public FinalCapturePoint(String name, BlockPos position, int radius, int captureTime, int cooldown) {
-        super(name, position, radius, captureTime, cooldown);
+    public FinalCapturePoint(String name, ZoneArea area, int captureTime, int cooldown) {
+        super(name, area, captureTime, cooldown);
         this.commandBlockPositions = new ArrayList<>();
     }
 
@@ -58,12 +59,12 @@ public class FinalCapturePoint extends CapturePoint {
 
     public static FinalCapturePoint loadFinal(CompoundTag tag) {
         String name = tag.getString("name");
-        BlockPos pos = new BlockPos(tag.getInt("x"), tag.getInt("y"), tag.getInt("z"));
-        int radius = tag.getInt("radius");
+        ZoneArea area = ZoneArea.loadFrom(tag);
         int captureTime = tag.getInt("captureTime");
         int cooldown = tag.getInt("cooldown");
 
-        FinalCapturePoint point = new FinalCapturePoint(name, pos, radius, captureTime, cooldown);
+        FinalCapturePoint point = new FinalCapturePoint(name, area, captureTime, cooldown);
+        point.setDimension(readDimension(tag));
 
         if (tag.contains("ownerTeam")) {
             point.setOwnerTeam(tag.getString("ownerTeam"));
@@ -75,21 +76,21 @@ public class FinalCapturePoint extends CapturePoint {
             if (rewardItem != null) point.setReward(new ItemStack(rewardItem));
         }
         point.setRewardAmount(tag.getInt("rewardAmount"));
-
-        if (tag.contains("commandBlocks")) {
-            CompoundTag cmdBlocksTag = tag.getCompound("commandBlocks");
-            int count = cmdBlocksTag.getInt("count");
-            for (int i = 0; i < count; i++) {
-                CompoundTag posTag = cmdBlocksTag.getCompound("pos" + i);
-                BlockPos cmdPos = new BlockPos(
-                        posTag.getInt("x"),
-                        posTag.getInt("y"),
-                        posTag.getInt("z")
-                );
-                point.commandBlockPositions.add(cmdPos);
-            }
-        }
+        readTuning(tag, point);
+        readCommandBlocks(tag, point);
 
         return point;
+    }
+
+    private static void readCommandBlocks(CompoundTag tag, FinalCapturePoint point) {
+        if (!tag.contains("commandBlocks")) return;
+
+        CompoundTag cmdBlocksTag = tag.getCompound("commandBlocks");
+        int count = cmdBlocksTag.getInt("count");
+        for (int i = 0; i < count; i++) {
+            CompoundTag posTag = cmdBlocksTag.getCompound("pos" + i);
+            point.commandBlockPositions.add(new BlockPos(
+                    posTag.getInt("x"), posTag.getInt("y"), posTag.getInt("z")));
+        }
     }
 }

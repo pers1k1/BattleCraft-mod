@@ -1,171 +1,341 @@
 package com.persiki84.minimap.client;
 
+import com.persiki84.battlecraft.client.custom.HudSlot;
+import com.persiki84.battlecraft.client.custom.HudLayout;
+import com.persiki84.battlecraft.client.custom.HudBox;
+import com.persiki84.zones.Zone;
+import com.persiki84.zones.ZoneType;
+import com.persiki84.zones.client.ClientMarkData;
+import com.persiki84.zones.client.ClientZoneData;
+import com.persiki84.zones.client.render.ZoneColors;
+import com.persiki84.zones.mark.MapMark;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.persiki84.capturepoints.client.ClientCaptureData;
 import com.persiki84.minimap.network.MapMarkerSyncPacket;
+import com.persiki84.minimap.network.MapWorldMarkerSyncPacket;
 import com.persiki84.minimap.network.PlayerPositionSyncPacket;
+import com.persiki84.shared.client.ui.UiPalette;
+import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiScale;
+import com.persiki84.shared.client.ui.UiAccent;
+import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.battlecraft.client.ClientModules;
+import com.persiki84.battlecraft.modules.ModuleId;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraftforge.client.event.RenderGuiOverlayEvent;
+import net.minecraft.util.Mth;
 import net.minecraftforge.client.gui.overlay.IGuiOverlay;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.lwjgl.opengl.GL11;
 
 import java.util.Map;
 
 public class MinimapOverlay {
+    private static final int PADDING = 6;
+    private static final float COMPACT_SCALE = 0.8f;
+    private static final float LABEL_SCALE = 0.75f;
+    private static final float PLATE_PAD_X = 3.0f;
+    private static final float PLATE_PAD_Y = 1.5f;
+    private static final float MARKER_CLEARANCE = 1.6f;
+    private static final float PLATE_HEIGHT = 8.0f;
+    private static final int GRID_COLOR = 0x1AFFFFFF;
+    private static final int FIELD_COLOR = 0xE61C1C1F;
+    private static final int PLATE_COLOR = 0xE6434349;
+    private static final int PLATE_TEXT = 0xFFF2F2F4;
+    private static final float BASE_RADIUS = 3.4f;
+    private static final float MARKER_DOT = 1.5f;
+    private static final Component BASE_LABEL = Component.translatable("zones.marker.base");
+
+    public static boolean isVisible() {
+        if (!ClientMapData.enableMinimap) return false;
+        if (!ClientModules.allows(ModuleId.MINIMAP) || !HudLayout.visible(HudSlot.MINIMAP)) return false;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.options.renderDebug || mc.options.hideGui) return false;
+        return com.persiki84.battlecraft.client.ClientGameData.isSoftDisabled()
+                || com.persiki84.battlecraft.client.ClientGameData.getCurrentPhase() != com.persiki84.battlecraft.BattleCraftManager.GamePhase.LOBBY;
+    }
+
+    public static float renderSize() {
+        double gui = Minecraft.getInstance().getWindow().getGuiScale();
+        return ClientMapData.minimapSize * (gui > 3.5 ? 1.0f : COMPACT_SCALE);
+    }
+
+    public static float hudBottom() {
+        if (!isVisible()) return 0.0f;
+
+        HudBox box = HudLayout.box(HudSlot.MINIMAP);
+        return box.drawn() ? box.y() + renderSize() : PADDING + renderSize();
+    }
+
     public static final IGuiOverlay HUD_MINIMAP = (gui, guiGraphics, partialTick, screenWidth, screenHeight) -> {
-        if (!ClientMapData.enableMinimap) return;
+        if (!isVisible()) return;
         Minecraft mc = Minecraft.getInstance();
 
-        if (mc.player == null || mc.options.renderDebug) return;
-        
-        if (!com.persiki84.battlecraft.client.ClientGameData.isSoftDisabled() && com.persiki84.battlecraft.client.ClientGameData.getCurrentPhase() == com.persiki84.battlecraft.BattleCraftManager.GamePhase.LOBBY) {
-            return;
+        float scale = UiScale.push(guiGraphics);
+        try {
+            render(guiGraphics, mc, partialTick, screenWidth / scale, screenHeight / scale, scale);
+        } finally {
+            UiScale.pop(guiGraphics);
         }
+    };
 
-        int size = ClientMapData.minimapSize;
+    private static void render(GuiGraphics guiGraphics, Minecraft mc, float partialTick,
+                               float logicalWidth, float logicalHeight, float scale) {
+        float size = renderSize();
         float zoom = ClientMapData.minimapZoom;
-        int padding = 5;
-        int x = screenWidth - size - padding;
-        int y = padding;
-        float radius = size * 0.25f;
-        float thickness = 2.0f;
+        HudBox box = HudLayout.place(HudSlot.MINIMAP, size, size, logicalWidth, logicalHeight);
+        float x = box.x();
+        float y = box.y();
+        float radius = Math.min(14.0f, size * 0.16f);
+        float cx = x + size / 2.0f;
+        float cy = y + size / 2.0f;
 
-        MapRenderUtil.fillRoundedRect(guiGraphics, x, y, size, size, radius, 0xFF1E1E1E);
+        double mapX = Mth.lerp(partialTick, mc.player.xo, mc.player.getX());
+        double mapZ = Mth.lerp(partialTick, mc.player.zo, mc.player.getZ());
 
+        UiRender.panel(guiGraphics, x, y, size, size, radius, FIELD_COLOR);
+
+        clipToShape(guiGraphics, x, y, size, radius);
+        MapTextureManager.renderMap(guiGraphics, mapX, mapZ, zoom, cx, cy, x, y, x + size, y + size);
+        renderGrid(guiGraphics, x, y, size, zoom, cx, cy, mapX, mapZ);
+        releaseShapeClip();
+
+        guiGraphics.enableScissor((int) (x * scale), (int) (y * scale), (int) ((x + size) * scale), (int) ((y + size) * scale));
+        renderObjectives(guiGraphics, mapX, mapZ, zoom, cx, cy);
+        renderMarkers(guiGraphics, mc, mapX, mapZ, zoom, cx, cy);
+
+        float yaw = Mth.lerp(partialTick, mc.player.yRotO, mc.player.getYRot());
+        UiRender.arrow(guiGraphics, cx, cy, yaw, 3.2f, UiAccent.color(), UiTheme.alpha(UiPalette.panelDeep(), 0.75f));
+        guiGraphics.disableScissor();
+
+        label(guiGraphics, mc, Mth.floor(mapX) + " " + Mth.floor(mapZ), cx, y + size - 9.0f, PLATE_TEXT);
+    }
+
+    private static void clipToShape(GuiGraphics guiGraphics, float x, float y, float size, float radius) {
         RenderSystem.enableDepthTest();
         RenderSystem.depthMask(true);
         RenderSystem.clear(GL11.GL_DEPTH_BUFFER_BIT, Minecraft.ON_OSX);
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
         RenderSystem.colorMask(false, false, false, false);
 
-        MapRenderUtil.fillRoundedRect(guiGraphics, x + thickness, y + thickness, size - thickness * 2, size - thickness * 2, radius - thickness, 0xFFFFFFFF);
+        UiRender.panel(guiGraphics, x, y, size, size, radius, 0xFFFFFFFF);
 
         RenderSystem.colorMask(true, true, true, true);
         RenderSystem.depthFunc(GL11.GL_EQUAL);
+    }
 
-        int cx = x + size / 2;
-        int cy = y + size / 2;
+    private static void releaseShapeClip() {
+        RenderSystem.depthMask(true);
+        RenderSystem.disableDepthTest();
+        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+    }
 
-        double mapX = mc.player.getX();
-        double mapZ = mc.player.getZ();
-
-        MapTextureManager.renderMap(guiGraphics, mapX, mapZ, zoom, cx, cy, size, size);
-
-        double minWorldX = mapX - (cx - x) / zoom;
+    private static void renderGrid(GuiGraphics guiGraphics, float x, float y, float size, float zoom,
+                                   float cx, float cy, double mapX, double mapZ) {
         double maxWorldX = mapX + ((x + size) - cx) / zoom;
-        long firstGridX = (long) Math.ceil(minWorldX / 100.0) * 100;
+        long firstGridX = (long) Math.ceil((mapX - (cx - x) / zoom) / 100.0) * 100;
         for (double wx = firstGridX; wx <= maxWorldX; wx += 100.0) {
-            double sx = cx + (wx - mapX) * zoom;
-            guiGraphics.fill((int) sx, y, (int) sx + 1, y + size, 0x44000000);
+            UiRender.rect(guiGraphics, (float) (cx + (wx - mapX) * zoom), y, 1.0f, size, GRID_COLOR);
         }
 
-        double minWorldZ = mapZ - (cy - y) / zoom;
         double maxWorldZ = mapZ + ((y + size) - cy) / zoom;
-        long firstGridZ = (long) Math.ceil(minWorldZ / 100.0) * 100;
+        long firstGridZ = (long) Math.ceil((mapZ - (cy - y) / zoom) / 100.0) * 100;
         for (double wz = firstGridZ; wz <= maxWorldZ; wz += 100.0) {
-            double sy = cy + (wz - mapZ) * zoom;
-            guiGraphics.fill(x, (int) sy, x + size, (int) sy + 1, 0x44000000);
+            UiRender.rect(guiGraphics, x, (float) (cy + (wz - mapZ) * zoom), size, 1.0f, GRID_COLOR);
         }
+    }
 
-        boolean isBattlecraftActive = !com.persiki84.battlecraft.client.ClientGameData.isSoftDisabled() &&
-                com.persiki84.battlecraft.client.ClientGameData.getCurrentPhase() == com.persiki84.battlecraft.BattleCraftManager.GamePhase.ACTIVE;
+    private static void renderObjectives(GuiGraphics guiGraphics, double mapX, double mapZ, float zoom, float cx, float cy) {
+        boolean active = !com.persiki84.battlecraft.client.ClientGameData.isSoftDisabled()
+                && com.persiki84.battlecraft.client.ClientGameData.getCurrentPhase() == com.persiki84.battlecraft.BattleCraftManager.GamePhase.ACTIVE;
+        if (!active) return;
 
-        if (isBattlecraftActive) {
-            for (Map.Entry<String, String> entry : ClientCaptureData.getAllPointOwners().entrySet()) {
-                BlockPos pos = ClientCaptureData.getPointPosition(entry.getKey());
-                if (pos != null) {
-                    renderPointMarker(guiGraphics, pos.getX(), pos.getZ(), mapX, mapZ, zoom, cx, cy, 0xFF000000 | (com.persiki84.capturepoints.client.CaptureHudOverlay.getTeamColor(entry.getValue()).getColor() != null ? com.persiki84.capturepoints.client.CaptureHudOverlay.getTeamColor(entry.getValue()).getColor() : 0xFFFFFF), entry.getKey());
-                }
-            }
-
-            if (ClientCaptureData.areAllPointsCapturedBySameTeam()) {
-                for (Map.Entry<String, String> entry : ClientCaptureData.getAllFinalPointOwners().entrySet()) {
-                    BlockPos pos = ClientCaptureData.getFinalPointPosition(entry.getKey());
-                    if (pos != null) {
-                        renderPointMarker(guiGraphics, pos.getX(), pos.getZ(), mapX, mapZ, zoom, cx, cy, 0xFFFFD700, entry.getKey());
-                    }
-                }
+        for (Map.Entry<String, String> entry : ClientCaptureData.getAllPointOwners().entrySet()) {
+            BlockPos pos = ClientCaptureData.getPointPosition(entry.getKey());
+            if (pos != null) {
+                renderPoint(guiGraphics, pos.getX(), pos.getZ(), mapX, mapZ, zoom, cx, cy,
+                        MapRenderUtil.getTeamColor(entry.getValue()), entry.getKey());
             }
         }
+        if (!ClientCaptureData.areAllPointsCapturedBySameTeam()) return;
 
-        renderPlayerDot(guiGraphics, mapX, mapZ, mc.player.getYRot(), mapX, mapZ, zoom, cx, cy, MapRenderUtil.getPlayerTeamColor(mc.player.getScoreboardName()));
+        for (Map.Entry<String, String> entry : ClientCaptureData.getAllFinalPointOwners().entrySet()) {
+            BlockPos pos = ClientCaptureData.getFinalPointPosition(entry.getKey());
+            if (pos != null) {
+                renderPoint(guiGraphics, pos.getX(), pos.getZ(), mapX, mapZ, zoom, cx, cy, UiAccent.color(), entry.getKey());
+            }
+        }
+    }
 
-        for (PlayerPositionSyncPacket.PlayerPos p : ClientMapData.getPlayers()) {
-            if (p.playerId.equals(mc.player.getUUID())) continue;
-            renderPlayerDot(guiGraphics, p.x, p.z, p.yRot, mapX, mapZ, zoom, cx, cy, MapRenderUtil.getPlayerTeamColor(p.playerName));
+    private static void renderMarkers(GuiGraphics guiGraphics, Minecraft mc, double mapX, double mapZ,
+                                      float zoom, float cx, float cy) {
+        renderBases(guiGraphics, mapX, mapZ, zoom, cx, cy);
+
+        for (MapWorldMarkerSyncPacket.WorldMarker marker : ClientMapData.getWorldMarkers()) {
+            renderWorldMarker(guiGraphics, marker.x, marker.z, mapX, mapZ, zoom, cx, cy, Component.translatable(marker.key).getString());
+        }
+
+        int pinged = 0;
+        for (MapMark mark : ClientMarkData.all()) {
+            if (mc.level == null || !mc.level.dimension().location().equals(mark.dimension())) continue;
+            pinged++;
+            renderMarker(guiGraphics, mark.position().getX() + 0.5, mark.position().getZ() + 0.5,
+                    mapX, mapZ, zoom, cx, cy, mark.color(), mark.label(),
+                    MarkerPings.age(MarkerKeys.of(mark), mark.position().getX(), mark.position().getZ()));
         }
 
         for (MapMarkerSyncPacket.MarkerData marker : ClientMapData.getMarkers()) {
             if (!ClientMapData.showOtherMarkers && !marker.playerName.equals(mc.player.getScoreboardName())) continue;
-            int color;
-            String name;
-            if (!marker.isTeam) {
-                color = 0xFF55FFFF;
-                name = Component.translatable("minimap.label.personal").getString();
-            } else {
-                color = MapRenderUtil.getPlayerTeamColor(marker.playerName);
-                name = marker.playerName;
-            }
-            renderMarker(guiGraphics, marker.x, marker.z, mapX, mapZ, zoom, cx, cy, color, name);
+            int color = marker.isTeam ? MapRenderUtil.getPlayerTeamColor(marker.playerName) : UiAccent.color();
+            String name = marker.isTeam ? marker.playerName : Component.translatable("minimap.label.personal").getString();
+            pinged++;
+            renderMarker(guiGraphics, marker.x, marker.z, mapX, mapZ, zoom, cx, cy, color, name,
+                    MarkerPings.age(MarkerKeys.of(marker), marker.x, marker.z));
         }
+        MarkerPings.sweep(pinged);
 
-        RenderSystem.depthMask(false);
-        RenderSystem.disableDepthTest();
-        RenderSystem.depthFunc(GL11.GL_LEQUAL);
-    };
-
-    private static void renderPlayerDot(GuiGraphics guiGraphics, double px, double pz, float yRot, double mapX, double mapZ, float zoom, int cx, int cy, int color) {
-        double dx = (px - mapX) * zoom;
-        double dz = (pz - mapZ) * zoom;
-        double dist = Math.sqrt(dx * dx + dz * dz);
-        float maxR = (ClientMapData.minimapSize - 4.0f) / 2.0f - 3.0f;
-        if (dist > maxR) {
-            return;
+        for (PlayerPositionSyncPacket.PlayerPos other : ClientMapData.getPlayers()) {
+            if (other.playerId.equals(mc.player.getUUID())) continue;
+            renderPlayerDot(guiGraphics, other.x, other.z, mapX, mapZ, zoom, cx, cy, MapRenderUtil.getPlayerTeamColor(other.playerName));
         }
-        double screenX = cx + dx;
-        double screenY = cy + dz;
-        MapRenderUtil.fillRoundedRect(guiGraphics, (float) screenX - 2, (float) screenY - 2, 4, 4, 2, color);
     }
 
-    private static void renderMarker(GuiGraphics guiGraphics, double mx, double mz, double mapX, double mapZ, float zoom, int cx, int cy, int color, String name) {
+    private static void renderBases(GuiGraphics guiGraphics, double mapX, double mapZ, float zoom, float cx, float cy) {
+        for (Zone zone : ClientZoneData.all()) {
+            if (zone.type() != ZoneType.BASE || !ZoneColors.visibleToOwnTeam(zone)) continue;
+
+            renderBase(guiGraphics, zone.area().centerX(), zone.area().centerZ(), mapX, mapZ, zoom, cx, cy,
+                    0xFF000000 | ZoneColors.packed(zone));
+        }
+    }
+
+    private static void renderBase(GuiGraphics guiGraphics, double bx, double bz, double mapX, double mapZ,
+                                   float zoom, float cx, float cy, int color) {
+        double dx = (bx - mapX) * zoom;
+        double dz = (bz - mapZ) * zoom;
+        double dist = Math.sqrt(dx * dx + dz * dz);
+        float maxR = (renderSize() - 4.0f) / 2.0f - 4.0f;
+        boolean clamped = dist > maxR;
+        if (clamped) {
+            dx = dx / dist * maxR;
+            dz = dz / dist * maxR;
+        }
+
+        float screenX = (float) (cx + dx);
+        float screenY = (float) (cy + dz);
+        int shown = UiTheme.muted(color, 0.2f);
+        UiRender.ring(guiGraphics, screenX, screenY, BASE_RADIUS, 2.8f, 1.0f, UiPalette.panelDeep());
+        UiRender.ring(guiGraphics, screenX, screenY, BASE_RADIUS, 1.6f, 1.0f, shown);
+        UiRender.dot(guiGraphics, screenX, screenY, 1.1f, shown);
+
+        if (!clamped) {
+            labelAbove(guiGraphics, Minecraft.getInstance(), BASE_LABEL.getString(), screenX, screenY,
+                    BASE_RADIUS + 1.4f, PLATE_TEXT);
+        }
+    }
+
+    private static void labelAbove(GuiGraphics guiGraphics, Minecraft mc, String value, float centerX,
+                                   float markerY, float markerRadius, int color) {
+        float scale = UiRender.crisp(guiGraphics, LABEL_SCALE);
+        float height = PLATE_HEIGHT * scale + PLATE_PAD_Y * 2.0f;
+        float plateY = markerY - markerRadius - MARKER_CLEARANCE - height;
+        plate(guiGraphics, mc, value, centerX, plateY, height, scale);
+        UiRender.labelCentered(guiGraphics, mc.font, value, centerX,
+                UiRender.centerY(plateY, height, scale), scale, color);
+    }
+
+    private static void label(GuiGraphics guiGraphics, Minecraft mc, String value, float centerX, float y, int color) {
+        float scale = UiRender.crisp(guiGraphics, LABEL_SCALE);
+        float height = PLATE_HEIGHT * scale + PLATE_PAD_Y * 2.0f;
+        float plateY = y - PLATE_PAD_Y;
+        plate(guiGraphics, mc, value, centerX, plateY, height, scale);
+        UiRender.labelCentered(guiGraphics, mc.font, value, centerX,
+                UiRender.centerY(plateY, height, scale), scale, color);
+    }
+
+    private static void plate(GuiGraphics guiGraphics, Minecraft mc, String value, float centerX, float plateY,
+                              float height, float scale) {
+        float width = UiRender.measure(guiGraphics, mc.font, Component.literal(value), scale) + PLATE_PAD_X * 2.0f;
+        UiRender.panel(guiGraphics, centerX - width / 2.0f, plateY, width, height, height / 2.0f, PLATE_COLOR);
+    }
+
+    private static void renderPlayerDot(GuiGraphics guiGraphics, double px, double pz, double mapX, double mapZ, float zoom, float cx, float cy, int color) {
+        double dx = (px - mapX) * zoom;
+        double dz = (pz - mapZ) * zoom;
+        float maxR = (renderSize() - 4.0f) / 2.0f - 3.0f;
+        if (Math.sqrt(dx * dx + dz * dz) > maxR) return;
+
+        float screenX = (float) (cx + dx);
+        float screenY = (float) (cy + dz);
+        UiRender.dot(guiGraphics, screenX, screenY, 2.6f, UiPalette.panelDeep());
+        UiRender.dot(guiGraphics, screenX, screenY, 2.0f, UiTheme.muted(color, 0.2f));
+    }
+
+    private static void renderMarker(GuiGraphics guiGraphics, double mx, double mz, double mapX, double mapZ,
+                                     float zoom, float cx, float cy, int color, String name, float age) {
         double dx = (mx - mapX) * zoom;
         double dz = (mz - mapZ) * zoom;
         double dist = Math.sqrt(dx * dx + dz * dz);
-        float maxR = (ClientMapData.minimapSize - 4.0f) / 2.0f - 4.0f;
-        boolean clamped = false;
-        if (dist > maxR) {
-            dx = (dx / dist) * maxR;
-            dz = (dz / dist) * maxR;
-            clamped = true;
+        float maxR = (renderSize() - 4.0f) / 2.0f - 4.0f;
+        boolean clamped = dist > maxR;
+        if (clamped) {
+            dx = dx / dist * maxR;
+            dz = dz / dist * maxR;
         }
-        double screenX = cx + dx;
-        double screenY = cy + dz;
-        guiGraphics.fill((int) screenX - 1, (int) screenY - 1, (int) screenX + 2, (int) screenY + 2, color);
+
+        float screenX = (float) (cx + dx);
+        float screenY = (float) (cy + dz);
+        int shown = UiTheme.muted(color, 0.2f);
+        float pop = MarkerPings.pop(age);
+        MarkerPings.ripple(guiGraphics, screenX, screenY, MARKER_DOT, shown, age);
+        UiRender.dot(guiGraphics, screenX, screenY, MARKER_DOT * pop + 0.6f, UiPalette.panelDeep());
+        UiRender.dot(guiGraphics, screenX, screenY, MARKER_DOT * pop, shown);
+
         if (!clamped) {
-            guiGraphics.drawString(Minecraft.getInstance().font, name, (int) screenX + 3, (int) screenY - 4, color, false);
+            labelAbove(guiGraphics, Minecraft.getInstance(), name, screenX, screenY, 2.1f, PLATE_TEXT);
         }
     }
 
-    private static void renderPointMarker(GuiGraphics guiGraphics, double px, double pz, double mapX, double mapZ, float zoom, int cx, int cy, int color, String name) {
+    private static void renderWorldMarker(GuiGraphics guiGraphics, double mx, double mz, double mapX, double mapZ, float zoom, float cx, float cy, String name) {
+        double dx = (mx - mapX) * zoom;
+        double dz = (mz - mapZ) * zoom;
+        double dist = Math.sqrt(dx * dx + dz * dz);
+        float maxR = (renderSize() - 4.0f) / 2.0f - 4.0f;
+        boolean clamped = dist > maxR;
+        if (clamped) {
+            dx = dx / dist * maxR;
+            dz = dz / dist * maxR;
+        }
+
+        float screenX = (float) (cx + dx);
+        float screenY = (float) (cy + dz);
+        UiRender.panel(guiGraphics, screenX - 3.1f, screenY - 3.1f, 6.2f, 6.2f, 2.0f, UiPalette.panelDeep());
+        UiRender.panel(guiGraphics, screenX - 2.5f, screenY - 2.5f, 5.0f, 5.0f, 1.5f, UiAccent.color());
+
+        if (!clamped) {
+            labelAbove(guiGraphics, Minecraft.getInstance(), name, screenX, screenY, 3.1f, PLATE_TEXT);
+        }
+    }
+
+    private static void renderPoint(GuiGraphics guiGraphics, double px, double pz, double mapX, double mapZ, float zoom, float cx, float cy, int color, String name) {
         double dx = (px - mapX) * zoom;
         double dz = (pz - mapZ) * zoom;
         double dist = Math.sqrt(dx * dx + dz * dz);
-        float maxR = (ClientMapData.minimapSize - 4.0f) / 2.0f - 4.0f;
-        boolean clamped = false;
-        if (dist > maxR) {
-            dx = (dx / dist) * maxR;
-            dz = (dz / dist) * maxR;
-            clamped = true;
+        float maxR = (renderSize() - 4.0f) / 2.0f - 4.0f;
+        boolean clamped = dist > maxR;
+        if (clamped) {
+            dx = dx / dist * maxR;
+            dz = dz / dist * maxR;
         }
-        double screenX = cx + dx;
-        double screenY = cy + dz;
-        MapRenderUtil.fillRoundedRect(guiGraphics, (float) screenX - 3, (float) screenY - 3, 6, 6, 2, color);
+
+        float screenX = (float) (cx + dx);
+        float screenY = (float) (cy + dz);
+        UiRender.panel(guiGraphics, screenX - 3.6f, screenY - 3.6f, 7.2f, 7.2f, 2.4f, UiPalette.panelDeep());
+        UiRender.panel(guiGraphics, screenX - 3.0f, screenY - 3.0f, 6.0f, 6.0f, 2.0f, UiTheme.muted(color, 0.25f));
+
         if (!clamped) {
-            guiGraphics.drawString(Minecraft.getInstance().font, name, (int) screenX + 4, (int) screenY - 4, color, false);
+            labelAbove(guiGraphics, Minecraft.getInstance(), name, screenX, screenY, 3.1f, PLATE_TEXT);
         }
     }
 }

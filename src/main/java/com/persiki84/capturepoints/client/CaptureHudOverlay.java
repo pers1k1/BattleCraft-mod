@@ -1,348 +1,486 @@
 package com.persiki84.capturepoints.client;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.Tesselator;
-import com.mojang.blaze3d.vertex.VertexFormat;
-import net.minecraft.client.renderer.GameRenderer;
-import org.joml.Matrix4f;
-import net.minecraft.ChatFormatting;
+import com.persiki84.battlecraft.client.custom.HudSlot;
+import com.persiki84.battlecraft.client.custom.HudLayout;
+import com.persiki84.battlecraft.client.custom.HudBox;
+import com.persiki84.shared.client.ui.TopStack;
+import com.persiki84.battlecraft.client.hud.BossBarHud;
+import com.persiki84.minimap.client.MapRenderUtil;
+import com.persiki84.shared.client.ui.Smooth;
+import com.persiki84.shared.client.ui.Toggle;
+import com.persiki84.shared.client.ui.UiAnim;
+import com.persiki84.shared.client.ui.UiFrame;
+import com.persiki84.shared.client.ui.UiHud;
+import com.persiki84.shared.client.ui.UiGlass;
+import com.persiki84.shared.client.ui.UiMetrics;
+import com.persiki84.shared.client.ui.UiPalette;
+import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiScale;
+import com.persiki84.shared.client.ui.UiTagStack;
+import com.persiki84.shared.client.ui.UiAccent;
+import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiWorldTag;
+import com.persiki84.shared.client.ui.UiVital;
+import com.persiki84.battlecraft.client.ClientModules;
+import com.persiki84.battlecraft.client.hud.HudInk;
+import com.persiki84.battlecraft.modules.ModuleId;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraftforge.client.gui.overlay.IGuiOverlay;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Objects;
 
 public class CaptureHudOverlay {
-    private static final int PILL_HEIGHT = 28;
-    private static final int PILL_Y = 35;
-    private static final int FINAL_PILL_Y = 70;
-    private static final int PILL_SPACING = 8;
-    private static final float RADIUS = 10.0f;
+    private static final float PILL_HEIGHT = 13.0f;
+    private static final float PILL_GAP = 5.0f;
+    private static final float PILL_RADIUS = 4.0f;
+    private static final float PILL_PADDING = 7.0f;
+    private static final float LABEL_SCALE = 0.8f;
+    private static final long OWNER_FLASH_MS = 3500L;
+    private static final long CAPTURE_TIMEOUT_MS = 1200L;
+    private static final float OBJECTIVE_WIDTH = 240.0f;
+    private static final float OBJECTIVE_HEIGHT = 46.0f;
+    private static final float CENTRAL_WIDTH = 110.0f;
+    private static final float CENTRAL_LABEL_SCALE = 0.8f;
+    private static final float CENTRAL_PADDING = UiMetrics.PAD;
+    private static final float CENTRAL_BAR_HEIGHT = UiMetrics.BAR_HEIGHT;
+    private static final float HOVER_NEAR = 14.0f;
+    private static final float HOVER_FAR = 46.0f;
+    private static final float ROW_GAP = 5.0f;
+    private static final float DOT_COLUMN = 7.0f;
+    private static final float MARKER_DOT = 1.6f;
+    private static final float MARKER_TAG_GAP = 4.5f;
+    private static final float RANGE_FADE_SPEED = 6.0f;
+    private static final double RANGE_SHOWN_FROM = 24.0;
+    private static final Map<String, MarkerState> markerStates = new HashMap<>();
+    private static final float MARKER_LABEL_SCALE = 0.75f;
+    private static final float FULL_PRESENCE = 1.0f;
+    private static final float STACK_GAP = 5.0f;
+    private static final float SAMPLE_PROGRESS = 0.62f;
+    private static final String STATE_ARMING = "capturepoints.hud.state.arming";
+    private static final String STATE_HELD = "capturepoints.hud.state.held";
+    private static final String STATE_STALLED = "capturepoints.hud.state.stalled";
+    private static final String STATE_CONTEST = "capturepoints.hud.state.contest";
+    private static final String STATE_ROLLBACK = "capturepoints.hud.state.rollback";
+    private static final String STATE_FINAL = "capturepoints.hud.state.final";
 
-    private static final Map<String, Float> animatedProgress = new HashMap<>();
-    private static final Map<String, Float> animatedWidth = new HashMap<>();
-    private static final Map<String, Float> animatedPillAlpha = new HashMap<>();
-    private static float centralAlpha = 0.0f;
-    private static String centralPointName = null;
-    private static boolean centralIsFinal = false;
+    private static final Map<String, Pill> pills = new LinkedHashMap<>();
+    private static final Toggle centralToggle = new Toggle(11.0f, 120L);
+    private static final Smooth centralProgress = new Smooth(14.0f);
+    private static String centralPoint;
+    private static boolean centralFinal;
+    private static float centralValue;
+    private static boolean centralLive;
+    private static Component centralCached;
+    private static Component centralCachedTag = Component.empty();
+    private static int centralCachedTint;
+    private static final CaptureState centralState = new CaptureState();
+    private static final CaptureState sampleState = new CaptureState();
 
     public static final IGuiOverlay HUD_CAPTURE = (gui, guiGraphics, partialTick, screenWidth, screenHeight) -> {
         if (com.persiki84.battlecraft.client.ClientGameData.isSoftDisabled()) return;
+        if (!ClientModules.allows(ModuleId.CAPTURE_POINTS)) return;
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.options.keyPlayerList.isDown()) return;
+        if (mc.player == null || UiHud.hidden()) return;
 
-        renderProjectedMarkers(guiGraphics, mc, partialTick);
+        renderProjectedMarkers(guiGraphics, mc, screenWidth / 2.0f, screenHeight / 2.0f);
+        ObjectiveHud.renderBanner(guiGraphics, mc, screenWidth, screenHeight);
 
-        if (com.persiki84.battlecraft.client.ClientGameData.getCurrentPhase() != com.persiki84.battlecraft.BattleCraftManager.GamePhase.ACTIVE) return;
-        if (mc.player.getTeam() == null) return;
+        boolean matchRunning = com.persiki84.battlecraft.client.ClientGameData.getCurrentPhase()
+                == com.persiki84.battlecraft.BattleCraftManager.GamePhase.ACTIVE && mc.player.getTeam() != null;
 
-        float delta = mc.getDeltaFrameTime() * 0.05f;
-        if (delta > 0.1f) delta = 0.1f;
-
-        renderPoints(guiGraphics, screenWidth, ClientCaptureData.getAllPointOwners(), PILL_Y, false, delta);
-
-        if (ClientCaptureData.areAllPointsCapturedBySameTeam()) {
-            renderPoints(guiGraphics, screenWidth, ClientCaptureData.getAllFinalPointOwners(), FINAL_PILL_Y, true, delta);
-        }
-
-        boolean capturing = ClientCaptureData.isLocalPlayerCapturing();
-        if (capturing) {
-            centralAlpha = lerp(centralAlpha, 1.0f, 5f, delta);
-            centralPointName = ClientCaptureData.getLocalCapturingPoint();
-            centralIsFinal = ClientCaptureData.isLocalCapturingFinal();
-        } else {
-            centralAlpha = lerp(centralAlpha, 0.0f, 5f, delta);
-        }
-
-        if (centralAlpha > 0.0f && centralPointName != null) {
-            renderCentralProgress(guiGraphics, screenWidth, screenHeight, centralIsFinal, delta, centralAlpha, centralPointName);
+        float scale = UiScale.push(guiGraphics);
+        try {
+            float delta = UiFrame.delta();
+            float logicalWidth = screenWidth / scale;
+            if (matchRunning) {
+                renderTopStack(guiGraphics, mc, logicalWidth, screenHeight / scale, scale, delta);
+            }
+            renderCentral(guiGraphics, mc, logicalWidth, screenHeight / scale, delta);
+        } finally {
+            UiScale.pop(guiGraphics);
         }
     };
 
-    private static void renderPoints(GuiGraphics guiGraphics, int screenWidth, Map<String, String> points, int baseY, boolean isFinal, float delta) {
-        if (points.isEmpty()) return;
+    private static void renderTopStack(GuiGraphics graphics, Minecraft mc, float screenWidth,
+                                       float screenHeight, float scale, float delta) {
+        if (!HudLayout.visible(HudSlot.OBJECTIVE)) return;
 
+        HudBox box = HudLayout.place(HudSlot.OBJECTIVE, OBJECTIVE_WIDTH, OBJECTIVE_HEIGHT, screenWidth, screenHeight);
+        HudLayout.push(graphics, box);
+        try {
+            paintTopStack(graphics, mc, box, scale, delta);
+        } finally {
+            HudLayout.pop(graphics, box);
+        }
+    }
+
+    private static void paintTopStack(GuiGraphics graphics, Minecraft mc, HudBox box, float scale, float delta) {
+        float centerX = box.centerX();
+        float top = TopStack.at("capture_top", objectiveBase(box, scale), delta);
+        float returnBottom = CaptureReturnHud.render(graphics, mc, centerX, top, delta);
+
+        float objectiveTop = TopStack.at("capture_objective",
+                returnBottom > 0.0f ? returnBottom + STACK_GAP : top, delta);
+        float barBottom = ObjectiveHud.render(graphics, mc, centerX, objectiveTop, delta);
+
+        float pillsTop = TopStack.at("capture_pills",
+                barBottom > 0.0f ? barBottom + STACK_GAP : objectiveTop, delta);
+        renderPills(graphics, mc, centerX, pillsTop, delta);
+    }
+
+    private static float objectiveBase(HudBox box, float scale) {
+        if (HudLayout.pinned(HudSlot.OBJECTIVE)) return box.y();
+        if (!HudLayout.of(HudSlot.OBJECTIVE).anchor().top()) return box.y();
+        return Math.max(box.y(), BossBarHud.bottom() / scale + 6.0f);
+    }
+
+    private static void renderPills(GuiGraphics graphics, Minecraft mc, float centerX, float top, float delta) {
+        long now = System.currentTimeMillis();
+        boolean finalsOpen = ClientCaptureData.areAllPointsCapturedBySameTeam();
+
+        claimRow(ClientCaptureData.getAllPointOwners(), false, now);
+        if (finalsOpen) {
+            claimRow(ClientCaptureData.getAllFinalPointOwners(), true, now);
+        }
+        retire(mc, finalsOpen, now, delta);
+
+        float rowTop = renderRow(graphics, mc, centerX, top, false);
+        renderRow(graphics, mc, centerX, rowTop > 0.0f ? rowTop + ROW_GAP : top, true);
+    }
+
+    private static void claimRow(Map<String, String> owners, boolean isFinal, long now) {
+        for (Map.Entry<String, String> entry : owners.entrySet()) {
+            claimPill(entry.getKey(), entry.getValue(), isFinal, now);
+        }
+    }
+
+    private static void retire(Minecraft mc, boolean finalsOpen, long now, float delta) {
+        boolean anyGone = false;
+        for (Map.Entry<String, Pill> entry : pills.entrySet()) {
+            Pill pill = entry.getValue();
+            pill.alive = listed(entry.getKey(), pill.isFinal, finalsOpen);
+            animatePill(mc, entry.getKey(), pill, now, delta);
+            anyGone |= !pill.alive && pill.toggle.hidden();
+        }
+        if (anyGone) {
+            pills.values().removeIf(pill -> !pill.alive && pill.toggle.hidden());
+        }
+    }
+
+    private static boolean listed(String name, boolean isFinal, boolean finalsOpen) {
+        if (isFinal) return finalsOpen && ClientCaptureData.getAllFinalPointOwners().containsKey(name);
+        return ClientCaptureData.getAllPointOwners().containsKey(name);
+    }
+
+    private static void claimPill(String name, String owner, boolean isFinal, long now) {
+        Pill pill = pills.get(name);
+        if (pill == null) {
+            pill = new Pill();
+            pill.owner = owner;
+            pills.put(name, pill);
+        } else if (!Objects.equals(pill.owner, owner)) {
+            pill.owner = owner;
+            pill.changedAt = now;
+        }
+        pill.isFinal = isFinal;
+    }
+
+    private static void animatePill(Minecraft mc, String name, Pill pill, long now, float delta) {
+        float progress = pill.alive ? ClientCaptureData.getProgress(name) : 0.0f;
+
+        pill.capturing = pill.alive && progress > 0.001f
+                && now - ClientCaptureData.getLastUpdateTime(name) < CAPTURE_TIMEOUT_MS;
+        pill.alphaValue = pill.toggle.update(pill.alive, delta);
+        pill.flash = UiAnim.clamp01((OWNER_FLASH_MS - (now - pill.changedAt)) / (float) OWNER_FLASH_MS);
+        if (pill.toggle.hidden()) {
+            pill.progress.snap(progress);
+        }
+        pill.progressValue = pill.progress.to(progress, delta);
+        float span = UiRender.width(mc.font, name) * LABEL_SCALE + PILL_PADDING * 2.0f + DOT_COLUMN;
+        pill.drawWidth = span * UiAnim.easeOut(pill.alphaValue);
+    }
+
+    private static float renderRow(GuiGraphics graphics, Minecraft mc, float centerX, float top, boolean finalRow) {
+        float totalWidth = 0.0f;
+        int visible = 0;
+
+        for (Pill pill : pills.values()) {
+            if (pill.isFinal != finalRow || pill.alphaValue <= 0.01f) continue;
+            totalWidth += pill.drawWidth;
+            visible++;
+        }
+        if (visible == 0) return 0.0f;
+
+        totalWidth += PILL_GAP * (visible - 1);
+        float x = centerX - totalWidth / 2.0f;
+
+        for (Map.Entry<String, Pill> entry : pills.entrySet()) {
+            Pill pill = entry.getValue();
+            if (pill.isFinal != finalRow || pill.alphaValue <= 0.01f) continue;
+
+            float y = top - (1.0f - UiAnim.easeOut(pill.alphaValue)) * 6.0f;
+            renderPill(graphics, mc, entry.getKey(), pill, x, y);
+            x += pill.drawWidth + PILL_GAP;
+        }
+        return top + PILL_HEIGHT;
+    }
+
+    private static void renderPill(GuiGraphics graphics, Minecraft mc, String name, Pill pill, float x, float y) {
+        float alpha = pill.alphaValue;
+        float width = pill.drawWidth;
+
+        float lift = pill.capturing
+                ? UiAnim.pulse(1100.0f, 0.25f, 0.85f)
+                : Math.max(pill.isFinal ? 0.5f : 0.0f, pill.flash * 0.7f);
+
+        UiVital.card(graphics, x, y, width, PILL_HEIGHT, Math.min(PILL_RADIUS, PILL_HEIGHT / 2.0f), alpha, lift);
+
+        if (width < PILL_PADDING * 2.0f) return;
+
+        UiRender.dot(graphics, x + PILL_PADDING - 1.0f, y + PILL_HEIGHT / 2.0f, 1.5f,
+                UiTheme.alpha(dotTint(pill), alpha));
+
+        int labelColor = CaptureColors.label();
+        UiRender.labelScaled(graphics, mc.font, name, x + PILL_PADDING + 5.0f,
+                UiRender.centerY(y, PILL_HEIGHT, LABEL_SCALE), LABEL_SCALE, UiTheme.alpha(labelColor, alpha));
+
+        if (pill.progressValue > 0.002f) {
+            int bar = ClientCaptureData.isDecaying(name) ? UiPalette.alert() : attackerTint(name);
+            UiRender.panel(graphics, x + 3.0f, y + PILL_HEIGHT - 3.0f, (width - 6.0f) * pill.progressValue, 1.5f, 0.75f,
+                    UiTheme.alpha(bar, alpha));
+        }
+    }
+
+    private static int dotTint(Pill pill) {
+        if (pill.isFinal) return UiAccent.color();
+        if (pill.owner == null || pill.owner.isEmpty()) return CaptureColors.neutralDot();
+        return MapRenderUtil.getTeamColor(pill.owner);
+    }
+
+    private static int attackerTint(String pointName) {
+        String team = ClientCaptureData.getAttackerTeam(pointName);
+        if (team == null || team.isEmpty()) return CaptureColors.progress();
+        return MapRenderUtil.getTeamColor(team);
+    }
+
+    private static void renderCentral(GuiGraphics graphics, Minecraft mc, float screenWidth, float screenHeight, float delta) {
+        boolean capturing = ClientCaptureData.isLocalCaptureShown();
+        centralLive = capturing;
+        if (capturing) {
+            centralPoint = ClientCaptureData.getLocalCapturingPoint();
+            centralFinal = ClientCaptureData.isLocalCapturingFinal();
+            centralValue = ClientCaptureData.getBarValue(centralPoint);
+        }
+
+        float alpha = centralToggle.update(capturing, delta);
+        if (centralToggle.cleared()) {
+            centralPoint = null;
+            centralValue = 0.0f;
+            centralProgress.snap(0.0f);
+            centralCachedTag = Component.empty();
+            centralState.settle();
+        }
+        if (alpha <= 0.01f || centralPoint == null) return;
+
+        wantCentralTag();
+        renderCentralCard(graphics, mc, screenWidth, screenHeight, alpha,
+                centralProgress.to(centralValue, delta), delta);
+    }
+
+    private static Component centralLabel(float progress) {
+        if (!centralLive) return centralCached == null ? Component.empty() : centralCached;
+
+        centralCached = buildCentralLabel(progress);
+        return centralCached;
+    }
+
+    private static Component buildCentralLabel(float progress) {
+        String point = centralPoint;
+        if (!ClientCaptureData.isRunning(point)) return Component.translatable("capturepoints.hud.point", point);
+
+        return Component.translatable("capturepoints.hud.capture_progress", point, (int) (progress * 100));
+    }
+
+    // WHY: тег состояния отделён от строки прогресса, потому что проценты меняются каждый кадр,
+    // WHY: и перекрашивать по ним всю надпись значит мигать вместо смены состояния
+    private static void wantCentralTag() {
+        if (!centralLive) return;
+
+        String key = resolveTag();
+        centralState.want(key, centralCachedTag, HudInk.text());
+    }
+
+    private static String resolveTag() {
+        String point = centralPoint;
+        if (!ClientCaptureData.isRunning(point)) {
+            centralCachedTag = Component.translatable(STATE_ARMING,
+                    ClientCaptureData.getArmingSeconds(point));
+            return STATE_ARMING;
+        }
+        if (ClientCaptureData.isHeld(point)) return tag(STATE_HELD);
+
+        int attackers = ClientCaptureData.getAttackerCount(point);
+        int rivals = ClientCaptureData.getRivalCount(point);
+        if (rivals > 0 && attackers == rivals) return tag(STATE_STALLED);
+        if (rivals > 0) {
+            centralCachedTag = Component.translatable(STATE_CONTEST, attackers, rivals);
+            return STATE_CONTEST;
+        }
+        if (ClientCaptureData.isDecaying(point)) return tag(STATE_ROLLBACK);
+        if (centralFinal) return tag(STATE_FINAL);
+
+        centralCachedTag = Component.empty();
+        return "";
+    }
+
+    private static String tag(String key) {
+        centralCachedTag = Component.translatable(key);
+        return key;
+    }
+
+    private static int centralTint() {
+        if (!centralLive || centralPoint == null) {
+            return centralCachedTint == 0 ? CaptureColors.progress() : centralCachedTint;
+        }
+
+        centralCachedTint = ClientCaptureData.isRunning(centralPoint) && !ClientCaptureData.isHeld(centralPoint)
+                ? (ClientCaptureData.isDecaying(centralPoint) ? UiPalette.alert() : CaptureColors.progress())
+                : UiAccent.faint();
+        return centralCachedTint;
+    }
+
+    private static void renderCentralCard(GuiGraphics graphics, Minecraft mc, float screenWidth, float screenHeight,
+                                          float alpha, float progress, float delta) {
+        if (!HudLayout.visible(HudSlot.CAPTURE)) return;
+
+        Component label = centralLabel(progress);
+
+        float labelScale = UiRender.crisp(graphics, CENTRAL_LABEL_SCALE);
+        float tagRoom = centralState.advance(graphics, labelScale, delta);
+        float textWidth = UiRender.measure(graphics, mc.font, label, labelScale) + tagRoom;
+        float barWidth = Math.max(CENTRAL_WIDTH, textWidth + 12.0f);
+        float cardWidth = barWidth + CENTRAL_PADDING * 2.0f;
+        float cardHeight = mc.font.lineHeight * labelScale + CENTRAL_BAR_HEIGHT + CENTRAL_PADDING * 2.0f + 4.0f;
+        HudBox box = HudLayout.place(HudSlot.CAPTURE, cardWidth, cardHeight, screenWidth, screenHeight);
+        float cardX = box.x();
+        float cardY = box.y() + (1.0f - UiAnim.easeOut(alpha)) * 5.0f;
+
+        HudLayout.push(graphics, box);
+        try {
+            paintCentralCard(graphics, mc, label, cardX, cardY, cardWidth, cardHeight, barWidth,
+                    labelScale, progress, alpha, centralTint(), centralState);
+        } finally {
+            HudLayout.pop(graphics, box);
+        }
+    }
+
+    public static void preview(GuiGraphics graphics, float x, float y, float width, float height, float alpha) {
         Minecraft mc = Minecraft.getInstance();
-        float totalWidth = 0;
-        Map<String, Float> targetWidths = new HashMap<>();
-
-        for (String pointName : points.keySet()) {
-            float textWidth = mc.font.width(pointName);
-            float targetW = Math.max(textWidth + 16, PILL_HEIGHT);
-            targetWidths.put(pointName, targetW);
-            float currentW = animatedWidth.getOrDefault(pointName, targetW);
-            currentW = lerp(currentW, targetW, 10f, delta);
-            animatedWidth.put(pointName, currentW);
-            totalWidth += currentW;
-        }
-        totalWidth += PILL_SPACING * (points.size() - 1);
-
-        float currentX = (screenWidth - totalWidth) / 2f;
-
-        for (Map.Entry<String, String> entry : points.entrySet()) {
-            String pointName = entry.getKey();
-            String owner = entry.getValue();
-            float width = animatedWidth.get(pointName);
-
-            renderPill(guiGraphics, pointName, owner, currentX, baseY, width, isFinal, delta);
-            currentX += width + PILL_SPACING;
-        }
+        float labelScale = UiRender.crisp(graphics, CENTRAL_LABEL_SCALE);
+        Component label = Component.translatable("battlecraft.custom.sample.capture");
+        float barWidth = Math.max(CENTRAL_WIDTH, UiRender.width(mc.font, label) * labelScale + 12.0f);
+        float cardWidth = barWidth + CENTRAL_PADDING * 2.0f;
+        float cardHeight = mc.font.lineHeight * labelScale + CENTRAL_BAR_HEIGHT + CENTRAL_PADDING * 2.0f + 4.0f;
+        HudLayout.sample(HudSlot.CAPTURE, cardWidth, cardHeight);
+        sampleState.want(STATE_ROLLBACK, Component.translatable(STATE_ROLLBACK), HudInk.text());
+        sampleState.advance(graphics, labelScale, UiFrame.delta());
+        paintCentralCard(graphics, mc, label, x, y, cardWidth, cardHeight, barWidth, labelScale,
+                SAMPLE_PROGRESS, alpha, CaptureColors.progress(), sampleState);
     }
 
-    private static void renderPill(GuiGraphics guiGraphics, String pointName, String owner, float x, float y, float width, boolean isFinal, float delta) {
-        Minecraft mc = Minecraft.getInstance();
-        
-        float pillAlpha = animatedPillAlpha.getOrDefault(pointName, 0f);
-        pillAlpha = lerp(pillAlpha, 1.0f, 2f, delta);
-        animatedPillAlpha.put(pointName, pillAlpha);
+    private static void paintCentralCard(GuiGraphics graphics, Minecraft mc, Component label, float cardX,
+                                         float cardY, float cardWidth, float cardHeight, float barWidth,
+                                         float labelScale, float progress, float alpha, int tint,
+                                         CaptureState state) {
+        UiVital.card(graphics, cardX, cardY, cardWidth, cardHeight, UiMetrics.radius(cardHeight), alpha);
 
-        if (pillAlpha < 0.05f) return;
+        float textY = cardY + CENTRAL_PADDING;
+        float labelWidth = UiRender.measure(graphics, mc.font, label, labelScale);
+        float textLeft = cardX + (cardWidth - labelWidth - state.room()) / 2.0f;
+        UiRender.labelScaled(graphics, mc.font, label, textLeft, textY, labelScale,
+                UiTheme.alpha(HudInk.text(), alpha));
+        state.paint(graphics, textLeft + labelWidth, textY, labelScale, alpha);
 
-        float targetProgress = ClientCaptureData.getProgress(pointName);
-        float currentProgress = animatedProgress.getOrDefault(pointName, 0f);
-        currentProgress = lerp(currentProgress, targetProgress, 10f, delta);
-        animatedProgress.put(pointName, currentProgress);
+        float barX = cardX + CENTRAL_PADDING;
+        float barY = cardY + cardHeight - CENTRAL_PADDING - CENTRAL_BAR_HEIGHT;
+        UiGlass.sunken(graphics, barX, barY, barWidth, CENTRAL_BAR_HEIGHT, CENTRAL_BAR_HEIGHT / 2.0f, alpha);
+        UiGlass.progress(graphics, barX, barY, barWidth, CENTRAL_BAR_HEIGHT, progress, tint, alpha);
+    }
 
-        boolean isBeingCaptured = currentProgress > 0.01f;
-        float blinkAlpha = 1.0f;
-        if (isBeingCaptured && (System.currentTimeMillis() - ClientCaptureData.getLastUpdateTime(pointName)) > 500) {
-            blinkAlpha = 0.5f + 0.5f * (float) Math.sin(System.currentTimeMillis() / 300.0);
-        }
+    private static void renderProjectedMarkers(GuiGraphics graphics, Minecraft mc, float aimX, float aimY) {
+        float scale = UiScale.factor();
+        float delta = UiFrame.delta();
 
-        if (isFinal) {
-            fillRoundedRect(guiGraphics, x - 1.5f, y - 1.5f, width + 3.0f, PILL_HEIGHT + 3.0f, RADIUS + 1.5f, applyAlpha(CaptureColors.ACCENT_GOLD_BORDER, pillAlpha));
-        } else {
-            int borderColor = CaptureColors.BORDER_DEFAULT;
-            if (owner != null && !isBeingCaptured) {
-                borderColor = blendColors(toPastel(getColorFromChatFormatting(getTeamColor(owner)), 0.8f), CaptureColors.OUTLINE_BLACK, 0.5f);
+        graphics.pose().pushPose();
+        graphics.pose().scale(scale, scale, 1.0f);
+        try {
+            for (ProjectedMarker marker : MarkerRenderer.visible()) {
+                float dx = marker.screenX() - aimX;
+                float dy = marker.screenY() - aimY;
+                float aimDistance = (float) Math.sqrt(dx * dx + dy * dy) / scale;
+                float focus = 1.0f - UiAnim.clamp01((aimDistance - HOVER_NEAR) / (HOVER_FAR - HOVER_NEAR));
+
+                renderMarker(graphics, mc, marker, marker.screenX() / scale, marker.screenY() / scale,
+                        focus, delta);
             }
-            fillRoundedRect(guiGraphics, x - 1.0f, y - 1.0f, width + 2.0f, PILL_HEIGHT + 2.0f, RADIUS + 1.0f, applyAlpha(borderColor, pillAlpha));
-        }
-
-        int bgColor = isFinal ? CaptureColors.PILL_BG_FINAL : CaptureColors.PILL_BG;
-        if (owner != null && !isBeingCaptured) {
-            bgColor = toPastel(getColorFromChatFormatting(getTeamColor(owner)), 1.0f);
-        }
-        
-        fillRoundedRect(guiGraphics, x, y, width, PILL_HEIGHT, RADIUS, applyAlpha(bgColor, pillAlpha));
-
-        if (isBeingCaptured) {
-            int captureColor = toPastel(getColorFromChatFormatting(getCapturingTeamColor(pointName)), 0.9f);
-            if (isFinal) {
-                captureColor = blendColors(captureColor, CaptureColors.ACCENT_GOLD, 0.4f);
-            }
-            captureColor = applyAlpha(captureColor, blinkAlpha * pillAlpha);
-            
-            double scale = mc.getWindow().getGuiScale();
-            int scissorX = (int) (x * scale);
-            int scissorY = (int) (mc.getWindow().getScreenHeight() - (y + PILL_HEIGHT) * scale);
-            int scissorW = (int) (width * currentProgress * scale);
-            int scissorH = (int) (PILL_HEIGHT * scale);
-            
-            RenderSystem.enableScissor(scissorX, scissorY, scissorW, scissorH);
-            fillRoundedRect(guiGraphics, x, y, width, PILL_HEIGHT, RADIUS, captureColor);
-            RenderSystem.disableScissor();
-        }
-
-        int textWidth = mc.font.width(pointName);
-        float textX = x + (width - textWidth) / 2f;
-        float textY = y + (PILL_HEIGHT - mc.font.lineHeight) / 2f + 1;
-
-        int textColor = isFinal ? CaptureColors.ACCENT_GOLD : CaptureColors.TEXT_WHITE;
-        if (isBeingCaptured) textColor = applyAlpha(textColor, 0.5f + 0.5f * blinkAlpha);
-        textColor = applyAlpha(textColor, pillAlpha);
-        guiGraphics.drawString(mc.font, pointName, (int) textX, (int) textY, textColor, true);
-    }
-
-    private static void renderCentralProgress(GuiGraphics guiGraphics, int screenWidth, int screenHeight, boolean isFinal, float delta, float alphaMod, String pointName) {
-        if (alphaMod < 0.05f) return;
-
-        Minecraft mc = Minecraft.getInstance();
-        
-        float targetProgress = ClientCaptureData.getProgress(pointName);
-        float currentProgress = animatedProgress.getOrDefault("central_" + pointName, 0f);
-        currentProgress = lerp(currentProgress, targetProgress, 10f, delta);
-        animatedProgress.put("central_" + pointName, currentProgress);
-
-        float blinkAlpha = 1.0f;
-        if (targetProgress > 0 && (System.currentTimeMillis() - ClientCaptureData.getLastUpdateTime(pointName)) > 500) {
-            blinkAlpha = 0.5f + 0.5f * (float) Math.sin(System.currentTimeMillis() / 300.0);
-        }
-        float overallAlpha = alphaMod * blinkAlpha;
-
-        float barWidth = 200f;
-        float barHeight = 12f;
-        float x = (screenWidth - barWidth) / 2f;
-        float y = screenHeight / 2f + 70f;
-
-        if (isFinal) {
-            fillRoundedRect(guiGraphics, x - 1.5f, y - 1.5f, barWidth + 3.0f, barHeight + 3.0f, (barHeight + 3.0f) / 2f, applyAlpha(CaptureColors.ACCENT_GOLD_BORDER, alphaMod));
-        }
-
-        fillRoundedRect(guiGraphics, x, y, barWidth, barHeight, barHeight / 2f, applyAlpha(CaptureColors.CENTRAL_BG, alphaMod));
-
-        if (currentProgress > 0.01f) {
-            int captureColor = toPastel(getColorFromChatFormatting(getCapturingTeamColor(pointName)), 0.9f);
-            if (isFinal) {
-                captureColor = blendColors(captureColor, CaptureColors.ACCENT_GOLD, 0.4f);
-            }
-            captureColor = applyAlpha(captureColor, overallAlpha);
-            
-            double scale = mc.getWindow().getGuiScale();
-            int scissorX = (int) (x * scale);
-            int scissorY = (int) (mc.getWindow().getScreenHeight() - (y + barHeight) * scale);
-            int scissorW = (int) (barWidth * currentProgress * scale);
-            int scissorH = (int) (barHeight * scale);
-            
-            RenderSystem.enableScissor(scissorX, scissorY, scissorW, scissorH);
-            fillRoundedRect(guiGraphics, x, y, barWidth, barHeight, barHeight / 2f, captureColor);
-            RenderSystem.disableScissor();
-        }
-
-        String langKey = isFinal ? "capturepoints.hud.final_progress" : "capturepoints.hud.capture_progress";
-        String text = Component.translatable(langKey, pointName, (int)(currentProgress * 100)).getString();
-        int textWidth = mc.font.width(text);
-        int textColor = isFinal ? CaptureColors.ACCENT_GOLD : CaptureColors.TEXT_WHITE;
-        textColor = applyAlpha(textColor, overallAlpha);
-        
-        guiGraphics.drawString(mc.font, text, (int)(x + (barWidth - textWidth) / 2f), (int)(y - 14), textColor, true);
-
-        RenderSystem.disableBlend();
-    }
-
-    private static void renderProjectedMarkers(GuiGraphics guiGraphics, Minecraft mc, float partialTick) {
-        for (ProjectedMarker marker : MarkerRenderer.markersToRender) {
-            int markerColor = CaptureColors.MARKER_DEFAULT;
-            if (marker.isFinal) {
-                markerColor = CaptureColors.ACCENT_GOLD;
-            } else if (marker.explicitColor != null) {
-                markerColor = marker.explicitColor;
-            } else if (marker.owner != null) {
-                markerColor = getColorFromChatFormatting(getTeamColor(marker.owner));
-            }
-
-            drawWorldMarker(guiGraphics, marker.screenX, marker.screenY, markerColor);
-
-            if (marker.name != null) {
-                String displayText = marker.name + " (" + (int) marker.distance + "m)";
-                int textWidth = mc.font.width(displayText);
-                float x = marker.screenX - textWidth / 2f;
-                float y = marker.screenY - mc.font.lineHeight - 6;
-
-                int outlineColor = CaptureColors.OUTLINE_BLACK;
-                guiGraphics.drawString(mc.font, displayText, (int) x + 1, (int) y, outlineColor, false);
-                guiGraphics.drawString(mc.font, displayText, (int) x - 1, (int) y, outlineColor, false);
-                guiGraphics.drawString(mc.font, displayText, (int) x, (int) y + 1, outlineColor, false);
-                guiGraphics.drawString(mc.font, displayText, (int) x, (int) y - 1, outlineColor, false);
-                guiGraphics.drawString(mc.font, displayText, (int) x, (int) y, CaptureColors.TEXT_WHITE, false);
-            }
+        } finally {
+            graphics.pose().popPose();
         }
     }
 
-    private static void drawWorldMarker(GuiGraphics guiGraphics, float cx, float cy, int color) {
-        drawRhombus(guiGraphics, cx, cy, 4, CaptureColors.OUTLINE_BLACK);
-        drawRhombus(guiGraphics, cx, cy, 3, color);
-    }
-
-    private static void drawRhombus(GuiGraphics guiGraphics, float cx, float cy, int halfSize, int color) {
-        for (int dy = -halfSize; dy <= halfSize; dy++) {
-            int width = halfSize - Math.abs(dy);
-            guiGraphics.fill((int)(cx - width), (int)(cy + dy), (int)(cx + width + 1), (int)(cy + dy + 1), color);
+    private static void renderMarker(GuiGraphics graphics, Minecraft mc, ProjectedMarker marker,
+                                     float x, float y, float focus, float delta) {
+        if (marker.name() == null) {
+            UiRender.dot(graphics, x, y, MARKER_DOT, UiTheme.alpha(markerColor(marker), 0.45f + 0.55f * focus));
+            return;
         }
+
+        MarkerState state = stateOf(marker);
+        float alpha = UiWorldTag.IDLE_ALPHA + (UiWorldTag.FOCUS_ALPHA - UiWorldTag.IDLE_ALPHA) * focus;
+        float height = UiWorldTag.height(mc.font, MARKER_LABEL_SCALE);
+        float ranged = UiAnim.easeOut(state.range.to(marker.distance() >= RANGE_SHOWN_FROM ? 1.0f : 0.0f, delta));
+        state.stack.depth((float) marker.distance());
+
+        UiWorldTag.render(graphics, mc.font, Component.literal(marker.name()),
+                Component.translatable("capturepoints.hud.marker.range", (int) marker.distance()), ranged,
+                x, y - height - MARKER_TAG_GAP, height, MARKER_LABEL_SCALE, markerColor(marker), alpha, focus,
+                FULL_PRESENCE, state.stack);
     }
 
-    private static ChatFormatting getCapturingTeamColor(String pointName) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null && mc.level != null) {
-            var uuid = ClientCaptureData.getCapturingPlayer(pointName);
-            if (uuid != null && uuid.equals(mc.player.getUUID())) {
-                var scoreboard = mc.level.getScoreboard();
-                var team = scoreboard.getPlayersTeam(mc.player.getScoreboardName());
-                if (team != null) return team.getColor();
-            } else if (uuid != null) {
-                var player = mc.level.getPlayerByUUID(uuid);
-                if (player != null) {
-                    var team = player.getTeam();
-                    if (team != null) return team.getColor();
-                }
-            }
+    private static MarkerState stateOf(ProjectedMarker marker) {
+        return markerStates.computeIfAbsent(marker.name(), name -> new MarkerState());
+    }
+
+    private static int markerColor(ProjectedMarker marker) {
+        if (marker.explicitColor() != null) return marker.explicitColor();
+        if (marker.isFinal()) return UiAccent.color();
+        if (marker.owner() != null && !marker.owner().isEmpty()) {
+            return MapRenderUtil.getTeamColor(marker.owner());
         }
-        return ChatFormatting.WHITE;
+        return CaptureColors.marker();
     }
 
-    public static ChatFormatting getTeamColor(String teamName) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level != null) {
-            var scoreboard = mc.level.getScoreboard();
-            var team = scoreboard.getPlayerTeam(teamName);
-            if (team != null) {
-                return team.getColor();
-            }
-        }
-        return ChatFormatting.GRAY;
+    private static final class MarkerState {
+        private final Smooth range = new Smooth(0.0f, RANGE_FADE_SPEED);
+        private final UiTagStack.Slot stack = UiTagStack.slot();
     }
 
-    public static int getColorFromChatFormatting(ChatFormatting formatting) {
-        Integer color = formatting.getColor();
-        if (color != null) {
-            return 0xFF000000 | color;
-        }
-        return 0xFF888888;
-    }
-
-    private static float lerp(float current, float target, float speed, float delta) {
-        float diff = target - current;
-        if (Math.abs(diff) < 0.005f) {
-            return target;
-        }
-        float factor = speed * delta;
-        if (factor > 1.0f) factor = 1.0f;
-        return current + diff * factor;
-    }
-
-    private static int toPastel(int color, float alphaMod) {
-        int a = (int) (((color >> 24) & 0xFF) * alphaMod);
-        if (a == 0) a = (int) (255 * alphaMod);
-        int r = (color >> 16) & 0xFF;
-        int g = (color >> 8) & 0xFF;
-        int b = color & 0xFF;
-        
-        r = (r + 255) / 2;
-        g = (g + 255) / 2;
-        b = (b + 255) / 2;
-        
-        return (a << 24) | (r << 16) | (g << 8) | b;
-    }
-
-    private static int applyAlpha(int color, float alphaMod) {
-        int a = (int) (((color >> 24) & 0xFF) * alphaMod);
-        return (a << 24) | (color & 0x00FFFFFF);
-    }
-
-    private static int blendColors(int color1, int color2, float ratio) {
-        int a1 = (color1 >> 24) & 0xFF;
-        int r1 = (color1 >> 16) & 0xFF;
-        int g1 = (color1 >> 8) & 0xFF;
-        int b1 = color1 & 0xFF;
-
-        int a2 = (color2 >> 24) & 0xFF;
-        int r2 = (color2 >> 16) & 0xFF;
-        int g2 = (color2 >> 8) & 0xFF;
-        int b2 = color2 & 0xFF;
-
-        int a = (int) (a1 + (a2 - a1) * ratio);
-        int r = (int) (r1 + (r2 - r1) * ratio);
-        int g = (int) (g1 + (g2 - g1) * ratio);
-        int b = (int) (b1 + (b2 - b1) * ratio);
-
-        return (a << 24) | (r << 16) | (g << 8) | b;
-    }
-
-    private static void fillRoundedRect(GuiGraphics graphics, float x, float y, float width, float height, float radius, int color) {
-        com.persiki84.minimap.client.MapRenderUtil.fillRoundedRect(graphics, x, y, width, height, radius, color);
+    private static final class Pill {
+        private final Toggle toggle = new Toggle(8.0f, 120L);
+        private final Smooth progress = new Smooth(14.0f);
+        private String owner;
+        private long changedAt;
+        private boolean capturing;
+        private boolean isFinal;
+        private boolean alive = true;
+        private float alphaValue;
+        private float progressValue;
+        private float drawWidth;
+        private float flash;
     }
 }

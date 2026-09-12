@@ -1,6 +1,8 @@
 package com.persiki84.battlecraft.client;
 
 import com.persiki84.battlecraft.BattleCraftManager;
+import com.persiki84.battlecraft.client.hud.HudConfig;
+import com.persiki84.battlecraft.client.island.DiscordIdentity;
 import dev.firstdark.rpc.enums.ActivityType;
 import dev.firstdark.rpc.enums.ErrorCode;
 import dev.firstdark.rpc.DiscordRpc;
@@ -16,15 +18,15 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class DiscordRpcManager {
-    private static final String OWNER_ID = "650390226643976213";
+    private static final String OWNER_NAME = "persiki84";
     private static final String CLIENT_ID = "1510061496590401688";
 
     private static DiscordRpcManager instance;
     private final DiscordRpc rpc = new DiscordRpc();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-    private volatile boolean initialized = false;
-    private volatile boolean isOwner = false;
+    private volatile boolean initialized;
+    private volatile boolean scheduled;
 
     private DiscordRpcManager() {}
 
@@ -35,22 +37,45 @@ public class DiscordRpcManager {
         return instance;
     }
 
-    public void init() {
+    public void identify() {
+        DiscordIdentity.ask(CLIENT_ID);
+    }
+
+    public void refresh() {
+        if (HudConfig.discordRpc()) {
+            init();
+            return;
+        }
+        clear();
+    }
+
+    private void init() {
         if (initialized) return;
+
+        initialized = true;
         executor.submit(() -> {
             try {
-                rpc.init(CLIENT_ID, new OwnerHandler(), false);
-                initialized = true;
-
-                scheduler.scheduleAtFixedRate(() -> {
-                    try { rpc.runCallbacks(); } catch (Exception ignored) {}
-                }, 1, 2, TimeUnit.SECONDS);
-
-                scheduler.scheduleAtFixedRate(this::updateStatus, 15, 30, TimeUnit.SECONDS);
-
+                rpc.init(CLIENT_ID, new SilentHandler(), false);
+                schedule();
                 updateStatus();
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                initialized = false;
+            }
         });
+    }
+
+    // WHY: переключатель может поднимать связь заново, а два расписания на один rpc шлют статус дважды
+    private void schedule() {
+        if (scheduled) return;
+
+        scheduled = true;
+        scheduler.scheduleAtFixedRate(this::pump, 1, 2, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(this::updateStatus, 15, 30, TimeUnit.SECONDS);
+    }
+
+    private void pump() {
+        if (!initialized) return;
+        try { rpc.runCallbacks(); } catch (Exception ignored) {}
     }
 
     public void updateStatus() {
@@ -70,7 +95,7 @@ public class DiscordRpcManager {
             if (ClientGameData.getCurrentPhase() == BattleCraftManager.GamePhase.ACTIVE) {
                 if (team != null) {
                     details = "Играет за команду " + team.getName();
-                    stateText = ClientGameData.hasActiveVote() ? "Идет голосование (F7/F8)" : "В бою";
+                    stateText = ClientGameData.hasActiveVote() ? "Идет голосование" : "В бою";
                 } else {
                     details = "Выбор команды";
                     stateText = "Наблюдение";
@@ -82,7 +107,7 @@ public class DiscordRpcManager {
         }
 
         final String fDetails = details;
-        final String fState = (isOwner ? "Owner" : "User") + " | " + stateText;
+        final String fState = (isOwner(mc) ? "Owner" : "User") + " | " + stateText;
 
         executor.submit(() -> {
             try {
@@ -100,6 +125,15 @@ public class DiscordRpcManager {
         });
     }
 
+    private void clear() {
+        if (!initialized) return;
+
+        initialized = false;
+        executor.submit(() -> {
+            try { rpc.shutdown(); } catch (Exception ignored) {}
+        });
+    }
+
     public void shutdown() {
         scheduler.shutdownNow();
         executor.submit(() -> {
@@ -111,10 +145,13 @@ public class DiscordRpcManager {
         executor.shutdown();
     }
 
-    private final class OwnerHandler implements DiscordEventHandler {
+    private static boolean isOwner(Minecraft mc) {
+        return mc.getUser() != null && OWNER_NAME.equalsIgnoreCase(mc.getUser().getName());
+    }
+
+    private final class SilentHandler implements DiscordEventHandler {
         @Override
         public void ready(User user) {
-            isOwner = user != null && OWNER_ID.equals(user.getUserId());
             updateStatus();
         }
 

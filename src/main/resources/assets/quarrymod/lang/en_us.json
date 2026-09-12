@@ -1,7 +1,6 @@
 {
   "quarrymod.prefix": "[QuarryMod] ",
   "quarrymod.error.player_only": "This command can only be used by a player",
-  "quarrymod.error.no_held_item": "You must hold an item in your hand",
   "quarrymod.command.cooldown.header": "=== Cooldown Info ===",
   "quarrymod.command.cooldown.global": "Global cooldown: %s sec",
   "quarrymod.command.cooldown.custom": "This block cooldown: %s sec (custom)",
@@ -32,5 +31,24 @@
   "quarrymod.command.list.stat_entry": "%s: %s",
   "quarrymod.command.list.global_cooldown": "Global cooldown: %s seconds",
   "quarrymod.event.cooldown_remaining": "Block regenerates in %s seconds!",
-  "quarrymod.event.wrong_tool": "You need a proper tool!"
+  "quarrymod.event.wrong_tool": "You need a proper tool!",
+  "quarrymod.menu.title": "QUARRY",
+  "quarrymod.menu.tab.cooldown": "Cooldown",
+  "quarrymod.menu.tab.blocks": "Blocks",
+  "quarrymod.menu.tab.types": "Block setup",
+  "quarrymod.menu.type.cooldown": "%s: cooldown, s",
+  "quarrymod.menu.type.multiplier": "%s: drop multiplier",
+  "quarrymod.menu.type.global": "Global",
+  "quarrymod.menu.type.empty": "No block types configured",
+  "quarrymod.command.type.cooldown_set": "Cooldown of %s: %s",
+  "quarrymod.command.type.multiplier_set": "Multiplier of %s: %s",
+  "quarrymod.command.type.global": "global",
+  "quarrymod.command.type.unknown": "This block is not supported by the quarry",
+  "quarrymod.menu.global": "Global cooldown, s",
+  "quarrymod.menu.count": "Registered blocks",
+  "quarrymod.menu.add": "Add block",
+  "quarrymod.menu.remove": "Remove block",
+  "quarrymod.menu.info": "Block info",
+  "quarrymod.menu.block_cooldown_reset": "Reset block cooldown",
+  "quarrymod.menu.action.aimed": "Aimed at"
 }

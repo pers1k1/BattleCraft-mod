@@ -1,0 +1,14 @@
+{
+  "providers": [
+    {
+      "type": "ttf",
+      "file": "battlecraft:title.ttf",
+      "shift": [
+        0,
+        0
+      ],
+      "size": 28.4,
+      "oversample": 2.0
+    }
+  ]
+}
