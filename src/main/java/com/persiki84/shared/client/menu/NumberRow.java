@@ -265,14 +265,24 @@ public class NumberRow extends MenuRow {
             typed = "-";
             return true;
         }
-        if (symbol == '.' && divisor > 1 && !typed.contains(".")) {
-            typed += symbol;
+        // WHY: цифровой блок на русской раскладке даёт запятую, и дробное значение молча
+        // WHY: превращалось в целое: 0,5 набиралось как 05
+        if ((symbol == '.' || symbol == ',') && divisor > 1 && !typed.contains(".")) {
+            typed += '.';
             return true;
         }
-        if (symbol < '0' || symbol > '9' || typed.length() >= MAX_DIGITS) return false;
+        if (symbol < '0' || symbol > '9' || digits(typed) >= MAX_DIGITS) return false;
 
         typed += symbol;
         return true;
+    }
+
+    private static int digits(String entered) {
+        int count = 0;
+        for (int index = 0; index < entered.length(); index++) {
+            if (Character.isDigit(entered.charAt(index))) count++;
+        }
+        return count;
     }
 
     @Override
@@ -308,7 +318,7 @@ public class NumberRow extends MenuRow {
 
     private int parse(String entered) {
         if (divisor == 1) return Integer.parseInt(entered);
-        return Math.round(Float.parseFloat(entered) * divisor);
+        return (int) Math.round(Double.parseDouble(entered) * divisor);
     }
 
     private void push(int delta, boolean audible) {

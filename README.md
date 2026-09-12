@@ -168,7 +168,50 @@ Announcements carry their own duration, from two to sixty seconds, set in the pa
 
 Every row of the `/bc` hub now has an explanation - match actions, the status lines, all twenty lobby and stamina settings, and each entry of the manage tab. Until now only the module switches had them, which is why hovering the other tabs looked as though hints were broken.
 
-Version 2026.9.12-alpha - the first public build of the rewritten interface, and a test one: it went out without a full play-through, so report anything that looks wrong.
+Version 2026.9.12v2-alpha - the first public build of the rewritten interface, and a test one: it went out without a full play-through, so report anything that looks wrong.
+
+## Shop, modifiers and map, 12 September 2026 (second pass)
+
+The shop admin panel gained a Layout tab. It picks the section itself, any of its subsections or any
+of its items and moves the chosen one up or down, drops it, or - for an item - moves it between the
+subsections of that section. Adding a held item now takes a target subsection instead of always
+landing in the section root, and `item id` accepts one too. The same operations exist as commands:
+`section order`, `subsection order` and `item order` with `up` or `down`, `subsection move` to another
+section, and `item move` to another section or subsection.
+
+An item is looked up by identifier inside a whole section, subsections included, so two items sharing
+an identifier made one of them unreachable. New and moved items now take the first identifier free in
+the destination section tree, and a subsection carried into another section renames only the items
+that would collide.
+
+The shop grid counted one row less than it could fit, because it charged a gap to every row instead of
+to the gaps between them. The missing row was still painted - the clipping band covered the whole
+panel rather than the tiles - so the last row was visible but never took a click. The band now equals
+the tile area, and scrolling moves whole rows: the previous clamp stopped at the last item instead of
+the last row, which shifted every tile into a neighbouring column and left the scrollbar thumb short
+of the bottom. The thumb is measured in rows as well. Switching a section or a subsection slides the
+tiles in from the side the new section lies on, and scrolling no longer replays the entrance
+animation. In the sidebar the clipping band started at the panel edge while the rows started below the
+scroll hint, which left the spare row above the list standing as a cut plate at the top.
+
+Item modifiers work in percent when the operation multiplies: both multiplying operations take a
+share, so the value row switches to percent with the operation and the stored multiplier stays the
+same number. Fractional values accept a comma as well as a dot - the numeric keypad on a Russian
+layout sends one, and the row used to drop it silently, turning 0,5 into 5. Amounts are formatted
+without a locale, and the shop card no longer prints a multiplier as if it were a percentage. The menu
+can now write either into the held stack or into the config entry for that item kind, which is what
+the commands always could: a modifier written into the stack travels with that one item, a modifier
+written into the config reaches every item of the kind, shop purchases included. Modifiers stored in
+an item's NBT keep a stable identity derived from the attribute and the slot instead of the position
+in the list, which shifted whenever a neighbouring entry was removed.
+
+The client painted map chunks within eight chunks of the player regardless of render distance, so
+anything loaded further out stayed black until the player walked over it, and a fast trip left holes
+behind. The paint window now follows the effective render distance, capped at the reach the server
+accepts, and is swept from the centre outwards with a time budget rather than a fixed count of chunks.
+Painted chunks are sent to the team in batches twice a second instead of one packet per chunk. A paint
+that comes out empty is no longer stored: it means the chunk had nothing to paint, and keeping it
+would have frozen a black square into the map forever, since a known chunk is not painted again.
 
 ## Releases
 

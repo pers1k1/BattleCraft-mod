@@ -41,6 +41,11 @@ public final class ShopCommand {
                 section == null ? java.util.List.of() : section.deepEntryIds(), builder);
     };
 
+    private static final SuggestionProvider<CommandSourceStack> TARGET_CHILDREN = (context, builder) -> {
+        ShopSection section = ShopCatalog.section(StringArgumentType.getString(context, "target"));
+        return SharedSuggestionProvider.suggest(section == null ? java.util.List.of() : section.childIds(), builder);
+    };
+
     private static final SuggestionProvider<CommandSourceStack> TEAMS = (context, builder) ->
             SharedSuggestionProvider.suggest(
                     context.getSource().getServer().getScoreboard().getTeamNames(), builder);
@@ -84,7 +89,10 @@ public final class ShopCommand {
                 .then(Commands.literal("remove")
                         .then(Commands.argument("section", StringArgumentType.word())
                                 .suggests(SECTIONS)
-                                .executes(ShopCommand::removeSection)));
+                                .executes(ShopCommand::removeSection)))
+                .then(Commands.literal("order")
+                        .then(order(Commands.argument("section", StringArgumentType.word()).suggests(SECTIONS),
+                                ShopCommand::orderSection)));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> subsectionBranch() {
@@ -100,7 +108,87 @@ public final class ShopCommand {
                                 .suggests(SECTIONS)
                                 .then(Commands.argument("subsection", StringArgumentType.word())
                                         .suggests(CHILDREN)
-                                        .executes(ShopCommand::removeSubsection))));
+                                        .executes(ShopCommand::removeSubsection))))
+                .then(Commands.literal("order")
+                        .then(sectionNode(order(Commands.argument("subsection", StringArgumentType.word())
+                                .suggests(CHILDREN), ShopCommand::orderSubsection))))
+                .then(Commands.literal("move")
+                        .then(sectionNode(Commands.argument("subsection", StringArgumentType.word())
+                                .suggests(CHILDREN)
+                                .then(Commands.argument("target", StringArgumentType.word())
+                                        .suggests(SECTIONS)
+                                        .executes(ShopCommand::moveSubsection)))));
+    }
+
+    private static ArgumentBuilder<CommandSourceStack, ?> order(
+            ArgumentBuilder<CommandSourceStack, ?> target, Reorder reorder) {
+        return target
+                .then(Commands.literal("up").executes(context -> reorder.apply(context, ShopOrder.UP)))
+                .then(Commands.literal("down").executes(context -> reorder.apply(context, ShopOrder.DOWN)));
+    }
+
+    private interface Reorder {
+        int apply(CommandContext<CommandSourceStack> context, int delta);
+    }
+
+    private static int orderSection(CommandContext<CommandSourceStack> context, int delta) {
+        String id = StringArgumentType.getString(context, "section");
+        if (!ShopCatalog.moveSection(id, delta)) return fail(context, "zones.shop.error.no_move", id);
+        return report(context, "zones.shop.success.moved", id);
+    }
+
+    private static int orderSubsection(CommandContext<CommandSourceStack> context, int delta) {
+        ShopSection section = requireSection(context);
+        if (section == null) return 0;
+
+        String childId = StringArgumentType.getString(context, "subsection");
+        if (!section.moveChild(childId, delta)) return fail(context, "zones.shop.error.no_move", childId);
+
+        ShopCatalog.persist();
+        return report(context, "zones.shop.success.moved", childId);
+    }
+
+    private static int orderEntry(CommandContext<CommandSourceStack> context, int delta) {
+        ShopSection section = requireSection(context);
+        if (section == null) return 0;
+
+        String entryId = StringArgumentType.getString(context, "entry");
+        if (!section.moveEntry(entryId, delta)) return fail(context, "zones.shop.error.no_move", entryId);
+
+        ShopCatalog.persist();
+        return report(context, "zones.shop.success.moved", entryId);
+    }
+
+    private static int moveSubsection(CommandContext<CommandSourceStack> context) {
+        ShopSection section = requireSection(context);
+        if (section == null) return 0;
+
+        String childId = StringArgumentType.getString(context, "subsection");
+        ShopSection child = section.child(childId);
+        if (child == null) return fail(context, "zones.shop.error.no_subsection", childId);
+
+        String targetId = StringArgumentType.getString(context, "target");
+        ShopSection target = ShopCatalog.section(targetId);
+        if (target == null) return fail(context, "zones.shop.error.no_section", targetId);
+        if (target == section) return fail(context, "zones.shop.error.same_place", childId);
+        if (target.child(childId) != null) return fail(context, "zones.shop.error.subsection_taken", childId);
+
+        section.children().remove(childId);
+        target.children().put(childId, adopt(target, child));
+        ShopCatalog.persist();
+        return report(context, "zones.shop.success.subsection_moved", childId, target.title());
+    }
+
+    // WHY: товар ищется по идентификатору внутри раздела вместе с отделами, поэтому переехавший
+    // WHY: отдел отдаёт свои товары под свободными именами, иначе один из двух станет недоступен
+    private static ShopSection adopt(ShopSection target, ShopSection child) {
+        for (String entryId : child.entryIds()) {
+            if (target.ownerOf(entryId) == null) continue;
+
+            ShopEntry entry = child.entries().remove(entryId);
+            child.place(entry.renamed(freeEntryId(entry.stack(), target, child)));
+        }
+        return child;
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> accessBranch() {
@@ -206,8 +294,42 @@ public final class ShopCommand {
                         .then(Commands.argument("slot", StringArgumentType.word())
                                 .suggests(SLOTS)
                                 .executes(ShopCommand::detachFromEntry)))))
+                .then(Commands.literal("order").then(sectionNode(order(entryNode(), ShopCommand::orderEntry))))
+                .then(moveItemBranch())
                 .then(stockBranch())
                 .then(restockBranch());
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> moveItemBranch() {
+        return Commands.literal("move").then(sectionNode(entryNode()
+                .then(Commands.argument("target", StringArgumentType.word())
+                        .suggests(SECTIONS)
+                        .executes(context -> moveEntry(context, null))
+                        .then(Commands.argument("subsection", StringArgumentType.word())
+                                .suggests(TARGET_CHILDREN)
+                                .executes(context -> moveEntry(context,
+                                        StringArgumentType.getString(context, "subsection")))))));
+    }
+
+    private static int moveEntry(CommandContext<CommandSourceStack> context, String childId) {
+        ShopSection owner = entryOwner(context);
+        if (owner == null) return 0;
+
+        String targetId = StringArgumentType.getString(context, "target");
+        ShopSection top = ShopCatalog.section(targetId);
+        if (top == null) return fail(context, "zones.shop.error.no_section", targetId);
+
+        ShopSection target = childId == null ? top : top.child(childId);
+        if (target == null) return fail(context, "zones.shop.error.no_subsection", childId);
+
+        String entryId = StringArgumentType.getString(context, "entry");
+        if (target == owner) return fail(context, "zones.shop.error.same_place", entryId);
+
+        ShopEntry entry = owner.entries().remove(entryId);
+        ShopEntry placed = top.ownerOf(entryId) == null ? entry : entry.renamed(freeEntryId(entry.stack(), top));
+        target.place(placed);
+        ShopCatalog.persist();
+        return report(context, "zones.shop.success.item_moved", placed.id(), target.title());
     }
 
     private static RequiredArgumentBuilder<CommandSourceStack, String> entryNode() {
@@ -238,7 +360,11 @@ public final class ShopCommand {
                                 .suggests(ITEM_IDS)
                                 .then(Commands.argument("count", IntegerArgumentType.integer(1, 64))
                                         .then(Commands.argument("price", IntegerArgumentType.integer(0))
-                                                .executes(ShopCommand::addById)))));
+                                                .executes(context -> addById(context, null))
+                                                .then(Commands.argument("subsection", StringArgumentType.word())
+                                                        .suggests(CHILDREN)
+                                                        .executes(context -> addById(context,
+                                                                StringArgumentType.getString(context, "subsection"))))))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> stockBranch() {
@@ -403,8 +529,8 @@ public final class ShopCommand {
         return storeEntry(context, target, held.copy(), IntegerArgumentType.getInteger(context, "price"));
     }
 
-    private static int addById(CommandContext<CommandSourceStack> context) {
-        ShopSection target = targetSection(context, null);
+    private static int addById(CommandContext<CommandSourceStack> context, String childId) {
+        ShopSection target = targetSection(context, childId);
         if (target == null) return 0;
 
         ResourceLocation itemId = ResourceLocation.tryParse(StringArgumentType.getString(context, "item"));
@@ -416,22 +542,34 @@ public final class ShopCommand {
     }
 
     private static int storeEntry(CommandContext<CommandSourceStack> context, ShopSection target, ItemStack stack, int price) {
-        String entryId = nextEntryId(target, stack);
-        target.entries().put(entryId, new ShopEntry(entryId, stack, price, null));
+        ShopSection top = requireSection(context);
+        if (top == null) return 0;
+
+        ShopEntry entry = new ShopEntry(freeEntryId(stack, top), stack, price, null);
+        target.place(entry);
         ShopCatalog.persist();
-        return report(context, "zones.shop.success.item_added", entryId, price);
+        return report(context, "zones.shop.success.item_added", entry.id(), price);
     }
 
-    private static String nextEntryId(ShopSection section, ItemStack stack) {
+    // WHY: раздел ищет товар у себя и во всех своих отделах, поэтому одинаковый идентификатор
+    // WHY: в разделе и в его отделе сделал бы второй товар недоступным ни одной команде
+    private static String freeEntryId(ItemStack stack, ShopSection... scopes) {
         ResourceLocation key = ForgeRegistries.ITEMS.getKey(stack.getItem());
         String base = key == null ? "item" : key.getPath();
         String candidate = base;
         int suffix = 2;
-        while (section.entries().containsKey(candidate)) {
+        while (taken(candidate, scopes)) {
             candidate = base + "_" + suffix;
             suffix++;
         }
         return candidate;
+    }
+
+    private static boolean taken(String entryId, ShopSection[] scopes) {
+        for (ShopSection scope : scopes) {
+            if (scope.ownerOf(entryId) != null) return true;
+        }
+        return false;
     }
 
     private static int removeEntry(CommandContext<CommandSourceStack> context) {

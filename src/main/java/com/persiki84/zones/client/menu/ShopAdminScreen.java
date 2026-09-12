@@ -46,6 +46,8 @@ public class ShopAdminScreen extends ManagerScreen {
 
     private int tab;
     private int accessTarget;
+    private int layoutTarget;
+    private int newParent;
     private String sectionId;
     private int newPrice = DEFAULT_PRICE;
     private int pickedGun;
@@ -58,7 +60,7 @@ public class ShopAdminScreen extends ManagerScreen {
     private String newSectionId = "";
     private String newSectionTitle = "";
     private int shownSections = -1;
-    private int shownEntries = -1;
+    private String shownLayout = "";
 
     public ShopAdminScreen() {
         super(Component.translatable("zones.shopadmin.title"));
@@ -71,6 +73,7 @@ public class ShopAdminScreen extends ManagerScreen {
                 Component.translatable("zones.shopadmin.tab.notes"),
                 Component.translatable("zones.shopadmin.tab.attachments"),
                 Component.translatable("zones.shopadmin.tab.section"),
+                Component.translatable("zones.shopadmin.tab.layout"),
                 Component.translatable("zones.shopadmin.tab.access"),
                 Component.translatable("zones.shopadmin.tab.create"));
     }
@@ -92,7 +95,7 @@ public class ShopAdminScreen extends ManagerScreen {
         if (sectionId == null && !sections.isEmpty()) sectionId = sections.get(0).id();
 
         shownSections = sections.size();
-        shownEntries = entries().size();
+        shownLayout = layoutSignature();
         noteField = null;
         idField = null;
         titleField = null;
@@ -101,9 +104,30 @@ public class ShopAdminScreen extends ManagerScreen {
         if (tab == 2) addNoteRows();
         if (tab == 3) place(attachRows());
         if (tab == 4) place(sectionRows());
-        if (tab == 5) place(accessRows());
-        if (tab == 6) addCreateRows();
+        if (tab == 5) place(layoutRows());
+        if (tab == 6) place(accessRows());
+        if (tab == 7) addCreateRows();
         addSectionList(sections);
+    }
+
+    // WHY: перестановка и перенос не меняют числа строк, поэтому обновление экрана по размеру
+    // WHY: списка пропускало бы их: сравниваем сам порядок идентификаторов
+    private String layoutSignature() {
+        StringBuilder signature = new StringBuilder();
+        for (ShopSection section : ClientShopData.sections()) {
+            signature.append(section.id()).append('/');
+        }
+
+        ShopSection section = current();
+        if (section == null) return signature.toString();
+
+        for (String childId : section.childIds()) {
+            signature.append(childId).append(':');
+        }
+        for (ShopEntry entry : entries()) {
+            signature.append(entry.id()).append(',');
+        }
+        return signature.toString();
     }
 
     // WHY: описание правится текстом, а не строкой-переключателем: поле ввода живёт до пересборки
@@ -605,15 +629,128 @@ public class ShopAdminScreen extends ManagerScreen {
         }
     }
 
+    private List<AbstractWidget> layoutRows() {
+        ShopSection section = current();
+        if (section == null) return List.of(emptyRow());
+
+        List<LayoutTarget> targets = layoutTargets(section);
+        layoutTarget = Math.floorMod(layoutTarget, targets.size());
+        LayoutTarget target = targets.get(layoutTarget);
+
+        PickRow picker = new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.shopadmin.layout.target"), layoutLabels(targets),
+                () -> layoutTarget, this::selectLayout);
+        picker.hint("zones.shopadmin.layout.target" + HINT_SUFFIX);
+
+        List<AbstractWidget> rows = new ArrayList<>();
+        rows.add(picker.icon(target::icon));
+        rows.add(shiftRow("zones.shopadmin.layout.up", target, " up"));
+        rows.add(shiftRow("zones.shopadmin.layout.down", target, " down"));
+        if (target.entryId() != null) rows.add(homeRow(section, target.entryId()));
+        rows.add(dropRow(target));
+        return rows;
+    }
+
+    private AbstractWidget shiftRow(String label, LayoutTarget target, String direction) {
+        return new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, Component.translatable(label),
+                () -> Component.translatable("zones.shopadmin.action.move"),
+                () -> send(target.orderCommand() + direction));
+    }
+
+    private AbstractWidget dropRow(LayoutTarget target) {
+        return new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable(target.removeLabel()),
+                () -> Component.translatable("zones.shopadmin.action.delete"), () -> {
+            send(target.removeCommand());
+            if (target.whole()) sectionId = null;
+            layoutTarget = 0;
+            rebuild();
+        }).alerting();
+    }
+
+    // WHY: отдел выбирается у самого товара: положить предмет в отдел командой можно было только
+    // WHY: при добавлении, а перенести уже лежащий товар в интерфейсе было нечем
+    private AbstractWidget homeRow(ShopSection section, String entryId) {
+        List<String> children = section.childIds();
+        List<Component> labels = new ArrayList<>();
+        labels.add(Component.translatable("zones.shopadmin.layout.section_itself"));
+        for (String childId : children) {
+            labels.add(Component.literal(section.child(childId).title()));
+        }
+
+        return new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.shopadmin.layout.home"), labels,
+                () -> homeOf(section, entryId, children),
+                picked -> moveEntry(entryId, picked == 0 ? "" : " " + children.get(picked - 1)));
+    }
+
+    private void moveEntry(String entryId, String childSuffix) {
+        send("item move " + sectionId + " " + entryId + " " + sectionId + childSuffix);
+    }
+
+    private static int homeOf(ShopSection section, String entryId, List<String> children) {
+        ShopSection owner = section.ownerOf(entryId);
+        if (owner == null || owner == section) return 0;
+        return Math.max(0, children.indexOf(owner.id()) + 1);
+    }
+
+    private void selectLayout(int picked) {
+        layoutTarget = picked;
+        rebuild();
+    }
+
+    private List<LayoutTarget> layoutTargets(ShopSection section) {
+        String id = section.id();
+        List<LayoutTarget> targets = new ArrayList<>();
+        targets.add(new LayoutTarget(Component.translatable("zones.shopadmin.access.section", section.title()),
+                "section order " + id, "section remove " + id, "zones.shopadmin.remove_section",
+                true, null, () -> ItemStack.EMPTY));
+
+        for (String childId : section.childIds()) {
+            targets.add(new LayoutTarget(Component.translatable("zones.shopadmin.access.subsection",
+                    section.child(childId).title()), "subsection order " + id + " " + childId,
+                    "subsection remove " + id + " " + childId, "zones.shopadmin.remove_subsection",
+                    false, null, () -> ItemStack.EMPTY));
+        }
+        for (ShopEntry entry : entries()) {
+            String entryId = entry.id();
+            targets.add(new LayoutTarget(entry.stack().getHoverName(), "item order " + id + " " + entryId,
+                    "item remove " + id + " " + entryId, "zones.shopadmin.remove_item", false, entryId,
+                    entry::stack));
+        }
+        return targets;
+    }
+
+    private static List<Component> layoutLabels(List<LayoutTarget> targets) {
+        List<Component> labels = new ArrayList<>();
+        for (LayoutTarget target : targets) {
+            labels.add(target.label());
+        }
+        return labels;
+    }
+
+    private record LayoutTarget(Component label, String orderCommand, String removeCommand, String removeLabel,
+                                boolean whole, String entryId, Supplier<ItemStack> iconSource) {
+        private ItemStack icon() {
+            return iconSource.get();
+        }
+    }
+
     private List<AbstractWidget> sectionRows() {
+        ShopSection section = current();
+        List<String> children = section == null ? List.of() : section.childIds();
+        newParent = children.isEmpty() ? 0 : Math.floorMod(newParent, children.size() + 1);
+
         List<AbstractWidget> rows = new ArrayList<>();
         rows.add(new NumberRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("zones.shopadmin.new_price"), () -> newPrice,
                 value -> newPrice = value, 0, MAX_PRICE, 5));
+        rows.add(parentRow(section, children));
         rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("zones.shopadmin.add_hand"),
                 () -> Component.translatable("zones.shopadmin.action.add"),
-                () -> send("item hand " + sectionId + " " + newPrice)));
+                () -> send("item hand " + sectionId + " " + newPrice
+                        + (newParent == 0 ? "" : " " + children.get(newParent - 1)))));
         rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("zones.shopadmin.remove_section"),
                 () -> Component.translatable("zones.shopadmin.action.delete"), () -> {
@@ -622,6 +759,21 @@ public class ShopAdminScreen extends ManagerScreen {
             rebuild();
         }).alerting());
         return rows;
+    }
+
+    private AbstractWidget parentRow(ShopSection section, List<String> children) {
+        List<Component> labels = new ArrayList<>();
+        labels.add(Component.translatable("zones.shopadmin.layout.section_itself"));
+        for (String childId : children) {
+            labels.add(Component.literal(section.child(childId).title()));
+        }
+
+        PickRow row = new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.shopadmin.add_to"), labels,
+                () -> newParent, picked -> newParent = picked);
+        row.hint("zones.shopadmin.add_to" + HINT_SUFFIX);
+        row.active = !children.isEmpty();
+        return row;
     }
 
     private AbstractWidget emptyRow() {
@@ -639,13 +791,13 @@ public class ShopAdminScreen extends ManagerScreen {
     protected void renderBody(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderListWell(graphics);
 
-        if (tab == 2 || tab == 6) renderFields(graphics);
+        if (tab == 2 || tab == 7) renderFields(graphics);
         Component hint = missing();
         if (hint != null) renderHint(graphics, hint, contentTop() + contentHeight() / 2.0f);
     }
 
     private Component missing() {
-        if (tab == 6) return null;
+        if (tab == 7) return null;
         if (ClientShopData.sections().isEmpty()) return Component.translatable("zones.shopadmin.no_sections");
         return current() == null ? Component.translatable("zones.shopadmin.pick_section") : null;
     }
@@ -658,7 +810,7 @@ public class ShopAdminScreen extends ManagerScreen {
 
     @Override
     public void tick() {
-        if (ClientShopData.sections().size() != shownSections || entries().size() != shownEntries) rebuild();
+        if (ClientShopData.sections().size() != shownSections || !layoutSignature().equals(shownLayout)) rebuild();
     }
 
 }

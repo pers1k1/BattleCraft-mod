@@ -276,14 +276,31 @@ public class ShopScreen extends GlassScreen {
     }
 
     private void openSection(String id) {
+        int direction = stepTo(ClientShopData.offered().stream().map(ShopSection::id).toList(), sectionId, id);
         sectionId = id;
         childId = null;
         entryId = null;
         clearSearch();
-        grid.reset();
+        grid.reset(direction);
         view.browse(sectionId, null);
         preview.rest();
         rebuild();
+    }
+
+    private static int stepTo(List<String> order, String from, String to) {
+        int was = order.indexOf(from);
+        int now = order.indexOf(to);
+        if (was < 0 || now < 0 || was == now) return 1;
+        return now > was ? 1 : -1;
+    }
+
+    private List<String> childOrder(ShopSection section) {
+        List<String> order = new ArrayList<>();
+        order.add(null);
+        for (ShopSection child : section.visibleChildren(ClientShopData.team(), false)) {
+            order.add(child.id());
+        }
+        return order;
     }
 
     private void clearSearch() {
@@ -307,9 +324,11 @@ public class ShopScreen extends GlassScreen {
 
     private void addTab(int x, int top, Component label, String id) {
         UiButton tab = new UiButton(x, top + (int) UiMetrics.GAP, TAB_WIDTH, TAB_HEIGHT, label, pressed -> {
+            ShopSection section = currentSection();
+            int direction = section == null ? 1 : stepTo(childOrder(section), childId, id);
             childId = id;
             entryId = null;
-            grid.reset();
+            grid.reset(direction);
             view.browse(sectionId, id);
             preview.rest();
             rebuild();
@@ -470,10 +489,12 @@ public class ShopScreen extends GlassScreen {
                 true, scrollable && sectionScroll < last);
     }
 
+    // WHY: полоса отсечения шла от кромки панели, а ряды начинались ниже на высоту подсказки
+    // WHY: прокрутки: запасной ряд над списком попадал в полосу и висел срезанной плашкой
     private void glideSections() {
         int top = contentTop();
-        lanes.list(sectionGlide.to(0.0f, UiFrame.delta()), top + UiMetrics.PAD_WIDE,
-                top + panelHeight() - UiMetrics.PAD_WIDE);
+        lanes.list(sectionGlide.to(0.0f, UiFrame.delta()), sectionsTop(top),
+                sectionsTop(top) + sectionCapacity() * ROW_HEIGHT);
         for (UiButton button : sectionButtons) {
             button.glide(lanes);
         }

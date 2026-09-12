@@ -251,7 +251,9 @@ public class ServerMapStorage {
         Map<ChunkPos, int[]> painted = new ConcurrentHashMap<>();
         for (ChunkPos pos : positions) {
             if (!level.hasChunk(pos.x, pos.z)) continue;
-            painted.put(pos, MapPainter.paint(level.getChunk(pos.x, pos.z)));
+
+            int[] colors = MapPainter.paint(level.getChunk(pos.x, pos.z));
+            if (!MapPainter.blank(colors)) painted.put(pos, colors);
         }
         if (painted.isEmpty()) return;
 

@@ -52,6 +52,12 @@ public final class ShopCatalog {
         return true;
     }
 
+    public static boolean moveSection(String id, int delta) {
+        if (!ShopOrder.move(sections, id, delta)) return false;
+        persist();
+        return true;
+    }
+
     public static ShopSection resolve(String sectionId, String childId) {
         ShopSection section = sections.get(sectionId);
         if (section == null) return null;

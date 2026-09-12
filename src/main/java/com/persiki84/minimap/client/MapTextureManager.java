@@ -82,24 +82,107 @@ public class MapTextureManager {
             region.close();
         }
         regions.clear();
+        outgoing.clear();
     }
 
-    private static final int SCAN_RADIUS = 8;
-    private static final int FRESH_LIMIT = 2;
-    private static final int RESCAN_BUDGET = 20;
+    private static final int MAX_SCAN_RADIUS = 32;
+    private static final int MIN_SCAN_RADIUS = 2;
+    private static final int LOOKUP_BUDGET = 768;
+    private static final int FRESH_BUDGET = 16;
+    private static final int RESCAN_BUDGET = 4;
+    private static final long SWEEP_NANOS = 2_000_000L;
+    private static final int SEND_BATCH = 24;
+    private static final int SEND_EVERY = 10;
+    private static final int QUEUE_LIMIT = 4096;
     private static final int REGION_BUDGET = 24;
 
-    private static int scanIndex = 0;
+    private static final java.util.List<ChunkPos> window = new java.util.ArrayList<>();
+    private static final java.util.Set<ChunkPos> outgoing = new java.util.LinkedHashSet<>();
+
+    private static int windowRadius = -1;
+    private static int cursor;
+    private static int sendCountdown;
 
     public static void update() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) return;
 
         ChunkPos center = new ChunkPos(new BlockPos((int) mc.player.getX(), 0, (int) mc.player.getZ()));
-        int painted = paintFresh(mc, center);
-        if (painted < FRESH_LIMIT) painted += rescanKnown(mc, center, painted);
-        if (painted > 0) uploadDirtyRegions();
+        if (sweep(mc, center) > 0) uploadDirtyRegions();
+        flushOutgoing(mc);
         trimRegions(center);
+    }
+
+    // WHY: окно покраски равно дальности прорисовки, а не восьми чанкам вокруг игрока: всё, что
+    // WHY: клиент держит загруженным, обязано попасть на карту, иначе за спиной остаются пятна
+    // WHY: непрокрашенной земли, и чем дальше прорисовка, тем их больше
+    private static int sweep(Minecraft mc, ChunkPos center) {
+        java.util.List<ChunkPos> offsets = window(mc);
+        long deadline = System.nanoTime() + SWEEP_NANOS;
+        int painted = 0;
+        int fresh = 0;
+        int rescans = 0;
+
+        for (int step = 0; step < LOOKUP_BUDGET; step++) {
+            ChunkPos offset = offsets.get(cursor);
+            cursor = (cursor + 1) % offsets.size();
+
+            ChunkPos pos = new ChunkPos(center.x + offset.x, center.z + offset.z);
+            boolean known = ClientMapData.chunkData.containsKey(pos);
+            if (known && rescans >= RESCAN_BUDGET) continue;
+            if (!mc.level.hasChunk(pos.x, pos.z)) continue;
+
+            if (known) rescans++; else fresh++;
+            if (updateChunk(mc.level.getChunk(pos.x, pos.z), pos)) painted++;
+            if (fresh >= FRESH_BUDGET || System.nanoTime() > deadline) break;
+        }
+        return painted;
+    }
+
+    private static java.util.List<ChunkPos> window(Minecraft mc) {
+        int radius = Math.max(MIN_SCAN_RADIUS,
+                Math.min(MAX_SCAN_RADIUS, mc.options.getEffectiveRenderDistance()));
+        if (radius == windowRadius) return window;
+
+        windowRadius = radius;
+        cursor = 0;
+        window.clear();
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                window.add(new ChunkPos(dx, dz));
+            }
+        }
+        window.sort(java.util.Comparator.comparingLong(pos -> (long) pos.x * pos.x + (long) pos.z * pos.z));
+        return window;
+    }
+
+    // WHY: пакет клиента серверу не длиннее 32767 байт, а чанк весит 1032, поэтому пачка идёт по
+    // WHY: 24 штуки и раз в полсекунды: прежняя отправка по чанку на каждую покраску забивала канал
+    private static void flushOutgoing(Minecraft mc) {
+        if (outgoing.isEmpty() || sendCountdown-- > 0) return;
+
+        sendCountdown = SEND_EVERY;
+        if (!ClientMapData.serverTakesChunks() || !inTeam()) {
+            outgoing.clear();
+            return;
+        }
+
+        java.util.List<com.persiki84.minimap.network.MapChunkSyncPacket.ChunkData> batch = new java.util.ArrayList<>();
+        java.util.Iterator<ChunkPos> waiting = outgoing.iterator();
+        while (waiting.hasNext() && batch.size() < SEND_BATCH) {
+            ChunkPos pos = waiting.next();
+            waiting.remove();
+
+            int[] colors = ClientMapData.chunkData.get(pos);
+            if (colors != null) {
+                batch.add(new com.persiki84.minimap.network.MapChunkSyncPacket.ChunkData(pos.x, pos.z, colors));
+            }
+        }
+        if (batch.isEmpty()) return;
+
+        String dimension = mc.level.dimension().location().toString().replace(":", "_");
+        com.persiki84.minimap.network.PacketHandler.INSTANCE
+                .sendToServer(new com.persiki84.minimap.network.MapChunkSyncPacket(dimension, batch));
     }
 
     private static void trimRegions(ChunkPos center) {
@@ -122,40 +205,6 @@ public class MapTextureManager {
             farthest = region;
         }
         if (farthest != null) farthest.close();
-    }
-
-    private static int paintFresh(Minecraft mc, ChunkPos center) {
-        int painted = 0;
-        for (int dx = -SCAN_RADIUS; dx <= SCAN_RADIUS; dx++) {
-            for (int dz = -SCAN_RADIUS; dz <= SCAN_RADIUS; dz++) {
-                ChunkPos cp = new ChunkPos(center.x + dx, center.z + dz);
-                if (ClientMapData.chunkData.containsKey(cp) || !mc.level.hasChunk(cp.x, cp.z)) continue;
-
-                LevelChunk chunk = mc.level.getChunk(cp.x, cp.z);
-                if (updateChunk(chunk, cp)) painted++;
-                if (painted > FRESH_LIMIT) return painted;
-            }
-        }
-        return painted;
-    }
-
-    private static int rescanKnown(Minecraft mc, ChunkPos center, int painted) {
-        int diameter = SCAN_RADIUS * 2 + 1;
-        int total = diameter * diameter;
-        int checked = 0;
-        int found = 0;
-
-        while (checked < RESCAN_BUDGET && painted + found < FRESH_LIMIT) {
-            scanIndex = (scanIndex + 1) % total;
-            ChunkPos cp = new ChunkPos(center.x + (scanIndex % diameter) - SCAN_RADIUS,
-                    center.z + (scanIndex / diameter) - SCAN_RADIUS);
-            checked++;
-            if (!ClientMapData.chunkData.containsKey(cp) || !mc.level.hasChunk(cp.x, cp.z)) continue;
-
-            LevelChunk chunk = mc.level.getChunk(cp.x, cp.z);
-            if (updateChunk(chunk, cp)) found++;
-        }
-        return found;
     }
 
     private static void uploadDirtyRegions() {
@@ -237,8 +286,11 @@ public class MapTextureManager {
         return Minecraft.getInstance().player != null && Minecraft.getInstance().player.getTeam() != null;
     }
 
+    // WHY: пустая покраска это не знание о местности, а чанк, который нечем было красить: записав
+    // WHY: её, карта запоминала чёрный квадрат навсегда, потому что известный чанк больше не берут
     private static boolean updateChunk(LevelChunk chunk, ChunkPos cp) {
         int[] newColors = com.persiki84.minimap.MapPainter.paint(chunk);
+        if (com.persiki84.minimap.MapPainter.blank(newColors)) return false;
 
         int[] oldColors = ClientMapData.chunkData.get(cp);
         if (oldColors != null && java.util.Arrays.equals(oldColors, newColors)) {
@@ -248,14 +300,18 @@ public class MapTextureManager {
         ClientMapData.chunkData.put(cp, newColors);
         ClientMapStorage.touch();
         drawChunkToImage(cp, newColors);
-
-        if (ClientMapData.serverTakesChunks() && inTeam()) {
-            String dim = Minecraft.getInstance().level.dimension().location().toString().replace(":", "_");
-            java.util.List<com.persiki84.minimap.network.MapChunkSyncPacket.ChunkData> list = new java.util.ArrayList<>();
-            list.add(new com.persiki84.minimap.network.MapChunkSyncPacket.ChunkData(cp.x, cp.z, newColors));
-            com.persiki84.minimap.network.PacketHandler.INSTANCE.sendToServer(new com.persiki84.minimap.network.MapChunkSyncPacket(dim, list));
-        }
+        queue(cp);
         return true;
+    }
+
+    private static void queue(ChunkPos cp) {
+        if (!ClientMapData.serverTakesChunks() || !inTeam()) return;
+        if (outgoing.size() >= QUEUE_LIMIT) {
+            java.util.Iterator<ChunkPos> oldest = outgoing.iterator();
+            oldest.next();
+            oldest.remove();
+        }
+        outgoing.add(cp);
     }
 
     public static void renderMap(GuiGraphics guiGraphics, double mapX, double mapZ, float zoom,

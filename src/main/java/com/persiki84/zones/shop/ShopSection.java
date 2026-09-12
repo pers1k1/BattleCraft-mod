@@ -47,6 +47,24 @@ public final class ShopSection {
         return null;
     }
 
+    public ShopEntry take(String entryId) {
+        ShopSection owner = ownerOf(entryId);
+        return owner == null ? null : owner.entries.remove(entryId);
+    }
+
+    public void place(ShopEntry entry) {
+        entries.put(entry.id(), entry);
+    }
+
+    public boolean moveChild(String childId, int delta) {
+        return ShopOrder.move(children, childId, delta);
+    }
+
+    public boolean moveEntry(String entryId, int delta) {
+        ShopSection owner = ownerOf(entryId);
+        return owner != null && ShopOrder.move(owner.entries, entryId, delta);
+    }
+
     // WHY: скрытое от команды не доезжает до клиента вовсе, а не прячется в его интерфейсе:
     // WHY: чужой ассортимент это игровая информация, и её нельзя отдавать по слову клиента
     public void write(FriendlyByteBuf buf, String viewer, boolean full) {

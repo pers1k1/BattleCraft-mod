@@ -95,8 +95,10 @@ public final class MapScanner {
             ChunkPos pos = scan.next();
             if (pos == null) return;
 
-            scan.batch.add(new MapChunkSyncPacket.ChunkData(pos.x, pos.z,
-                    MapPainter.paint(level.getChunk(pos.x, pos.z))));
+            int[] colors = MapPainter.paint(level.getChunk(pos.x, pos.z));
+            if (!MapPainter.blank(colors)) {
+                scan.batch.add(new MapChunkSyncPacket.ChunkData(pos.x, pos.z, colors));
+            }
             if (scan.batch.size() >= BATCH) flush(player, scan);
         } while (System.nanoTime() < deadline);
     }

@@ -57,43 +57,56 @@ public class AttributeHandler {
         ItemStack stack = event.getItemStack();
         ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(stack.getItem());
         if (itemId == null) return;
-        String key = itemId.toString();
 
         if (dirty) refreshCache();
-        if (cache.containsKey(key)) {
-            List<AttributeEntry> entries = cache.get(key);
-            for (AttributeEntry entry : entries) {
-                if (!entry.slotName.equals("any") && !entry.slotName.equals(event.getSlotType().getName())) {
-                    continue;
-                }
-                UUID uuid = UUID.nameUUIDFromBytes((key + ":" + entry.attribute.getDescriptionId() + ":" + entry.slotName).getBytes(StandardCharsets.UTF_8));
-                AttributeModifier modifier = new AttributeModifier(uuid, "ItemMod Modifier", entry.amount, entry.operation);
-                event.addModifier(entry.attribute, modifier);
-            }
+        addConfigured(event, itemId.toString());
+        addStored(event, stack, itemId.toString());
+    }
+
+    private void addConfigured(ItemAttributeModifierEvent event, String key) {
+        List<AttributeEntry> entries = cache.get(key);
+        if (entries == null) return;
+
+        for (AttributeEntry entry : entries) {
+            if (!fits(entry.slotName, event)) continue;
+
+            UUID uuid = named(key + ":" + entry.attribute.getDescriptionId() + ":" + entry.slotName);
+            event.addModifier(entry.attribute, new AttributeModifier(uuid, "ItemMod Modifier", entry.amount, entry.operation));
         }
+    }
 
-        if (stack.hasTag() && stack.getTag().contains("ItemModifiersAttributes", 9)) {
-            net.minecraft.nbt.ListTag list = stack.getTag().getList("ItemModifiersAttributes", 10);
-            for (int i = 0; i < list.size(); i++) {
-                net.minecraft.nbt.CompoundTag compound = list.getCompound(i);
-                String attrId = compound.getString("Attribute");
-                double amount = compound.getDouble("Amount");
-                int opId = compound.getInt("Operation");
-                AttributeModifier.Operation op = AttributeModifier.Operation.values()[Math.min(Math.max(opId, 0), 2)];
-                String slotName = compound.getString("Slot").toLowerCase();
+    // WHY: номер записи в списке смещается после снятия соседней, и модификатор менял UUID
+    // WHY: на живом предмете: имя берём от атрибута и слота, а не от позиции в списке
+    private void addStored(ItemAttributeModifierEvent event, ItemStack stack, String key) {
+        if (!stack.hasTag() || !stack.getTag().contains("ItemModifiersAttributes", 9)) return;
 
-                if (!slotName.equals("any") && !slotName.equals(event.getSlotType().getName())) {
-                    continue;
-                }
+        net.minecraft.nbt.ListTag list = stack.getTag().getList("ItemModifiersAttributes", 10);
+        for (int index = 0; index < list.size(); index++) {
+            net.minecraft.nbt.CompoundTag compound = list.getCompound(index);
+            String slotName = compound.getString("Slot").toLowerCase();
+            if (!fits(slotName, event)) continue;
 
-                Attribute attr = ForgeRegistries.ATTRIBUTES.getValue(new ResourceLocation(attrId));
-                if (attr != null) {
-                    UUID uuid = UUID.nameUUIDFromBytes((key + ":" + attrId + ":" + slotName + ":nbt:" + i).getBytes(StandardCharsets.UTF_8));
-                    AttributeModifier modifier = new AttributeModifier(uuid, "ItemMod NBT Modifier", amount, op);
-                    event.addModifier(attr, modifier);
-                }
-            }
+            String attrId = compound.getString("Attribute");
+            Attribute attr = ForgeRegistries.ATTRIBUTES.getValue(new ResourceLocation(attrId));
+            if (attr == null) continue;
+
+            AttributeModifier.Operation op = operationOf(compound.getInt("Operation"));
+            UUID uuid = named(key + ":" + attrId + ":" + slotName + ":nbt");
+            event.addModifier(attr, new AttributeModifier(uuid, "ItemMod NBT Modifier",
+                    compound.getDouble("Amount"), op));
         }
+    }
+
+    private static boolean fits(String slotName, ItemAttributeModifierEvent event) {
+        return slotName.equals("any") || slotName.equals(event.getSlotType().getName());
+    }
+
+    private static AttributeModifier.Operation operationOf(int stored) {
+        return AttributeModifier.Operation.values()[Math.min(Math.max(stored, 0), 2)];
+    }
+
+    private static UUID named(String source) {
+        return UUID.nameUUIDFromBytes(source.getBytes(StandardCharsets.UTF_8));
     }
 
     private static class AttributeEntry {

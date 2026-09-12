@@ -73,5 +73,13 @@
   "itemmodifiers.menu.add_attribute": "Add attribute",
   "itemmodifiers.menu.remove_attribute": "Remove attribute",
   "itemmodifiers.menu.action.add": "Add",
-  "itemmodifiers.menu.action.remove": "Remove"
+  "itemmodifiers.menu.action.remove": "Remove",
+  "itemmodifiers.menu.amount_percent": "Value, %",
+  "itemmodifiers.menu.amount_percent.hint": "A multiplying operation takes a share: 25 % means +25 % to the value. Arrows step by 1 %, click the number to type it.",
+  "itemmodifiers.menu.amount.hint": "A flat bonus in attribute units. Click the number to type a fractional value, dot or comma.",
+  "itemmodifiers.menu.operation.hint": "\"Add\" gives flat units, both multiplying operations work in percent: of the base value and of the computed total.",
+  "itemmodifiers.menu.target": "Write into",
+  "itemmodifiers.menu.target.hint": "\"Held item\" edits one item and travels with it. \"Every item of this kind\" writes into the config, so every such item gets the modifier, shop purchases included.",
+  "itemmodifiers.menu.target.hand": "Held item",
+  "itemmodifiers.menu.target.kind": "Every item of this kind"
 }

@@ -1,5 +1,6 @@
 package com.persiki84.zones.client;
 
+import com.persiki84.shared.AmountText;
 import com.persiki84.zones.network.ModifierSyncPacket;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -71,17 +72,11 @@ public final class ClientModifierData {
         if (attribute == null) return null;
 
         double amount = parseDouble(parts[2]);
-        boolean percent = !"0".equals(parts[3]);
-        String formatted = (amount > 0 ? "+" : "") + trim(amount) + (percent ? "%" : "");
+        boolean percent = !"0".equals(parts[3].trim());
 
         return Component.translatable("zones.shop.modifier.attribute",
-                        Component.translatable(attribute.getDescriptionId()), formatted)
+                        Component.translatable(attribute.getDescriptionId()), AmountText.signed(amount, percent))
                 .withStyle(amount < 0 ? ChatFormatting.RED : ChatFormatting.GREEN);
-    }
-
-    private static String trim(double value) {
-        if (value == Math.floor(value)) return String.valueOf((long) value);
-        return String.format("%.2f", value);
     }
 
     private static String roman(int level) {

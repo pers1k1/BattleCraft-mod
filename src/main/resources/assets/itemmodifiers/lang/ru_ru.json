@@ -73,5 +73,13 @@
   "itemmodifiers.menu.add_attribute": "Добавить атрибут",
   "itemmodifiers.menu.remove_attribute": "Убрать атрибут",
   "itemmodifiers.menu.action.add": "Добавить",
-  "itemmodifiers.menu.action.remove": "Убрать"
+  "itemmodifiers.menu.action.remove": "Убрать",
+  "itemmodifiers.menu.amount_percent": "Значение, %",
+  "itemmodifiers.menu.amount_percent.hint": "Умножающая операция задаётся долей: 25 % это +25 % к значению. Шаг стрелок 1 %, точное число вводится щелчком по нему.",
+  "itemmodifiers.menu.amount.hint": "Прибавка в единицах атрибута. Дробное значение вводится щелчком по числу, разделитель точка или запятая.",
+  "itemmodifiers.menu.operation.hint": "«Прибавить» даёт единицы, обе умножающие операции считают проценты: от базового значения и от уже посчитанного итога.",
+  "itemmodifiers.menu.target": "Куда записать",
+  "itemmodifiers.menu.target.hint": "«В руку» правит один предмет и едет с ним. «Всем такого вида» пишет в конфиг: модификатор получат все такие предметы, включая купленные в магазине.",
+  "itemmodifiers.menu.target.hand": "В предмет в руке",
+  "itemmodifiers.menu.target.kind": "Всем предметам этого вида"
 }

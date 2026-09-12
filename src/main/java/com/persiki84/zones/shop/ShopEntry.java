@@ -55,6 +55,18 @@ public final class ShopEntry {
         this.restockSeconds = Math.max(0, seconds);
     }
 
+    // WHY: товар ищется по идентификатору в пределах раздела вместе с его отделами, поэтому
+    // WHY: перенос в раздел с таким же идентификатором обязан дать товару свободное имя
+    public ShopEntry renamed(String newId) {
+        ShopEntry copy = new ShopEntry(newId, stack, price, description);
+        copy.access.restore(access.list());
+        copy.stock = stock;
+        copy.available = available;
+        copy.restockSeconds = restockSeconds;
+        copy.readyAt = readyAt;
+        return copy;
+    }
+
     public void restore(int available, long readyAt) {
         this.available = limited() ? Math.min(available, stock) : UNLIMITED;
         this.readyAt = readyAt;

@@ -58,10 +58,15 @@ public final class ShopGrid {
     private static final float MIN_THUMB = 18.0f;
     private static final float THUMB_SPEED = 17.0f;
 
+    private static final float SWITCH_SPEED = 11.0f;
+    private static final float SWITCH_SHIFT = 34.0f;
+
     private final List<Smooth> hover = new ArrayList<>();
     private final Smooth glide = new Smooth(0.0f, GLIDE_SPEED);
     private final Smooth thumb = new Smooth(0.0f, THUMB_SPEED);
     private final Smooth choice = new Smooth(1.0f, CHOICE_SPEED);
+    private final Smooth switching = new Smooth(1.0f, SWITCH_SPEED);
+    private int switchFrom;
 
     private long shownAt = System.currentTimeMillis();
     private long pressedAt;
@@ -83,12 +88,19 @@ public final class ShopGrid {
         height = gridHeight;
     }
 
+    // WHY: ряду нужен зазор только между соседями, поэтому свободного места хватает на ряд
+    // WHY: больше, чем давало деление с зазором на каждый: последний ряд рисовался, но не ловил
+    // WHY: щелчок, потому что ёмкость сетки его не знала
     public int columns() {
-        return Math.max(1, (int) ((width - UiMetrics.PAD_WIDE - SCROLL_LANE) / (TILE_SIZE + TILE_GAP)));
+        return fits(width - UiMetrics.PAD_WIDE - SCROLL_LANE);
     }
 
     public int rows() {
-        return Math.max(1, (int) ((height - UiMetrics.PAD - TILE_LEAD) / (TILE_SIZE + TILE_GAP)));
+        return fits(height - UiMetrics.PAD - TILE_LEAD);
+    }
+
+    private static int fits(float room) {
+        return Math.max(1, (int) ((room + TILE_GAP) / (TILE_SIZE + TILE_GAP)));
     }
 
     public int capacity() {
@@ -99,22 +111,37 @@ public final class ShopGrid {
         moveTo(scroll + step * columns(), total);
     }
 
+    // WHY: прокрутка идёт рядами: остаток последнего ряда сдвигал сетку на неполный ряд, и
+    // WHY: товары переезжали в чужие столбцы, а бегунок не доходил до низа
     private void moveTo(int target, int total) {
         int next = clamp(target, total);
         if (next == scroll) return;
 
         glide.snap(capped(glide.get() + (next - scroll) / (float) columns() * (TILE_SIZE + TILE_GAP)));
         scroll = next;
-        refresh();
     }
 
     public void reset() {
+        reset(0);
+    }
+
+    public void reset(int direction) {
         scroll = 0;
+        glide.snap(0.0f);
+        switchFrom = direction;
+        switching.snap(0.0f);
         refresh();
     }
 
     public void refresh() {
         shownAt = System.currentTimeMillis();
+    }
+
+    // WHY: смена раздела и отдела меняла содержимое сетки в один кадр, и переход читался
+    // WHY: подменой картинки: плитки въезжают со стороны выбранного раздела
+    private float switchShift() {
+        if (switchFrom == 0) return 0.0f;
+        return switchFrom * SWITCH_SHIFT * (1.0f - UiAnim.easeOut(switching.get()));
     }
 
     private float appear(int index) {
@@ -128,7 +155,7 @@ public final class ShopGrid {
         if (mouseY < bandTop() || mouseY >= bandBottom()) return null;
 
         for (int index = 0; index < shown; index++) {
-            float x = tileX(index);
+            float x = tileX(index) + switchShift();
             float y = tileY(index);
             if (mouseX >= x && mouseX < x + TILE_SIZE && mouseY >= y && mouseY < y + TILE_SIZE) {
                 pressedIndex = index;
@@ -175,6 +202,7 @@ public final class ShopGrid {
         trackChoice(chosenId);
 
         float offset = glide.to(0.0f, UiFrame.delta());
+        switching.to(1.0f, UiFrame.delta());
         UiRender.clip(graphics, left, bandTop(), width, bandBottom() - bandTop());
         try {
             paintTiles(graphics, entries, shown, showSection, mouseX, mouseY, offset);
@@ -222,18 +250,20 @@ public final class ShopGrid {
         return Math.max(-limit, Math.min(limit, offset));
     }
 
+    // WHY: полоса отсечения равна площади рядов, а не всей панели: лишний ряд рисовался по её
+    // WHY: остатку целиком и выглядел живым, хотя ёмкость сетки его не держала и щелчок не ловил
     private float bandTop() {
-        return top;
+        return trackTop() - TILE_LEAD;
     }
 
     private float bandBottom() {
-        return top + height;
+        return trackTop() + trackHeight() + TILE_LEAD;
     }
 
     private void renderTile(GuiGraphics graphics, ShopView.Found found, int index,
                             boolean showSection, int mouseX, int mouseY, float offset) {
         float appear = appear(index);
-        float x = tileX(index);
+        float x = tileX(index) + switchShift();
         float rawY = tileY(index) + offset + (1.0f - appear) * APPEAR_LIFT;
         boolean hovered = mouseX >= x && mouseX < x + TILE_SIZE && mouseY >= rawY && mouseY < rawY + TILE_SIZE
                 && mouseY >= bandTop() && mouseY < bandBottom();
@@ -376,7 +406,7 @@ public final class ShopGrid {
     }
 
     private float thumbHeight(int total) {
-        float visible = capacity() / (float) Math.max(1, total);
+        float visible = rows() / (float) Math.max(1, rowsOf(total));
         return Math.max(MIN_THUMB, trackHeight() * visible);
     }
 
@@ -405,8 +435,8 @@ public final class ShopGrid {
     }
 
     private int clamp(int value, int total) {
-        int limit = Math.max(0, total - capacity());
-        return Math.max(0, Math.min(value, limit));
+        int limit = Math.max(0, rowsOf(total) - rows()) * columns();
+        return Math.max(0, Math.min(value / columns() * columns(), limit));
     }
 
     private static String clock(int seconds) {

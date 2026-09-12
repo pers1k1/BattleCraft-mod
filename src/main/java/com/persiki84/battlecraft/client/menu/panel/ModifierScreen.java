@@ -4,6 +4,7 @@ import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.shared.client.menu.ActionRow;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.PanelScreen;
+import com.persiki84.shared.AmountText;
 import com.persiki84.shared.Names;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -26,6 +27,10 @@ public class ModifierScreen extends PanelScreen {
     private static final int DECIMALS = String.valueOf(AMOUNT_SCALE).length() - 1;
     private static final int AMOUNT_STEP = 100;
     private static final int MAX_AMOUNT = 1000 * AMOUNT_SCALE;
+    private static final int PERCENT_SCALE = 10;
+    private static final int PERCENT_STEP = 10;
+    private static final int MAX_PERCENT = 100 * AMOUNT_SCALE;
+    private static final int ADDITION = 0;
     private static final String[] SLOTS = {"mainhand", "offhand", "head", "chest", "legs", "feet", "any"};
 
     private final List<ResourceLocation> effectIds = new ArrayList<>();
@@ -41,6 +46,7 @@ public class ModifierScreen extends PanelScreen {
     private int amount = AMOUNT_SCALE;
     private int operation;
     private int slot;
+    private int target;
 
     public ModifierScreen() {
         super(Component.translatable("itemmodifiers.menu.title"));
@@ -145,9 +151,23 @@ public class ModifierScreen extends PanelScreen {
             Component label = effects ? Names.effect(id) : Names.attribute(id);
             Component value = effects
                     ? Component.translatable("itemmodifiers.menu.item.level", parts[2])
-                    : Component.translatable("itemmodifiers.menu.item.value", parts[2]);
+                    : Component.translatable("itemmodifiers.menu.item.value", amountLabel(parts));
             rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, label, () -> value,
                     () -> dropEntry(effects, id)).alerting());
+        }
+    }
+
+    private static String amountLabel(String[] parts) {
+        double value = parseAmount(parts[2]);
+        boolean percent = parts.length > 3 && !"0".equals(parts[3].trim());
+        return AmountText.signed(value, percent);
+    }
+
+    private static double parseAmount(String stored) {
+        try {
+            return Double.parseDouble(stored.trim());
+        } catch (NumberFormatException unreadable) {
+            return 0.0;
         }
     }
 
@@ -179,8 +199,27 @@ public class ModifierScreen extends PanelScreen {
                 () -> send(COMMAND + " clear")).alerting();
     }
 
+    // WHY: рука пишет модификатор в NBT одного стака, а вид предмета в конфиг: из меню правилась
+    // WHY: только рука, и купленный в магазине такой же предмет приходил без модификаторов
+    private AbstractWidget targetRow() {
+        return pick("itemmodifiers.menu.target", targetOptions(), () -> target, picked -> {
+            target = picked;
+            rebuild();
+        });
+    }
+
+    private static List<Component> targetOptions() {
+        return List.of(Component.translatable("itemmodifiers.menu.target.hand"),
+                Component.translatable("itemmodifiers.menu.target.kind"));
+    }
+
+    private String base() {
+        return target == 0 ? COMMAND : "ie";
+    }
+
     private List<AbstractWidget> effectRows() {
         List<AbstractWidget> rows = new ArrayList<>();
+        rows.add(targetRow());
         rows.add(pick("itemmodifiers.menu.effect", effectNames, () -> effect, picked -> effect = picked));
         rows.add(number("itemmodifiers.menu.level", () -> level, value -> level = value, 0, MAX_LEVEL, 1));
         rows.add(pick("itemmodifiers.menu.kind", kindOptions(), () -> kind, picked -> kind = picked));
@@ -198,20 +237,34 @@ public class ModifierScreen extends PanelScreen {
 
     private void addEffect() {
         if (effectIds.isEmpty()) return;
-        send(COMMAND + " addpotion " + effectIds.get(effect) + " " + level + " " + (kind == 1 ? "DEBUFF" : "BUFF"));
+        send(base() + " addpotion " + effectIds.get(effect) + " " + level + " " + (kind == 1 ? "DEBUFF" : "BUFF"));
     }
 
     private void removeEffect() {
         if (effectIds.isEmpty()) return;
-        send(COMMAND + " remove potion " + effectIds.get(effect));
+        send(base() + " remove potion " + effectIds.get(effect));
+    }
+
+    // WHY: операции 1 и 2 множат базу и итог, то есть величина у них это доля: в процентах
+    // WHY: она читается сама собой, а числом 0.1 выглядит как ошибка ввода
+    private AbstractWidget amountRow() {
+        if (operation == ADDITION) {
+            return number("itemmodifiers.menu.amount", () -> amount, value -> amount = value,
+                    -MAX_AMOUNT, MAX_AMOUNT, AMOUNT_STEP).scaledBy(AMOUNT_SCALE);
+        }
+        return number("itemmodifiers.menu.amount_percent", () -> amount, value -> amount = value,
+                -MAX_PERCENT, MAX_PERCENT, PERCENT_STEP).scaledBy(PERCENT_SCALE);
     }
 
     private List<AbstractWidget> attributeRows() {
         List<AbstractWidget> rows = new ArrayList<>();
+        rows.add(targetRow());
         rows.add(pick("itemmodifiers.menu.attribute", attributeNames, () -> attribute, picked -> attribute = picked));
-        rows.add(number("itemmodifiers.menu.amount", () -> amount, value -> amount = value,
-                -MAX_AMOUNT, MAX_AMOUNT, AMOUNT_STEP).scaledBy(AMOUNT_SCALE));
-        rows.add(pick("itemmodifiers.menu.operation", operationOptions(), () -> operation, picked -> operation = picked));
+        rows.add(amountRow());
+        rows.add(pick("itemmodifiers.menu.operation", operationOptions(), () -> operation, picked -> {
+            operation = picked;
+            rebuild();
+        }));
         rows.add(pick("itemmodifiers.menu.slot", slotOptions(), () -> slot, picked -> slot = picked));
         rows.add(action("itemmodifiers.menu.add_attribute", "itemmodifiers.menu.action.add", this::addAttribute));
         rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
@@ -236,7 +289,7 @@ public class ModifierScreen extends PanelScreen {
 
     private void addAttribute() {
         if (attributeIds.isEmpty()) return;
-        send(COMMAND + " addattribute " + attributeIds.get(attribute) + " " + amountText() + " "
+        send(base() + " addattribute " + attributeIds.get(attribute) + " " + amountText() + " "
                 + operation + " " + SLOTS[slot]);
     }
 
@@ -244,8 +297,14 @@ public class ModifierScreen extends PanelScreen {
         return BigDecimal.valueOf(amount, DECIMALS).stripTrailingZeros().toPlainString();
     }
 
+    // WHY: конфиг держит модификатор одной записью на предмет и атрибут, поэтому у команды вида
+    // WHY: предмета слота в снятии нет, а у руки он обязателен
     private void removeAttribute() {
         if (attributeIds.isEmpty()) return;
-        send(COMMAND + " remove attribute " + attributeIds.get(attribute) + " " + SLOTS[slot]);
+        if (target == 0) {
+            send(COMMAND + " remove attribute " + attributeIds.get(attribute) + " " + SLOTS[slot]);
+            return;
+        }
+        send("ie remove attribute " + attributeIds.get(attribute));
     }
 }
