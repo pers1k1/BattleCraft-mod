@@ -170,6 +170,13 @@ Every row of the `/bc` hub now has an explanation - match actions, the status li
 
 Version 2026.9.12-alpha - the first public build of the rewritten interface, and a test one: it went out without a full play-through, so report anything that looks wrong.
 
+## Releases
+
+The launcher installs the jar from this repository automatically: `battlecraft_mod_version.txt`
+in [pers1k1/vrsns](https://github.com/pers1k1/vrsns) names the version, and the launcher pulls
+`battlecraft-<version>-all.jar` from the matching `v<version>` release here. Release tags follow
+`yyyy.MM.dd`; the version inside the jar keeps the Gradle form and may carry a pre-release suffix.
+
 ## License and attribution
 
 Released under the [GNU Affero General Public License v3.0](LICENSE) with the
