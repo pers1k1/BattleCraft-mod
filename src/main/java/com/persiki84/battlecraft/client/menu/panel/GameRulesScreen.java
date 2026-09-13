@@ -77,6 +77,9 @@ public class GameRulesScreen extends PanelScreen {
             rows.add(row);
             rows.add(reading(rule.hint(), Component::empty));
         }
+        rows.add(heading(Component.translatable("battlecraft.rules.group.reset")));
+        rows.add(action("battlecraft.rules.reset_all", "battlecraft.rules.do_reset",
+                () -> send(COMMAND + " reset")).alerting());
         return rows;
     }
 }

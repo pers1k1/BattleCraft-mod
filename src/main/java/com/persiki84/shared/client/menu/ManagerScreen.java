@@ -15,8 +15,12 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.registries.ForgeRegistries;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -32,6 +36,7 @@ public abstract class ManagerScreen extends GlassScreen {
     protected int listScroll;
     protected int shownRows = -1;
     protected int sourceRows = -1;
+    private String shownSignature = "";
     private final Smooth glide = new Smooth(0.0f, GLIDE_SPEED);
     private final Smooth listGlide = new Smooth(0.0f, GLIDE_SPEED);
     private final ScrollLanes lanes = new ScrollLanes();
@@ -637,6 +642,26 @@ public abstract class ManagerScreen extends GlassScreen {
                 Component.translatable(label), () -> Component.translatable(value), run);
         row.hint(label + HINT_SUFFIX);
         return row;
+    }
+
+    // WHY: перестановка и переименование не меняют числа строк, поэтому экран, обновляющийся по их
+    // WHY: количеству, их не замечает: список сверяется подписью, как состав магазина
+    protected boolean stale(String signature) {
+        if (signature.equals(shownSignature)) return false;
+
+        shownSignature = signature;
+        return true;
+    }
+
+    protected static String heldItem() {
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (player == null) return "";
+
+        ItemStack stack = player.getMainHandItem();
+        if (stack.isEmpty()) return "";
+
+        ResourceLocation id = ForgeRegistries.ITEMS.getKey(stack.getItem());
+        return id == null ? "" : id.toString();
     }
 
     protected ActionRow reading(String label, Supplier<Component> value) {

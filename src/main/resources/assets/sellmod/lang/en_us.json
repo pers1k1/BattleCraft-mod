@@ -28,5 +28,13 @@
   "sellmod.menu.remove_price": "Remove from buying",
   "sellmod.menu.empty_hand": "Hand is empty",
   "sellmod.menu.action.apply": "Apply",
-  "sellmod.menu.action.remove": "Remove"
+  "sellmod.menu.action.remove": "Remove",
+  "sellmod.menu.tab.item": "By id",
+  "sellmod.menu.item_id": "Item id",
+  "sellmod.menu.item_id.hint": "Item id such as minecraft:diamond. Without a colon minecraft is assumed.",
+  "sellmod.menu.item_id.placeholder": "minecraft:diamond",
+  "sellmod.menu.item_price": "Price",
+  "sellmod.menu.item_set_price": "Set price",
+  "sellmod.menu.item_set_currency": "Make it currency",
+  "sellmod.menu.error_item": "No such item"
 }

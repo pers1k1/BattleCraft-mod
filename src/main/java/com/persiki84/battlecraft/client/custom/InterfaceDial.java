@@ -7,7 +7,8 @@ import java.util.function.Supplier;
 public enum InterfaceDial {
     SOUND_VOLUME("soundVolume", 1.0f, 0.0f, 2.0f, HudConfig::soundVolume, HudConfig::soundVolume),
     VISUALIZER_GAIN("visualizerGain", 1.0f, 0.25f, 2.0f, HudConfig::visualizerGain, HudConfig::visualizerGain),
-    VISUALIZER_SPEED("visualizerSpeed", 1.0f, 0.25f, 2.0f, HudConfig::visualizerSpeed, HudConfig::visualizerSpeed);
+    VISUALIZER_SPEED("visualizerSpeed", 1.0f, 0.25f, 2.0f, HudConfig::visualizerSpeed, HudConfig::visualizerSpeed),
+    MARKER_SCALE("markerScale", 1.0f, 0.5f, 1.5f, HudConfig::markerScale, HudConfig::markerScale);
 
     public interface Setter {
         void set(float value);

@@ -26,6 +26,8 @@ public class CapturePoint {
     private String buffEffect;
     private int buffAmplifier;
 
+    private String captureCommand;
+
     private ItemStack incomeItem;
     private int passiveIncomeAmount;
     private int incomeTimer;
@@ -59,6 +61,8 @@ public class CapturePoint {
 
         this.buffEffect = null;
         this.buffAmplifier = 0;
+
+        this.captureCommand = null;
 
         this.incomeItem = new ItemStack(Items.AIR);
         this.passiveIncomeAmount = 0;
@@ -126,6 +130,26 @@ public class CapturePoint {
     public int getBuffAmplifier() { return buffAmplifier; }
     public void setBuffAmplifier(int amplifier) { this.buffAmplifier = amplifier; }
 
+    public String getCaptureCommand() { return captureCommand; }
+
+    public void setCaptureCommand(String command) {
+        this.captureCommand = command == null || command.isBlank() ? null : command.trim();
+    }
+
+    public boolean hasReward() {
+        return !reward.isEmpty() && rewardAmount > 0;
+    }
+
+    public void clearReward() {
+        this.reward = new ItemStack(Items.AIR);
+        this.rewardAmount = 0;
+    }
+
+    public void clearOwner() {
+        this.ownerTeam = null;
+        this.lastCaptureTime = 0;
+    }
+
     public ItemStack getIncomeItem() { return incomeItem; }
     public void setIncomeItem(ItemStack item) { this.incomeItem = item; }
 
@@ -190,6 +214,7 @@ public class CapturePoint {
 
         if (buffEffect != null) tag.putString("buffEffect", buffEffect);
         tag.putInt("buffAmplifier", buffAmplifier);
+        if (captureCommand != null) tag.putString("captureCommand", captureCommand);
 
         tag.putString("incomeItem", ForgeRegistries.ITEMS.getKey(incomeItem.getItem()).toString());
         tag.putInt("passiveIncomeAmount", passiveIncomeAmount);
@@ -239,6 +264,13 @@ public class CapturePoint {
         if (tag.contains("ownerTeam")) point.ownerTeam = tag.getString("ownerTeam");
         point.lastCaptureTime = tag.getLong("lastCaptureTime");
 
+        readBonuses(tag, point);
+        readTuning(tag, point);
+
+        return point;
+    }
+
+    private static void readBonuses(CompoundTag tag, CapturePoint point) {
         if (tag.contains("rewardItem")) {
             Item rewardItem = ForgeRegistries.ITEMS.getValue(new ResourceLocation(tag.getString("rewardItem")));
             if (rewardItem != null) point.reward = new ItemStack(rewardItem);
@@ -247,15 +279,13 @@ public class CapturePoint {
 
         if (tag.contains("buffEffect")) point.buffEffect = tag.getString("buffEffect");
         if (tag.contains("buffAmplifier")) point.buffAmplifier = tag.getInt("buffAmplifier");
+        if (tag.contains("captureCommand")) point.setCaptureCommand(tag.getString("captureCommand"));
 
         if (tag.contains("incomeItem")) {
-            Item incItem = ForgeRegistries.ITEMS.getValue(new ResourceLocation(tag.getString("incomeItem")));
-            if (incItem != null) point.incomeItem = new ItemStack(incItem);
+            Item incomeStored = ForgeRegistries.ITEMS.getValue(new ResourceLocation(tag.getString("incomeItem")));
+            if (incomeStored != null) point.incomeItem = new ItemStack(incomeStored);
         }
         if (tag.contains("passiveIncomeAmount")) point.passiveIncomeAmount = tag.getInt("passiveIncomeAmount");
         if (tag.contains("incomeInterval")) point.incomeIntervalSeconds = tag.getInt("incomeInterval");
-        readTuning(tag, point);
-
-        return point;
     }
 }

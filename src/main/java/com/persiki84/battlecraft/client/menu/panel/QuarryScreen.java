@@ -2,6 +2,7 @@ package com.persiki84.battlecraft.client.menu.panel;
 
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.shared.Names;
+import com.persiki84.shared.client.menu.ActionRow;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.PanelScreen;
@@ -20,6 +21,9 @@ public class QuarryScreen extends PanelScreen {
     private static final int GLOBAL_COOLDOWN = -1;
     private static final int MIN_MULTIPLIER = 1;
     private static final int MAX_MULTIPLIER = 64;
+    private static final int DEFAULT_BLOCK_COOLDOWN = 60;
+
+    private int aimedCooldown = DEFAULT_BLOCK_COOLDOWN;
 
     public QuarryScreen() {
         super(Component.translatable("quarrymod.menu.title"));
@@ -35,6 +39,7 @@ public class QuarryScreen extends PanelScreen {
         return List.of(
                 new Page(Component.translatable("quarrymod.menu.tab.cooldown"), this::cooldownRows),
                 new Page(Component.translatable("quarrymod.menu.tab.blocks"), this::blockRows),
+                new Page(Component.translatable("quarrymod.menu.tab.list"), this::listRows),
                 new Page(Component.translatable("quarrymod.menu.tab.types"), this::typeRows));
     }
 
@@ -96,7 +101,63 @@ public class QuarryScreen extends PanelScreen {
                 action("quarrymod.menu.add", "quarrymod.menu.action.aimed", () -> send(COMMAND + " add")),
                 action("quarrymod.menu.remove", "quarrymod.menu.action.aimed", () -> send(COMMAND + " remove")),
                 action("quarrymod.menu.info", "quarrymod.menu.action.aimed", () -> send(COMMAND + " info")),
+                number("quarrymod.menu.block_cooldown", () -> aimedCooldown, value -> aimedCooldown = value,
+                        1, MAX_SECONDS, 5),
+                action("quarrymod.menu.block_cooldown_set", "quarrymod.menu.action.aimed",
+                        () -> send(COMMAND + " cooldown set " + aimedCooldown)),
                 action("quarrymod.menu.block_cooldown_reset", "quarrymod.menu.action.aimed",
                         () -> send(COMMAND + " cooldown reset")));
+    }
+
+    private static List<CompoundTag> blocks() {
+        ListTag stored = MenuData.state(ModuleMenuStates.QUARRY)
+                .getList(ModuleMenuStates.QUARRY_BLOCKS, Tag.TAG_COMPOUND);
+        List<CompoundTag> blocks = new ArrayList<>();
+        for (int index = 0; index < stored.size(); index++) {
+            blocks.add(stored.getCompound(index));
+        }
+        return blocks;
+    }
+
+    private List<AbstractWidget> listRows() {
+        List<CompoundTag> blocks = blocks();
+        if (blocks.isEmpty()) return List.of(reading("quarrymod.menu.list.empty", Component::empty));
+
+        List<AbstractWidget> rows = new ArrayList<>();
+        for (CompoundTag block : blocks) {
+            rows.add(blockRow(block));
+        }
+
+        int total = MenuData.state(menuId()).getInt("blocks");
+        if (total > blocks.size()) {
+            rows.add(reading("quarrymod.menu.list.more",
+                    () -> Component.literal(String.valueOf(total - blocks.size()))));
+        }
+        return rows;
+    }
+
+    private AbstractWidget blockRow(CompoundTag block) {
+        ActionRow row = new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Names.block(block.getString("block")), () -> position(block), () -> {});
+        row.note(blockNote(block));
+        row.active = false;
+        return row;
+    }
+
+    private static Component blockNote(CompoundTag block) {
+        Component dimension = dimensionLabel(block.getString("dimension"));
+        int cooldown = block.getInt("cooldown");
+        if (cooldown <= 0) return dimension;
+
+        return Component.translatable("quarrymod.menu.list.custom", dimension, cooldown);
+    }
+
+    private static Component position(CompoundTag block) {
+        return Component.literal(block.getInt("x") + " " + block.getInt("y") + " " + block.getInt("z"));
+    }
+
+    private static Component dimensionLabel(String dimension) {
+        int mark = dimension.indexOf(':');
+        return Component.literal(mark < 0 ? dimension : dimension.substring(mark + 1));
     }
 }

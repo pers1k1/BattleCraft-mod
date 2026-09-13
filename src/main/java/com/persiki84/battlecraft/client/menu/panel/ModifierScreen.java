@@ -2,7 +2,9 @@ package com.persiki84.battlecraft.client.menu.panel;
 
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.shared.client.menu.ActionRow;
+import com.persiki84.shared.client.menu.FieldRow;
 import com.persiki84.shared.client.menu.MenuData;
+import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.PanelScreen;
 import com.persiki84.shared.AmountText;
 import com.persiki84.shared.Names;
@@ -31,6 +33,9 @@ public class ModifierScreen extends PanelScreen {
     private static final int PERCENT_STEP = 10;
     private static final int MAX_PERCENT = 100 * AMOUNT_SCALE;
     private static final int ADDITION = 0;
+    private static final int HAND_TARGET = 0;
+    private static final int PICKED_TARGET = 2;
+    private static final int LORE_LENGTH = 128;
     private static final String[] SLOTS = {"mainhand", "offhand", "head", "chest", "legs", "feet", "any"};
 
     private final List<ResourceLocation> effectIds = new ArrayList<>();
@@ -38,6 +43,7 @@ public class ModifierScreen extends PanelScreen {
     private final List<ResourceLocation> attributeIds = new ArrayList<>();
     private final List<Component> attributeNames = new ArrayList<>();
 
+    private FieldRow loreRow;
     private String picked;
     private int effect;
     private int level;
@@ -86,7 +92,53 @@ public class ModifierScreen extends PanelScreen {
                 new Page(Component.translatable("itemmodifiers.menu.tab.items"), this::itemRows),
                 new Page(Component.translatable("itemmodifiers.menu.tab.item"), this::pickedRows),
                 new Page(Component.translatable("itemmodifiers.menu.tab.effect"), this::effectRows),
-                new Page(Component.translatable("itemmodifiers.menu.tab.attribute"), this::attributeRows));
+                new Page(Component.translatable("itemmodifiers.menu.tab.attribute"), this::attributeRows),
+                new Page(Component.translatable("itemmodifiers.menu.tab.lore"), this::loreRows));
+    }
+
+    private List<AbstractWidget> loreRows() {
+        return List.of(
+                reading("itemmodifiers.menu.lore.held", ModifierScreen::heldLabel),
+                loreField(),
+                action("itemmodifiers.menu.lore.add", "itemmodifiers.menu.action.add", this::addLore),
+                clearLoreRow());
+    }
+
+    // WHY: строка поля переживает пересборку: новая на каждый кадр стирала бы набранный текст
+    private FieldRow loreField() {
+        if (loreRow == null) {
+            loreRow = new FieldRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                    Component.translatable("itemmodifiers.menu.lore.text"),
+                    Component.translatable("itemmodifiers.menu.lore.placeholder"),
+                    "", LORE_LENGTH, value -> { });
+            loreRow.hint("itemmodifiers.menu.lore.text" + HINT_SUFFIX);
+        }
+        loreRow.setX(rowsLeft());
+        loreRow.setWidth(rowsWidth());
+        return loreRow;
+    }
+
+    private void addLore() {
+        String text = loreField().value().trim();
+        if (text.isEmpty()) {
+            MenuFeedback.show(Component.translatable("itemmodifiers.menu.lore.error_empty"), true);
+            return;
+        }
+
+        send("ie lore add " + text);
+        loreField().box().setValue("");
+    }
+
+    private ActionRow clearLoreRow() {
+        return new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("itemmodifiers.menu.lore.clear"),
+                () -> Component.translatable("itemmodifiers.menu.action.clear"),
+                () -> send("ie lore clear")).alerting();
+    }
+
+    private static Component heldLabel() {
+        String id = heldItem();
+        return id.isEmpty() ? Component.translatable("itemmodifiers.menu.lore.empty_hand") : Names.item(id);
     }
 
     private static List<CompoundTag> tracked() {
@@ -120,8 +172,11 @@ public class ModifierScreen extends PanelScreen {
         return rows;
     }
 
+    // WHY: выбор в списке молча ничего не менял, а добавление уходило в руку: теперь выбор сразу
+    // WHY: переводит цель на этот предмет, иначе список вводит в заблуждение
     private void pickItem(String id) {
         picked = id;
+        target = PICKED_TARGET;
         rebuild();
     }
 
@@ -202,19 +257,29 @@ public class ModifierScreen extends PanelScreen {
     // WHY: рука пишет модификатор в NBT одного стака, а вид предмета в конфиг: из меню правилась
     // WHY: только рука, и купленный в магазине такой же предмет приходил без модификаторов
     private AbstractWidget targetRow() {
-        return pick("itemmodifiers.menu.target", targetOptions(), () -> target, picked -> {
-            target = picked;
+        return pick("itemmodifiers.menu.target", targetOptions(), this::targetIndex, chosen -> {
+            target = chosen;
             rebuild();
         });
     }
 
-    private static List<Component> targetOptions() {
-        return List.of(Component.translatable("itemmodifiers.menu.target.hand"),
-                Component.translatable("itemmodifiers.menu.target.kind"));
+    private List<Component> targetOptions() {
+        List<Component> options = new ArrayList<>();
+        options.add(Component.translatable("itemmodifiers.menu.target.hand"));
+        options.add(Component.translatable("itemmodifiers.menu.target.kind"));
+        if (picked != null) {
+            options.add(Component.translatable("itemmodifiers.menu.target.picked", Names.item(picked)));
+        }
+        return options;
+    }
+
+    private int targetIndex() {
+        return Math.min(target, targetOptions().size() - 1);
     }
 
     private String base() {
-        return target == 0 ? COMMAND : "ie";
+        if (targetIndex() == PICKED_TARGET) return "ie item " + picked;
+        return targetIndex() == HAND_TARGET ? COMMAND : "ie";
     }
 
     private List<AbstractWidget> effectRows() {
@@ -301,10 +366,10 @@ public class ModifierScreen extends PanelScreen {
     // WHY: предмета слота в снятии нет, а у руки он обязателен
     private void removeAttribute() {
         if (attributeIds.isEmpty()) return;
-        if (target == 0) {
+        if (targetIndex() == HAND_TARGET) {
             send(COMMAND + " remove attribute " + attributeIds.get(attribute) + " " + SLOTS[slot]);
             return;
         }
-        send("ie remove attribute " + attributeIds.get(attribute));
+        send(base() + " remove attribute " + attributeIds.get(attribute));
     }
 }

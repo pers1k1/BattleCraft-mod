@@ -22,6 +22,7 @@ import com.persiki84.zones.Zone;
 import com.persiki84.zones.ZoneType;
 import com.persiki84.zones.client.render.ZoneMarkers;
 import com.persiki84.battlecraft.client.ClientModules;
+import com.persiki84.battlecraft.client.hud.HudConfig;
 import com.persiki84.battlecraft.client.hud.HudInk;
 import com.persiki84.battlecraft.modules.ModuleId;
 import net.minecraft.client.Minecraft;
@@ -139,7 +140,7 @@ public final class ZoneHud {
         float delta = UiFrame.delta();
         float centerScreenX = minecraft.getWindow().getGuiScaledWidth() / 2.0f;
         float centerScreenY = minecraft.getWindow().getGuiScaledHeight() / 2.0f;
-        float markerScale = UiRender.crisp(graphics, MARKER_SCALE);
+        float markerScale = UiRender.crisp(graphics, MARKER_SCALE * HudConfig.markerScale());
         float height = UiWorldTag.height(minecraft.font, markerScale);
 
         for (ZoneMarkers.Marker marker : ZoneMarkers.live()) {

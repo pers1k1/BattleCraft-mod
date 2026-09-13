@@ -2,7 +2,9 @@ package com.persiki84.battlecraft.client.menu.panel;
 
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.shared.client.menu.ActionRow;
+import com.persiki84.shared.client.menu.FieldRow;
 import com.persiki84.shared.client.menu.MenuData;
+import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.PanelScreen;
 import com.persiki84.shared.Names;
@@ -11,6 +13,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,8 +23,11 @@ public class SellScreen extends PanelScreen {
     private static final String COMMAND = "sell";
     private static final int MAX_PRICE = 100000;
     private static final int DEFAULT_PRICE = 10;
+    private static final int ID_LENGTH = 96;
 
+    private FieldRow itemRow;
     private int heldPrice = DEFAULT_PRICE;
+    private int typedPrice = DEFAULT_PRICE;
 
     public SellScreen() {
         super(Component.translatable("sellmod.menu.title"));
@@ -36,7 +43,49 @@ public class SellScreen extends PanelScreen {
         return List.of(
                 new Page(Component.translatable("sellmod.menu.tab.prices"), this::priceRows),
                 new Page(Component.translatable("sellmod.menu.tab.remove"), this::removeRows),
-                new Page(Component.translatable("sellmod.menu.tab.hand"), this::handRows));
+                new Page(Component.translatable("sellmod.menu.tab.hand"), this::handRows),
+                new Page(Component.translatable("sellmod.menu.tab.item"), this::itemRows));
+    }
+
+    private List<AbstractWidget> itemRows() {
+        List<AbstractWidget> rows = new ArrayList<>();
+        rows.add(itemField());
+        rows.add(number("sellmod.menu.item_price", () -> typedPrice, value -> typedPrice = value,
+                0, MAX_PRICE, 1));
+        rows.add(action("sellmod.menu.item_set_price", "sellmod.menu.action.apply",
+                () -> withTyped(id -> send(COMMAND + " price set " + id + " " + typedPrice))));
+        rows.add(action("sellmod.menu.item_set_currency", "sellmod.menu.action.apply",
+                () -> withTyped(id -> send(COMMAND + " setcurrency " + id))));
+        return rows;
+    }
+
+    // WHY: строка поля переживает пересборку: новая на каждый кадр стирала бы набранный текст
+    private FieldRow itemField() {
+        if (itemRow == null) {
+            itemRow = new FieldRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                    Component.translatable("sellmod.menu.item_id"),
+                    Component.translatable("sellmod.menu.item_id.placeholder"),
+                    "", ID_LENGTH, value -> { });
+            itemRow.hint("sellmod.menu.item_id" + HINT_SUFFIX);
+        }
+        itemRow.setX(rowsLeft());
+        itemRow.setWidth(rowsWidth());
+        return itemRow;
+    }
+
+    private void withTyped(java.util.function.Consumer<String> action) {
+        String id = itemField().value().trim();
+        if (!known(id)) {
+            MenuFeedback.show(Component.translatable("sellmod.menu.error_item"), true);
+            return;
+        }
+
+        action.accept(id);
+    }
+
+    private static boolean known(String id) {
+        ResourceLocation key = ResourceLocation.tryParse(id);
+        return key != null && ForgeRegistries.ITEMS.containsKey(key);
     }
 
     private List<AbstractWidget> removeRows() {

@@ -36,6 +36,7 @@ public final class MarkMenuState {
         tag.putString("dimension", mark.dimension().toString());
         tag.putInt("color", mark.color());
         tag.putBoolean("everyone", mark.everyone());
+        tag.putBoolean("inWorld", mark.inWorld());
 
         ListTag teams = new ListTag();
         for (String team : mark.teams()) {

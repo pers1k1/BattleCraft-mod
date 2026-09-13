@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.9.12-alpha` in files, `12.09.26 ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.9.13-alpha` in files, `13.09.26 ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -212,6 +212,93 @@ accepts, and is swept from the centre outwards with a time budget rather than a 
 Painted chunks are sent to the team in batches twice a second instead of one packet per chunk. A paint
 that comes out empty is no longer stored: it means the chunk had nothing to paint, and keeping it
 would have frozen a black square into the map forever, since a known chunk is not painted again.
+
+## Module panels, 12 September 2026 (third pass)
+
+The airdrop panel offered a warning time up to a day while the command takes an hour, so anything
+above that was rejected without a word; the row now stops where the command does. Loot entries were
+add-and-delete only, and everything else the loot commands can do had to be typed. An Entry tab now
+picks a stored entry and edits its count range and chance, moves it up or down the table, duplicates
+it, strips the item tags off it or removes it, and the Loot tab can empty the table in one go. The
+count rows keep the range valid on their own, so lowering a maximum below the minimum drags the
+minimum with it instead of failing. Writing raw NBT into an entry stays a command: the argument is a
+compound tag, and a text field that rejects most of what is typed into it is worse than no field.
+
+The quarry panel can set the cooldown of the block in the crosshair, not only the global one, and a
+List tab shows the registered blocks with their position, dimension and any custom cooldown. The list
+in the snapshot is capped and the panel says how many blocks it did not show, because the snapshot
+travels whole on every request and these blocks run into the thousands.
+
+Immortality gained a Players tab: every player online is a row, the switch grants or takes immortality
+away, and a granted row carries the seconds left. Granting is refused while the module is off and
+turning it off clears the list, so the rows are locked rather than silently doing nothing.
+
+Item modifiers can write a lore line onto the held item and clear its lore. The item chosen on the
+Items tab is now a target of its own: the effect and attribute tabs used to act on the held item or on
+its kind whatever was selected in the list, so picking an item there changed nothing. Picking one now
+switches the target to it, and the target row spells out where the next addition lands.
+
+Selling prices could only be pinned to the held item although the command takes an identifier. A
+By id tab takes one, checks it against the item registry before sending anything, and sets the price
+or makes the item the currency.
+
+## Capture points, marks and command coverage, 13 September 2026
+
+A capture point can run a console command when it is taken. The command is stored with the point, runs
+from the server console at the point's own position, and takes `%point%`, `%team%`, `%x%`, `%y%` and
+`%z%`. It is set with `capturepoint setcommand <point> <command>` or from the Bonuses tab of the point
+panel, and removed with `clearcommand` or the button next to the field.
+
+The capture reward can be switched off from the panel: its amount accepts zero, which clears the
+reward the way `removereward` always did, and the reward and income items are taken from the hand
+instead of being typeable only as a command argument. Income, its interval, the owner effect and the
+capture command now come from one branch builder, so a final point carries the same set as an ordinary
+one - the panel used to send `finalpoint setincome`, a command that did not exist.
+
+The owner of a point can be cleared. `capturepoint clearowner <point>` and `finalpoint clearowner
+<point>` release the point and reset its cooldown, and the owner row carries a `none` entry that sends
+the same command.
+
+A mark can be taken off the world while staying on the map: the world tag fades out the way every
+other tag does and the mark keeps its place on the minimap and the full map. Marks can also be renamed
+from the panel, which until now was only possible at creation.
+
+Capture point tags in the world leave with the same animation as base, shop and mark tags when the
+player list is held open. The capture HUD dropped out of the frame instead, which read as a defect
+next to the tags that faded.
+
+A zone carries a colour row again - eight presets plus the team colour, with a colour set by command
+shown as its own entry instead of being reported as the first preset - and `zone edit <id> clearcolor`
+puts a zone back onto its team colour. The spawn anchor row checks that the operator stands inside the
+zone before sending, because the command refuses otherwise. The shop admin panel can add an item by
+identifier instead of only from the hand, and the Layout tab moves a subsection or an item into
+another section.
+
+World tags carry a size of their own. The slider sits in the interface tab of the customization
+screen, runs from half to one and a half of the stock size and covers the labels of bases, shops,
+capture points and operator marks, the range readout beside them and the plain dots of player markers.
+It travels with presets and with the config like every other interface dial.
+
+The whole capture HUD leaves with the player list rather than only its tags: the objective bar, the
+return card, the point pills and the centre progress card fade out and come back instead of being
+dropped from the frame, and the victory banner rides the same fade. A pill that fades out under the
+list keeps its place in the set, so it does not come back as a new pill without its owner history.
+
+Panels refresh from the data rather than from the number of rows. A rename, a colour, a captured point
+or a command added to a list changes nothing about how many rows a screen has, so screens that
+compared counts did not notice: the hub, the point panel, the mark panel and the zone panel now
+compare a signature of what they show, the way the shop layout tab already did. Adding or removing a
+match command now appears in the list at once, and the command and effect fields of a point follow the
+point when its stored value changes elsewhere.
+
+In the `/bc` hub the Require teams switch sent `config requireTeams`, a path that was never
+registered, and did nothing; it sends `config set requireTeams` now. The console commands run at match
+start, at match stop and on surrender have a tab of their own: every entry is a row that removes
+itself, and each of the three lists has a field and an Add row. Clearing the late-join grace has a row
+of its own rather than only appearing as an unmet checklist item, game rules can be reset from the
+rules panel, and a team can be created under any name instead of the four suggested ones. The build
+config check - snapshot, recheck, clear and forgetting a single path - has a panel instead of living
+only in chat.
 
 ## Releases
 

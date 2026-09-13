@@ -79,7 +79,17 @@
   "itemmodifiers.menu.amount.hint": "A flat bonus in attribute units. Click the number to type a fractional value, dot or comma.",
   "itemmodifiers.menu.operation.hint": "\"Add\" gives flat units, both multiplying operations work in percent: of the base value and of the computed total.",
   "itemmodifiers.menu.target": "Write into",
-  "itemmodifiers.menu.target.hint": "\"Held item\" edits one item and travels with it. \"Every item of this kind\" writes into the config, so every such item gets the modifier, shop purchases included.",
+  "itemmodifiers.menu.target.hint": "\"Held item\" edits one item and travels with it. \"Every item of this kind\" writes into the config for the held item, and the third line does the same for the item selected on the \"Items\" tab.",
   "itemmodifiers.menu.target.hand": "Held item",
-  "itemmodifiers.menu.target.kind": "Every item of this kind"
+  "itemmodifiers.menu.target.kind": "Every item of this kind",
+  "itemmodifiers.menu.target.picked": "Selected: %s",
+  "itemmodifiers.menu.tab.lore": "Lore",
+  "itemmodifiers.menu.lore.held": "Held item",
+  "itemmodifiers.menu.lore.empty_hand": "The hand is empty",
+  "itemmodifiers.menu.lore.text": "Lore line",
+  "itemmodifiers.menu.lore.text.hint": "The line is appended to the held item lore. The & sign sets color and style: &c red, &l bold, &r reset.",
+  "itemmodifiers.menu.lore.placeholder": "Line text",
+  "itemmodifiers.menu.lore.add": "Add line",
+  "itemmodifiers.menu.lore.clear": "Clear lore",
+  "itemmodifiers.menu.lore.error_empty": "The line is empty"
 }

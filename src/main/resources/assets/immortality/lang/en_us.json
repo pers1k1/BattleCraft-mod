@@ -28,5 +28,9 @@
   "immortality.menu.enabled": "Enabled",
   "immortality.menu.duration": "Duration, s",
   "immortality.menu.clear_all": "Clear from everyone",
-  "immortality.menu.action.clear": "Clear"
+  "immortality.menu.action.clear": "Clear",
+  "immortality.menu.tab.players": "Players",
+  "immortality.menu.disabled": "The module is off, granting is unavailable",
+  "immortality.menu.no_players": "Nobody is on the server",
+  "immortality.menu.remaining": "%s s left"
 }

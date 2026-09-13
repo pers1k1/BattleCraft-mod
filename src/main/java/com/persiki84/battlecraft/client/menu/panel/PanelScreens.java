@@ -1,6 +1,7 @@
 package com.persiki84.battlecraft.client.menu.panel;
 
 import com.persiki84.battlecraft.menu.AnnounceMenuState;
+import com.persiki84.battlecraft.menu.ConfigMenuState;
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.shared.client.menu.MenuScreens;
 
@@ -21,5 +22,6 @@ public final class PanelScreens {
         MenuScreens.register(ModuleMenuStates.TEAMS, TeamsScreen::new);
         MenuScreens.register(ModuleMenuStates.MAP, MapShareScreen::new);
         MenuScreens.register(AnnounceMenuState.MENU_ID, AnnounceScreen::new);
+        MenuScreens.register(ConfigMenuState.MENU_ID, ConfigGuardScreen::new);
     }
 }

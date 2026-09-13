@@ -79,8 +79,9 @@ public final class CaptureReturnHud {
         return !area.contains(minecraft.player.getX(), minecraft.player.getY(), minecraft.player.getZ());
     }
 
-    public static float render(GuiGraphics graphics, Minecraft mc, float centerX, float top, float delta) {
-        float alpha = visibility.update(wanted(), delta);
+    public static float render(GuiGraphics graphics, Minecraft mc, float centerX, float top, float delta,
+                               boolean shown) {
+        float alpha = visibility.update(wanted() && shown, delta);
         if (visibility.live()) {
             track();
         }

@@ -24,20 +24,13 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
-import net.minecraft.commands.arguments.item.ItemArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraftforge.network.PacketDistributor;
-import net.minecraftforge.registries.ForgeRegistries;
 
 
 public class CapturePointCommand {
-
-    private static final SuggestionProvider<CommandSourceStack> EFFECT_SUGGESTIONS = (context, builder) ->
-            SharedSuggestionProvider.suggestResource(ForgeRegistries.MOB_EFFECTS.getKeys(), builder);
 
     public static final SuggestionProvider<CommandSourceStack> POINT_SUGGESTIONS = (context, builder) ->
             SharedSuggestionProvider.suggest(CapturePointManager.getAllPoints().stream().map(CapturePoint::getName), builder);
@@ -53,8 +46,8 @@ public class CapturePointCommand {
         addLifecycleBranches(root);
         addGeometryBranches(root);
         addTimingBranches(root);
-        addRewardBranches(root, context);
         addToggleBranches(root);
+        PointBonusCommands.addBranches(root, POINT_SUGGESTIONS, CapturePointManager::getCapturePoint, context);
         CaptureTuningCommands.addBranches(root, POINT_SUGGESTIONS, CapturePointManager::getCapturePoint);
 
         dispatcher.register(root);
@@ -75,7 +68,11 @@ public class CapturePointCommand {
                                 .suggests(POINT_SUGGESTIONS)
                                 .then(Commands.argument("teamName", StringArgumentType.string())
                                         .suggests(SCOREBOARD_TEAM_SUGGESTIONS)
-                                        .executes(CapturePointCommand::setOwner))));
+                                        .executes(CapturePointCommand::setOwner))))
+                .then(Commands.literal("clearowner")
+                        .then(Commands.argument("pointName", StringArgumentType.string())
+                                .suggests(POINT_SUGGESTIONS)
+                                .executes(CapturePointCommand::clearOwner)));
     }
 
     private static void addGeometryBranches(LiteralArgumentBuilder<CommandSourceStack> root) {
@@ -88,14 +85,6 @@ public class CapturePointCommand {
     private static void addTimingBranches(LiteralArgumentBuilder<CommandSourceStack> root) {
         root.then(captureTimeBranch())
                 .then(cooldownBranch());
-    }
-
-    private static void addRewardBranches(LiteralArgumentBuilder<CommandSourceStack> root, CommandBuildContext context) {
-        root.then(rewardBranch(context))
-                .then(removeRewardBranch())
-                .then(incomeBranch(context))
-                .then(incomeIntervalBranch())
-                .then(buffBranch());
     }
 
     private static void addToggleBranches(LiteralArgumentBuilder<CommandSourceStack> root) {
@@ -164,49 +153,6 @@ public class CapturePointCommand {
                         .suggests(POINT_SUGGESTIONS)
                         .then(Commands.argument("seconds", IntegerArgumentType.integer(0))
                                 .executes(CapturePointCommand::setCooldown)));
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> rewardBranch(CommandBuildContext context) {
-        return Commands.literal("setreward")
-                .then(Commands.argument("name", StringArgumentType.string())
-                        .suggests(POINT_SUGGESTIONS)
-                        .then(Commands.argument("item", ItemArgument.item(context))
-                                .then(Commands.argument("amount", IntegerArgumentType.integer(1, 64))
-                                        .executes(CapturePointCommand::setReward))));
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> removeRewardBranch() {
-        return Commands.literal("removereward")
-                .then(Commands.argument("name", StringArgumentType.string())
-                        .suggests(POINT_SUGGESTIONS)
-                        .executes(CapturePointCommand::removeReward));
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> incomeBranch(CommandBuildContext context) {
-        return Commands.literal("setincome")
-                .then(Commands.argument("point", StringArgumentType.string())
-                        .suggests(POINT_SUGGESTIONS)
-                        .then(Commands.argument("item", ItemArgument.item(context))
-                                .then(Commands.argument("amount", IntegerArgumentType.integer(0))
-                                        .executes(CapturePointCommand::setIncome))));
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> incomeIntervalBranch() {
-        return Commands.literal("setincomeinterval")
-                .then(Commands.argument("point", StringArgumentType.string())
-                        .suggests(POINT_SUGGESTIONS)
-                        .then(Commands.argument("seconds", IntegerArgumentType.integer(1))
-                                .executes(CapturePointCommand::setIncomeInterval)));
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> buffBranch() {
-        return Commands.literal("setbuff")
-                .then(Commands.argument("point", StringArgumentType.string())
-                        .suggests(POINT_SUGGESTIONS)
-                        .then(Commands.argument("effect", StringArgumentType.string())
-                                .suggests(EFFECT_SUGGESTIONS)
-                                .then(Commands.argument("amplifier", IntegerArgumentType.integer(0, 5))
-                                        .executes(CapturePointCommand::setBuff))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> protectionBranch() {
@@ -316,6 +262,26 @@ public class CapturePointCommand {
         return String.format(" (Income: %dx %s / %d min)", point.getPassiveIncomeAmount(), itemName, minutes);
     }
 
+    private static int clearOwner(CommandContext<CommandSourceStack> context) {
+        String pointName = StringArgumentType.getString(context, "pointName");
+        CapturePoint point = CapturePointManager.getCapturePoint(pointName);
+
+        if (point == null) {
+            context.getSource().sendFailure(Component.translatable("capturepoints.error.point_not_found").withStyle(ChatFormatting.RED));
+            return 0;
+        }
+
+        point.clearOwner();
+        CapturePointManager.cancelCaptureForPoint(pointName);
+        CapturePointManager.persist();
+        CapturePointManager.syncPoints();
+        context.getSource().sendSuccess(() ->
+                Component.translatable("capturepoints.success.owner_cleared",
+                        Component.literal(pointName).withStyle(ChatFormatting.YELLOW))
+                        .withStyle(ChatFormatting.GREEN), true);
+        return 1;
+    }
+
     private static int setOwner(CommandContext<CommandSourceStack> context) {
         String pointName = StringArgumentType.getString(context, "pointName");
         String teamName = StringArgumentType.getString(context, "teamName");
@@ -345,38 +311,7 @@ public class CapturePointCommand {
         return 1;
     }
 
-    private static int setReward(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        String name = StringArgumentType.getString(context, "name");
-        ItemStack item = ItemArgument.getItem(context, "item").createItemStack(1, false);
-        int amount = IntegerArgumentType.getInteger(context, "amount");
 
-        CapturePoint point = CapturePointManager.getCapturePoint(name);
-        if (point == null) {
-            context.getSource().sendFailure(Component.translatable("capturepoints.error.point_not_found").withStyle(ChatFormatting.RED));
-            return 0;
-        }
-        point.setReward(item);
-        point.setRewardAmount(amount);
-        CapturePointManager.persist();
-        context.getSource().sendSuccess(() ->
-                Component.translatable("capturepoints.success.reward_updated").withStyle(ChatFormatting.GREEN), true);
-        return 1;
-    }
-
-    private static int removeReward(CommandContext<CommandSourceStack> context) {
-        String name = StringArgumentType.getString(context, "name");
-        CapturePoint point = CapturePointManager.getCapturePoint(name);
-        if (point == null) {
-            context.getSource().sendFailure(Component.translatable("capturepoints.error.point_not_found").withStyle(ChatFormatting.RED));
-            return 0;
-        }
-        point.setReward(new ItemStack(Items.AIR));
-        point.setRewardAmount(0);
-        CapturePointManager.persist();
-        context.getSource().sendSuccess(() ->
-                Component.translatable("capturepoints.success.reward_removed").withStyle(ChatFormatting.GREEN), true);
-        return 1;
-    }
 
     private static int setShape(CommandContext<CommandSourceStack> context) {
         String name = StringArgumentType.getString(context, "name");
@@ -490,72 +425,8 @@ public class CapturePointCommand {
         return 1;
     }
 
-    private static int setBuff(CommandContext<CommandSourceStack> context) {
-        String name = StringArgumentType.getString(context, "point");
-        String effect = StringArgumentType.getString(context, "effect");
-        int amplifier = IntegerArgumentType.getInteger(context, "amplifier");
 
-        CapturePoint point = CapturePointManager.getCapturePoint(name);
-        if (point == null) {
-            context.getSource().sendFailure(Component.translatable("capturepoints.error.point_not_found").withStyle(ChatFormatting.RED));
-            return 0;
-        }
 
-        point.setBuffEffect(effect);
-        point.setBuffAmplifier(amplifier);
-        CapturePointManager.persist();
-        context.getSource().sendSuccess(() ->
-                Component.translatable("capturepoints.success.buff_set",
-                        Component.literal(name).withStyle(ChatFormatting.YELLOW),
-                        Component.literal(effect).withStyle(ChatFormatting.LIGHT_PURPLE),
-                        amplifier + 1
-                ).withStyle(ChatFormatting.GREEN), true);
-        return 1;
-    }
-
-    private static int setIncome(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        String name = StringArgumentType.getString(context, "point");
-        ItemStack item = ItemArgument.getItem(context, "item").createItemStack(1, false);
-        int amount = IntegerArgumentType.getInteger(context, "amount");
-
-        CapturePoint point = CapturePointManager.getCapturePoint(name);
-        if (point == null) {
-            context.getSource().sendFailure(Component.translatable("capturepoints.error.point_not_found").withStyle(ChatFormatting.RED));
-            return 0;
-        }
-
-        point.setIncomeItem(item);
-        point.setPassiveIncomeAmount(amount);
-        CapturePointManager.persist();
-
-        String itemName = item.getHoverName().getString();
-        context.getSource().sendSuccess(() ->
-                Component.translatable("capturepoints.success.income_set",
-                        Component.literal(name).withStyle(ChatFormatting.YELLOW),
-                        Component.literal(amount + "x " + itemName).withStyle(ChatFormatting.GOLD)
-                ).withStyle(ChatFormatting.GREEN), true);
-        return 1;
-    }
-
-    private static int setIncomeInterval(CommandContext<CommandSourceStack> context) {
-        String name = StringArgumentType.getString(context, "point");
-        int seconds = IntegerArgumentType.getInteger(context, "seconds");
-        CapturePoint point = CapturePointManager.getCapturePoint(name);
-
-        if (point == null) {
-            context.getSource().sendFailure(Component.translatable("capturepoints.error.point_not_found").withStyle(ChatFormatting.RED));
-            return 0;
-        }
-
-        point.setIncomeIntervalSeconds(seconds);
-        CapturePointManager.persist();
-        context.getSource().sendSuccess(() ->
-                Component.translatable("capturepoints.success.income_interval_set",
-                        Component.literal(name).withStyle(ChatFormatting.YELLOW),
-                        Component.literal(seconds + " sec.").withStyle(ChatFormatting.GOLD)
-                ).withStyle(ChatFormatting.GREEN), true);
-        return 1;
-    }
     private static int setHeight(CommandContext<CommandSourceStack> context) {
         String name = StringArgumentType.getString(context, "name");
         int up = IntegerArgumentType.getInteger(context, "up");

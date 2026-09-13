@@ -1,6 +1,7 @@
 package com.persiki84.zones.client.menu;
 
 import com.persiki84.shared.client.menu.ActionRow;
+import com.persiki84.shared.client.menu.FieldRow;
 import com.persiki84.shared.client.menu.GlidingRow;
 import com.persiki84.shared.client.menu.ManagerScreen;
 import com.persiki84.shared.client.menu.MenuCommands;
@@ -38,6 +39,8 @@ public class ShopAdminScreen extends ManagerScreen {
     private static final int MAX_RESTOCK = 604800;
     private static final int RESTOCK_STEP = 30;
     private static final int DEFAULT_PRICE = 100;
+    private static final int MAX_ITEM_ID = 128;
+    private static final int MAX_COUNT = 64;
     private static final int CREATE_ROWS = 3 + MenuField.ROW_EQUIVALENT * 2;
     private static final int NOTE_ROWS = 3 + MenuField.ROW_EQUIVALENT;
     private static final Pattern ID_PATTERN = Pattern.compile("[a-z0-9_.-]+");
@@ -50,6 +53,8 @@ public class ShopAdminScreen extends ManagerScreen {
     private int newParent;
     private String sectionId;
     private int newPrice = DEFAULT_PRICE;
+    private int newCount = 1;
+    private FieldRow itemIdRow;
     private int pickedGun;
     private int pickedNote;
     private String noteEntryId;
@@ -646,6 +651,7 @@ public class ShopAdminScreen extends ManagerScreen {
         rows.add(picker.icon(target::icon));
         rows.add(shiftRow("zones.shopadmin.layout.up", target, " up"));
         rows.add(shiftRow("zones.shopadmin.layout.down", target, " down"));
+        if (target.moveCommand() != null) rows.add(hostRow(target));
         if (target.entryId() != null) rows.add(homeRow(section, target.entryId()));
         rows.add(dropRow(target));
         return rows;
@@ -666,6 +672,38 @@ public class ShopAdminScreen extends ManagerScreen {
             layoutTarget = 0;
             rebuild();
         }).alerting();
+    }
+
+    // WHY: раздел выбирается у товара и у отдела: меню подставляло целью переноса текущий раздел,
+    // WHY: и увезти товар или отдел к соседям было нечем
+    private AbstractWidget hostRow(LayoutTarget target) {
+        List<ShopSection> sections = ClientShopData.sections();
+        List<Component> labels = new ArrayList<>();
+        for (ShopSection candidate : sections) {
+            labels.add(Component.literal(candidate.title()));
+        }
+
+        PickRow row = new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.shopadmin.layout.host"), labels,
+                () -> hostIndex(sections), picked -> relocate(target, sections.get(picked).id()));
+        row.hint("zones.shopadmin.layout.host" + HINT_SUFFIX);
+        row.active = sections.size() > 1;
+        return row;
+    }
+
+    private int hostIndex(List<ShopSection> sections) {
+        for (int index = 0; index < sections.size(); index++) {
+            if (sections.get(index).id().equals(sectionId)) return index;
+        }
+        return 0;
+    }
+
+    private void relocate(LayoutTarget target, String targetId) {
+        if (targetId.equals(sectionId)) return;
+
+        send(target.moveCommand() + " " + targetId);
+        layoutTarget = 0;
+        rebuild();
     }
 
     // WHY: отдел выбирается у самого товара: положить предмет в отдел командой можно было только
@@ -703,20 +741,21 @@ public class ShopAdminScreen extends ManagerScreen {
         String id = section.id();
         List<LayoutTarget> targets = new ArrayList<>();
         targets.add(new LayoutTarget(Component.translatable("zones.shopadmin.access.section", section.title()),
-                "section order " + id, "section remove " + id, "zones.shopadmin.remove_section",
+                "section order " + id, null, "section remove " + id, "zones.shopadmin.remove_section",
                 true, null, () -> ItemStack.EMPTY));
 
         for (String childId : section.childIds()) {
             targets.add(new LayoutTarget(Component.translatable("zones.shopadmin.access.subsection",
                     section.child(childId).title()), "subsection order " + id + " " + childId,
+                    "subsection move " + id + " " + childId,
                     "subsection remove " + id + " " + childId, "zones.shopadmin.remove_subsection",
                     false, null, () -> ItemStack.EMPTY));
         }
         for (ShopEntry entry : entries()) {
             String entryId = entry.id();
             targets.add(new LayoutTarget(entry.stack().getHoverName(), "item order " + id + " " + entryId,
-                    "item remove " + id + " " + entryId, "zones.shopadmin.remove_item", false, entryId,
-                    entry::stack));
+                    "item move " + id + " " + entryId, "item remove " + id + " " + entryId,
+                    "zones.shopadmin.remove_item", false, entryId, entry::stack));
         }
         return targets;
     }
@@ -729,8 +768,9 @@ public class ShopAdminScreen extends ManagerScreen {
         return labels;
     }
 
-    private record LayoutTarget(Component label, String orderCommand, String removeCommand, String removeLabel,
-                                boolean whole, String entryId, Supplier<ItemStack> iconSource) {
+    private record LayoutTarget(Component label, String orderCommand, String moveCommand, String removeCommand,
+                                String removeLabel, boolean whole, String entryId,
+                                Supplier<ItemStack> iconSource) {
         private ItemStack icon() {
             return iconSource.get();
         }
@@ -749,8 +789,8 @@ public class ShopAdminScreen extends ManagerScreen {
         rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("zones.shopadmin.add_hand"),
                 () -> Component.translatable("zones.shopadmin.action.add"),
-                () -> send("item hand " + sectionId + " " + newPrice
-                        + (newParent == 0 ? "" : " " + children.get(newParent - 1)))));
+                () -> send("item hand " + sectionId + " " + newPrice + childSuffix(children))));
+        addByIdRows(rows, children);
         rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("zones.shopadmin.remove_section"),
                 () -> Component.translatable("zones.shopadmin.action.delete"), () -> {
@@ -759,6 +799,48 @@ public class ShopAdminScreen extends ManagerScreen {
             rebuild();
         }).alerting());
         return rows;
+    }
+
+    private void addByIdRows(List<AbstractWidget> rows, List<String> children) {
+        rows.add(itemIdRow());
+        rows.add(new NumberRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.shopadmin.add_count"), () -> newCount,
+                value -> newCount = value, 1, MAX_COUNT, 1));
+        rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.shopadmin.add_id"),
+                () -> Component.translatable("zones.shopadmin.action.add"),
+                () -> addById(children)));
+    }
+
+    // WHY: строка поля переживает пересборку: новая на каждый кадр стирала бы набранный
+    // WHY: идентификатор и уводила бы курсор из поля на первой же смене состояния меню
+    private FieldRow itemIdRow() {
+        if (itemIdRow == null) {
+            itemIdRow = new FieldRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                    Component.translatable("zones.shopadmin.item_id"),
+                    Component.translatable("zones.shopadmin.item_id.example"),
+                    "", MAX_ITEM_ID, value -> { });
+            itemIdRow.hint("zones.shopadmin.item_id" + HINT_SUFFIX);
+        }
+        itemIdRow.setX(rowsLeft());
+        itemIdRow.setWidth(rowsWidth());
+        return itemIdRow;
+    }
+
+    // WHY: идентификатор уходит в кавычках: двоеточие в minecraft:stone Brigadier не читает
+    // WHY: как часть слова и обрывает разбор команды на нём
+    private void addById(List<String> children) {
+        String item = itemIdRow().value().trim();
+        if (item.isEmpty()) {
+            MenuFeedback.show(Component.translatable("zones.shopadmin.error.no_item_id"), true);
+            return;
+        }
+        send("item id " + sectionId + " \"" + item + "\" " + newCount + " " + newPrice
+                + childSuffix(children));
+    }
+
+    private String childSuffix(List<String> children) {
+        return newParent == 0 ? "" : " " + children.get(newParent - 1);
     }
 
     private AbstractWidget parentRow(ShopSection section, List<String> children) {

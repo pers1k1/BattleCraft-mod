@@ -14,12 +14,15 @@ import com.persiki84.zones.Zone;
 import com.persiki84.zones.ZoneRule;
 import com.persiki84.zones.ZoneType;
 import com.persiki84.zones.client.ClientZoneData;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.ToIntFunction;
 import java.util.regex.Pattern;
 
@@ -33,6 +36,11 @@ public class ZoneManagerScreen extends ManagerScreen {
     private static final int MAX_HEIGHT = 256;
     private static final int DEFAULT_SIZE = 24;
     private static final Pattern ID_PATTERN = Pattern.compile("[A-Za-z0-9_.+-]+");
+
+    private static final int[] COLORS = {
+            0xE7E9F4, 0xCE2A22, 0x3F7BD8, 0x3FA75A,
+            0xE0B33C, 0xD9772E, 0x9B59B6, 0x34C6C6
+    };
 
     private int tab;
     private String zoneId;
@@ -137,6 +145,7 @@ public class ZoneManagerScreen extends ManagerScreen {
         rows.add(heightRow(id, true));
         rows.add(heightRow(id, false));
         rows.add(ownerRow(id));
+        rows.add(colorRow(id));
         rows.add(spawnRow(id));
         rows.add(actionRow("zones.menu.teleport", "zones.menu.action.go", () -> send("tp " + id)));
         rows.add(actionRow("zones.menu.move", "zones.menu.action.here", () -> edit(id, "here")));
@@ -231,13 +240,82 @@ public class ZoneManagerScreen extends ManagerScreen {
         edit(id, "clearowner");
     }
 
+    private PickRow colorRow(String id) {
+        int shown = read(id, Zone::color);
+        boolean own = shown != Zone.TEAM_COLOR && presetIndex(shown) < 0;
+        return new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.menu.color"), colorOptions(own, shown),
+                () -> colorChoice(read(id, Zone::color), own),
+                picked -> applyColor(id, picked, shown));
+    }
+
+    private static List<Component> colorOptions(boolean own, int shown) {
+        List<Component> options = new ArrayList<>();
+        options.add(Component.translatable("zones.menu.color.team"));
+        for (int index = 0; index < COLORS.length; index++) {
+            options.add(Component.translatable("zones.menu.color." + index));
+        }
+        if (own) options.add(Component.translatable("zones.menu.color.own", hex(shown)));
+        return options;
+    }
+
+    private static String hex(int color) {
+        return String.format(Locale.ROOT, "#%06X", color & 0xFFFFFF);
+    }
+
+    // WHY: свой цвет зоны отличается от первого пресета: без отдельного пункта строка показывала бы
+    // WHY: белый на любом заданном командой цвете и стирала бы его первым же щелчком
+    private static int colorChoice(int color, boolean own) {
+        if (color == Zone.TEAM_COLOR) return 0;
+
+        int preset = presetIndex(color);
+        if (preset >= 0) return preset + 1;
+        return own ? COLORS.length + 1 : 0;
+    }
+
+    private static int presetIndex(int color) {
+        for (int index = 0; index < COLORS.length; index++) {
+            if (COLORS[index] == color) return index;
+        }
+        return -1;
+    }
+
+    private void applyColor(String id, int picked, int shown) {
+        if (picked == 0) {
+            edit(id, "clearcolor");
+            return;
+        }
+        edit(id, "color " + (picked <= COLORS.length ? COLORS[picked - 1] : shown));
+    }
+
     private PickRow spawnRow(String id) {
         List<Component> options = List.of(Component.translatable("zones.menu.spawn.random"),
                 Component.translatable("zones.menu.spawn.anchor"));
         return new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("zones.menu.spawn"), options,
                 () -> read(id, zone -> zone.spawnsAtAnchor() ? 1 : 0),
-                picked -> edit(id, picked == 1 ? "spawn here" : "spawn random"));
+                picked -> applySpawn(id, picked));
+    }
+
+    // WHY: якорь встаёт туда, где стоит игрок, и снаружи зоны сервер откажет: без проверки строка
+    // WHY: молча возвращалась бы в прежний режим, не сказав почему
+    private void applySpawn(String id, int picked) {
+        if (picked == 0) {
+            edit(id, "spawn random");
+            return;
+        }
+        if (!standingInside(id)) {
+            MenuFeedback.show(Component.translatable("zones.error.anchor_outside", id), true);
+            return;
+        }
+        edit(id, "spawn here");
+    }
+
+    private static boolean standingInside(String id) {
+        Zone zone = ClientZoneData.byId(id);
+        LocalPlayer player = Minecraft.getInstance().player;
+        return zone != null && player != null
+                && zone.area().contains(player.getX(), player.getY(), player.getZ());
     }
 
     private ActionRow actionRow(String label, String value, Runnable action) {
@@ -381,7 +459,15 @@ public class ZoneManagerScreen extends ManagerScreen {
 
     @Override
     public void tick() {
-        if (ClientZoneData.all().size() != shownZones) rebuild();
+        if (stale(signature()) || ClientZoneData.all().size() != shownZones) rebuild();
+    }
+
+    private static String signature() {
+        StringBuilder mark = new StringBuilder();
+        for (Zone zone : ClientZoneData.all()) {
+            mark.append(zone.id()).append(zone.type().id()).append(zone.color()).append('\n');
+        }
+        return mark.toString();
     }
 
 }

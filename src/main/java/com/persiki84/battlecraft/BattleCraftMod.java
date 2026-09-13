@@ -28,6 +28,7 @@ import com.persiki84.battlecraft.client.menu.BattleCraftMenuScreen;
 import com.persiki84.battlecraft.client.menu.panel.PanelScreens;
 import com.persiki84.battlecraft.menu.BattleCraftMenuState;
 import com.persiki84.battlecraft.menu.AnnounceMenuState;
+import com.persiki84.battlecraft.menu.ConfigMenuState;
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.battlecraft.network.PacketHandler;
 import com.persiki84.battlecraft.projectile.ProjectileChunkLoader;
@@ -87,6 +88,7 @@ public class BattleCraftMod {
         BattleCraftMenuState.register();
         ModuleMenuStates.register();
         AnnounceMenuState.register();
+        ConfigMenuState.register();
         LOGGER.info("BattleCraft Core Mod initialized!");
     }
 

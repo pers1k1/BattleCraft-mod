@@ -50,5 +50,12 @@
   "quarrymod.menu.remove": "Remove block",
   "quarrymod.menu.info": "Block info",
   "quarrymod.menu.block_cooldown_reset": "Reset block cooldown",
+  "quarrymod.menu.block_cooldown": "Block cooldown, s",
+  "quarrymod.menu.block_cooldown_set": "Set block cooldown",
+  "quarrymod.menu.block_cooldown.hint": "The value goes to the block you are looking at and overrides the global cooldown",
+  "quarrymod.menu.tab.list": "List",
+  "quarrymod.menu.list.empty": "No quarry blocks",
+  "quarrymod.menu.list.more": "More blocks, not shown",
+  "quarrymod.menu.list.custom": "%s · cooldown %s s",
   "quarrymod.menu.action.aimed": "Aimed at"
 }

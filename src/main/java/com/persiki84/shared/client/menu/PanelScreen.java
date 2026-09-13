@@ -11,11 +11,6 @@ import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.registries.ForgeRegistries;
 
 public abstract class PanelScreen extends ManagerScreen {
     protected static final int ROW_MARGIN = 24;
@@ -106,17 +101,6 @@ public abstract class PanelScreen extends ManagerScreen {
 
     protected ActionRow action(Component label, Component value, Runnable run) {
         return new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, label, () -> value, run);
-    }
-
-    protected static String heldItem() {
-        LocalPlayer player = Minecraft.getInstance().player;
-        if (player == null) return "";
-
-        ItemStack stack = player.getMainHandItem();
-        if (stack.isEmpty()) return "";
-
-        ResourceLocation id = ForgeRegistries.ITEMS.getKey(stack.getItem());
-        return id == null ? "" : id.toString();
     }
 
     protected void send(String command) {

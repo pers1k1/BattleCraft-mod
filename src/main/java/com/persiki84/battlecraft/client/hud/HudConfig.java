@@ -15,6 +15,7 @@ public final class HudConfig {
     private static ForgeConfigSpec.DoubleValue SOUND_VOLUME;
     private static ForgeConfigSpec.BooleanValue HOVER_SOUND;
     private static ForgeConfigSpec.BooleanValue HUD_ACCENT_TEXT;
+    private static ForgeConfigSpec.DoubleValue MARKER_SCALE;
     private static ForgeConfigSpec.BooleanValue STATUS_BARS;
     private static ForgeConfigSpec.BooleanValue EFFECT_CHIPS;
     private static ForgeConfigSpec.BooleanValue BOSS_BARS;
@@ -80,6 +81,12 @@ public final class HudConfig {
         SOUND_VOLUME = defineSoundVolume();
         HOVER_SOUND = defineHoverSound();
         HUD_ACCENT_TEXT = defineHudAccentText();
+        MARKER_SCALE = defineMarkerScale();
+    }
+
+    private static ForgeConfigSpec.DoubleValue defineMarkerScale() {
+        return BUILDER.comment("Размер меток в мире: базы, магазины, точки захвата и админские метки")
+                .defineInRange("markerScale", 1.0, 0.5, 1.5);
     }
 
     private static void defineVanillaReplacements() {
@@ -313,6 +320,14 @@ public final class HudConfig {
 
     public static void discordRpc(boolean value) {
         if (SPEC.isLoaded()) DISCORD_RPC.set(value);
+    }
+
+    public static float markerScale() {
+        return SPEC.isLoaded() ? MARKER_SCALE.get().floatValue() : 1.0f;
+    }
+
+    public static void markerScale(float value) {
+        if (SPEC.isLoaded()) MARKER_SCALE.set((double) Math.max(0.5f, Math.min(1.5f, value)));
     }
 
     public static float soundVolume() {

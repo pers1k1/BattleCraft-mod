@@ -12,9 +12,4 @@ public final class UiHud {
         Minecraft minecraft = Minecraft.getInstance();
         return minecraft.options != null && minecraft.options.keyPlayerList.isDown();
     }
-
-    public static boolean hidden() {
-        Minecraft minecraft = Minecraft.getInstance();
-        return minecraft.options == null || minecraft.options.hideGui || rosterOpen();
-    }
 }

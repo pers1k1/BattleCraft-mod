@@ -55,6 +55,8 @@ public final class CustomizeScreen extends ManagerScreen {
     private static final float DIAL_LEAST = 0.25f;
     private static final float DIAL_MOST = 2.0f;
     private static final float DIAL_STEP = 0.05f;
+    private static final float MARKER_LEAST = 0.5f;
+    private static final float MARKER_MOST = 1.5f;
     private static final int TAB_PRESETS = 3;
     private static final int TAB_MINE = 4;
 
@@ -330,6 +332,7 @@ public final class CustomizeScreen extends ManagerScreen {
             Customization.heartbeat(value);
             Customization.save();
         }));
+        built.add(markerRow());
         addIslandRows(built);
         addVoiceRows(built);
         built.add(heading("battlecraft.custom.group.elements"));
@@ -384,6 +387,14 @@ public final class CustomizeScreen extends ManagerScreen {
         built.add(dial("battlecraft.custom.visualizer_color", HudConfig::visualizerColor, HudConfig::visualizerColor));
         built.add(dial("battlecraft.custom.visualizer_attack", HudConfig::visualizerAttack, HudConfig::visualizerAttack));
         built.add(dial("battlecraft.custom.island_flip", HudConfig::islandFlipSpeed, HudConfig::islandFlipSpeed));
+    }
+
+    private SliderRow markerRow() {
+        SliderRow row = new SliderRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("battlecraft.custom.marker_scale"),
+                HudConfig::markerScale, HudConfig::markerScale, MARKER_LEAST, MARKER_MOST, DIAL_STEP);
+        row.hint("battlecraft.custom.marker_scale" + HINT_SUFFIX);
+        return row.readout(0, 100.0f, "%");
     }
 
     private PickRow fontRow() {

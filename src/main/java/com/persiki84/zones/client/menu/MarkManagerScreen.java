@@ -1,6 +1,7 @@
 package com.persiki84.zones.client.menu;
 
 import com.persiki84.shared.client.menu.ActionRow;
+import com.persiki84.shared.client.menu.FieldRow;
 import com.persiki84.shared.client.menu.GlidingRow;
 import com.persiki84.shared.client.menu.ManagerScreen;
 import com.persiki84.shared.client.menu.MenuCommands;
@@ -32,6 +33,7 @@ public class MarkManagerScreen extends ManagerScreen {
     private static final int MIN_HEIGHT = -64;
     private static final int MAX_HEIGHT = 320;
     private static final int CREATE_ROWS = 4 + MenuField.ROW_EQUIVALENT * 2;
+    private static final int LABEL_LIMIT = 48;
     private static final Pattern ID_PATTERN = Pattern.compile("[A-Za-z0-9_.+-]+");
 
     private static final int[] COLORS = {
@@ -41,6 +43,8 @@ public class MarkManagerScreen extends ManagerScreen {
 
     private int tab;
     private String markId;
+    private FieldRow labelRow;
+    private String labelShownFor;
     private int shownMarks = -1;
     private MenuField idField;
     private MenuField labelField;
@@ -147,16 +151,59 @@ public class MarkManagerScreen extends ManagerScreen {
         if (mark == null) return List.of();
 
         String id = mark.getString("id");
+        followMark(mark);
         List<AbstractWidget> rows = new ArrayList<>();
         rows.add(reading("zones.mark.menu.position", () -> position(id)));
+        rows.add(labelRow());
+        rows.add(action("zones.mark.menu.rename", "zones.mark.menu.action.apply", () -> applyLabel(id)));
         rows.add(colorRow(id));
         rows.add(new ToggleRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("zones.mark.menu.everyone"),
                 () -> live(id).getBoolean("everyone"), value -> showEveryone(id, value)));
+        rows.add(worldRow(id));
         rows.add(action("zones.mark.menu.teleport", "zones.mark.menu.action.go", () -> send("tp " + id)));
         rows.add(action("zones.mark.menu.move", "zones.mark.menu.action.here", () -> send("edit " + id + " here")));
         rows.add(deleteRow(id));
         return rows;
+    }
+
+    // WHY: метка, снятая с мира, остаётся на миникарте и полной карте: это ориентир для карты,
+    // WHY: а не табличка над местностью
+    private ToggleRow worldRow(String id) {
+        ToggleRow row = new ToggleRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.mark.menu.in_world"),
+                () -> live(id).getBoolean("inWorld"),
+                value -> send("edit " + id + " world " + value));
+        row.hint("zones.mark.menu.in_world" + HINT_SUFFIX);
+        return row;
+    }
+
+    private FieldRow labelRow() {
+        if (labelRow == null) {
+            labelRow = new FieldRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                    Component.translatable("zones.mark.menu.label"),
+                    Component.translatable("zones.mark.menu.new.label"), "", LABEL_LIMIT, value -> { });
+        }
+        labelRow.setX(rowsLeft());
+        labelRow.setWidth(rowsWidth());
+        return labelRow;
+    }
+
+    private void followMark(CompoundTag mark) {
+        String id = mark.getString("id") + '\n' + mark.getString("label");
+        if (id.equals(labelShownFor)) return;
+
+        labelShownFor = id;
+        labelRow().box().setValue(mark.getString("label"));
+    }
+
+    private void applyLabel(String id) {
+        String label = labelRow().value().trim();
+        if (label.isEmpty()) {
+            MenuFeedback.show(Component.translatable("zones.mark.menu.error.no_label"), true);
+            return;
+        }
+        send("edit " + id + " label " + label);
     }
 
     private static CompoundTag live(String id) {
@@ -351,7 +398,17 @@ public class MarkManagerScreen extends ManagerScreen {
     @Override
     public void tick() {
         MenuData.request(MarkMenuState.MENU_ID);
-        if (marks().size() != shownMarks) rebuild();
+        if (stale(signature()) || marks().size() != shownMarks) rebuild();
+    }
+
+    private static String signature() {
+        StringBuilder mark = new StringBuilder();
+        for (CompoundTag entry : marks()) {
+            mark.append(entry.getString("id")).append(entry.getString("label")).append(entry.getInt("color"))
+                    .append(entry.getBoolean("everyone")).append(entry.getBoolean("inWorld"))
+                    .append(entry.getList("teams", Tag.TAG_STRING)).append('\n');
+        }
+        return mark.toString();
     }
 
 }

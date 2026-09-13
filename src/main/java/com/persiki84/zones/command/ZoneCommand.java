@@ -105,6 +105,7 @@ public final class ZoneCommand {
                         .then(ownerEdits())
                         .then(clearOwnerEdit())
                         .then(colorEdits())
+                        .then(clearColorEdit())
                         .then(placementEdits())
                         .then(spawnEdits())
                         .then(ruleEdits()));
@@ -145,6 +146,10 @@ public final class ZoneCommand {
         return Commands.literal("color")
                 .then(Commands.argument("value", IntegerArgumentType.integer())
                         .executes(ZoneCommand::editColor));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> clearColorEdit() {
+        return Commands.literal("clearcolor").executes(ZoneCommand::clearColor);
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> heightEdits() {
@@ -307,6 +312,14 @@ public final class ZoneCommand {
         if (zone == null) return 0;
 
         zone.setColor(IntegerArgumentType.getInteger(context, "value"));
+        return applyEdit(context, zone);
+    }
+
+    private static int clearColor(CommandContext<CommandSourceStack> context) {
+        Zone zone = requireZone(context);
+        if (zone == null) return 0;
+
+        zone.setColor(Zone.TEAM_COLOR);
         return applyEdit(context, zone);
     }
 

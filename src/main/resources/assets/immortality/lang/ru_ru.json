@@ -28,5 +28,9 @@
   "immortality.menu.enabled": "Включено",
   "immortality.menu.duration": "Длительность, с",
   "immortality.menu.clear_all": "Снять со всех",
-  "immortality.menu.action.clear": "Снять"
+  "immortality.menu.action.clear": "Снять",
+  "immortality.menu.tab.players": "Игроки",
+  "immortality.menu.disabled": "Модуль выключен, выдача недоступна",
+  "immortality.menu.no_players": "На сервере никого нет",
+  "immortality.menu.remaining": "осталось %s с"
 }

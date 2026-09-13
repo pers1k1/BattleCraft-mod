@@ -8,6 +8,7 @@ import com.persiki84.itemmodifiers.ModifierConfig;
 import com.persiki84.killreward.KillRewardMod;
 import com.persiki84.knockdown.config.KnockdownConfig;
 import com.persiki84.quarrymod.QuarryMod;
+import com.persiki84.quarrymod.data.QuarryBlock;
 import com.persiki84.quarrymod.data.QuarryBlockManager;
 import com.persiki84.quarrymod.data.QuarryBlockRule;
 import com.persiki84.sellmod.SellManager;
@@ -15,6 +16,8 @@ import com.persiki84.battlecraft.rules.GameRule;
 import com.persiki84.battlecraft.rules.GameRules;
 import com.persiki84.shared.gunsmith.GunSmith;
 import com.persiki84.shared.menu.MenuStates;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.server.MinecraftServer;
@@ -43,9 +46,12 @@ public final class ModuleMenuStates {
     private static final ResourceLocation GLOBAL_TABLE = new ResourceLocation("airdrop", "global");
     public static final String TRACKED_ITEMS = "trackedItems";
     public static final String QUARRY_RULES = "quarryRules";
+    public static final String QUARRY_BLOCKS = "quarryBlocks";
+    public static final String IMMORTAL_PLAYERS = "immortalPlayers";
 
     private static final int PERCENT = 100;
     private static final int TICKS_PER_SECOND = 20;
+    private static final int LISTED_BLOCKS = 200;
 
     private ModuleMenuStates() {}
 
@@ -53,7 +59,7 @@ public final class ModuleMenuStates {
         MenuStates.register(AIRDROP, 2, player -> airdrop());
         MenuStates.register(QUARRY, 2, player -> quarry());
         MenuStates.register(KILL_REWARD, 2, player -> killReward());
-        MenuStates.register(IMMORTALITY, 2, player -> immortality());
+        MenuStates.register(IMMORTALITY, 2, ModuleMenuStates::immortality);
         MenuStates.register(KNOCKDOWN, 2, player -> knockdown());
         MenuStates.register(COMBAT, 2, player -> combat());
         MenuStates.register(SELL, 2, ModuleMenuStates::sell);
@@ -148,7 +154,31 @@ public final class ModuleMenuStates {
         tag.putInt("globalCooldown", (int) manager.getGlobalCooldown());
         tag.putInt("blocks", manager.getAllQuarryBlocks().size());
         tag.put(QUARRY_RULES, quarryRules(manager));
+        tag.put(QUARRY_BLOCKS, quarryBlocks(manager));
         return tag;
+    }
+
+    // WHY: карьерных блоков бывают тысячи, а снимок уходит по сети целиком на каждый запрос меню,
+    // WHY: поэтому список обрезан, а полное число лежит отдельным полем
+    private static ListTag quarryBlocks(QuarryBlockManager manager) {
+        ListTag list = new ListTag();
+        for (QuarryBlock block : manager.getAllQuarryBlocks().values()) {
+            if (list.size() >= LISTED_BLOCKS) break;
+            list.add(quarryBlock(manager, block));
+        }
+        return list;
+    }
+
+    private static CompoundTag quarryBlock(QuarryBlockManager manager, QuarryBlock block) {
+        CompoundTag entry = new CompoundTag();
+        BlockPos pos = block.getPos();
+        entry.putString("block", BuiltInRegistries.BLOCK.getKey(block.getOriginalState().getBlock()).toString());
+        entry.putString("dimension", block.getDimension());
+        entry.putInt("x", pos.getX());
+        entry.putInt("y", pos.getY());
+        entry.putInt("z", pos.getZ());
+        entry.putInt("cooldown", (int) manager.getCustomCooldown(pos, block.getDimension()));
+        return entry;
     }
 
     private static ListTag quarryRules(QuarryBlockManager manager) {
@@ -172,11 +202,27 @@ public final class ModuleMenuStates {
         return tag;
     }
 
-    private static CompoundTag immortality() {
+    private static CompoundTag immortality(ServerPlayer viewer) {
         CompoundTag tag = new CompoundTag();
         tag.putBoolean("enabled", ImmortalityHandler.isEnabled());
         tag.putInt("duration", ImmortalityHandler.getDuration());
+        tag.put(IMMORTAL_PLAYERS, immortalPlayers(viewer));
         return tag;
+    }
+
+    private static ListTag immortalPlayers(ServerPlayer viewer) {
+        ListTag list = new ListTag();
+        MinecraftServer server = viewer.getServer();
+        if (server == null) return list;
+
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            CompoundTag entry = new CompoundTag();
+            entry.putString("name", player.getName().getString());
+            entry.putBoolean("immortal", ImmortalityHandler.isImmortal(player));
+            entry.putInt("remaining", ImmortalityHandler.getRemainingTime(player));
+            list.add(entry);
+        }
+        return list;
     }
 
     private static CompoundTag knockdown() {

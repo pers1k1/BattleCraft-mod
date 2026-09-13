@@ -22,12 +22,9 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
-import net.minecraft.commands.arguments.item.ItemArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 import java.util.List;
 
@@ -47,8 +44,8 @@ public class FinalPointCommand {
         addGeometryBranches(root);
         addTimingBranches(root);
         addCommandBlockBranches(root);
-        addRewardBranches(root, context);
         addToggleBranches(root);
+        PointBonusCommands.addBranches(root, FINAL_POINT_SUGGESTIONS, CapturePointManager::getFinalPoint, context);
         CaptureTuningCommands.addBranches(root, FINAL_POINT_SUGGESTIONS, CapturePointManager::getFinalPoint);
 
         dispatcher.register(root);
@@ -69,7 +66,11 @@ public class FinalPointCommand {
                                 .suggests(FINAL_POINT_SUGGESTIONS)
                                 .then(Commands.argument("teamName", StringArgumentType.string())
                                         .suggests(SCOREBOARD_TEAM_SUGGESTIONS)
-                                        .executes(FinalPointCommand::setOwner))));
+                                        .executes(FinalPointCommand::setOwner))))
+                .then(Commands.literal("clearowner")
+                        .then(Commands.argument("pointName", StringArgumentType.string())
+                                .suggests(FINAL_POINT_SUGGESTIONS)
+                                .executes(FinalPointCommand::clearOwner)));
     }
 
     private static void addGeometryBranches(LiteralArgumentBuilder<CommandSourceStack> root) {
@@ -111,19 +112,6 @@ public class FinalPointCommand {
                         .then(Commands.argument("name", StringArgumentType.string())
                                 .suggests(FINAL_POINT_SUGGESTIONS)
                                 .executes(FinalPointCommand::clearCommandBlocks)));
-    }
-
-    private static void addRewardBranches(LiteralArgumentBuilder<CommandSourceStack> root, CommandBuildContext context) {
-        root.then(Commands.literal("setreward")
-                        .then(Commands.argument("name", StringArgumentType.string())
-                                .suggests(FINAL_POINT_SUGGESTIONS)
-                                .then(Commands.argument("item", ItemArgument.item(context))
-                                        .then(Commands.argument("amount", IntegerArgumentType.integer(1, 64))
-                                                .executes(FinalPointCommand::setReward)))))
-                .then(Commands.literal("removereward")
-                        .then(Commands.argument("name", StringArgumentType.string())
-                                .suggests(FINAL_POINT_SUGGESTIONS)
-                                .executes(FinalPointCommand::removeReward)));
     }
 
     private static void addToggleBranches(LiteralArgumentBuilder<CommandSourceStack> root) {
@@ -273,6 +261,27 @@ public class FinalPointCommand {
         return 1;
     }
 
+    private static int clearOwner(CommandContext<CommandSourceStack> context) {
+        String pointName = StringArgumentType.getString(context, "pointName");
+        FinalCapturePoint point = CapturePointManager.getFinalPoint(pointName);
+
+        if (point == null) {
+            context.getSource().sendFailure(
+                    Component.translatable("capturepoints.error.final_point_not_found", pointName).withStyle(ChatFormatting.RED));
+            return 0;
+        }
+
+        point.clearOwner();
+        CapturePointManager.cancelCaptureForPoint(pointName);
+        CapturePointManager.persist();
+        CapturePointManager.syncFinalPoints();
+        context.getSource().sendSuccess(() ->
+                Component.translatable("capturepoints.success.owner_cleared",
+                        Component.literal(pointName).withStyle(ChatFormatting.YELLOW))
+                        .withStyle(ChatFormatting.GREEN), true);
+        return 1;
+    }
+
     private static int setOwner(CommandContext<CommandSourceStack> context) {
         String pointName = StringArgumentType.getString(context, "pointName");
         String teamName = StringArgumentType.getString(context, "teamName");
@@ -419,48 +428,7 @@ public class FinalPointCommand {
         return 1;
     }
 
-    private static int setReward(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        String name = StringArgumentType.getString(context, "name");
-        ItemStack item = ItemArgument.getItem(context, "item").createItemStack(1, false);
-        int amount = IntegerArgumentType.getInteger(context, "amount");
 
-        FinalCapturePoint point = CapturePointManager.getFinalPoint(name);
-        if (point == null) {
-            context.getSource().sendFailure(Component.translatable("capturepoints.error.final_point_not_found_short").withStyle(ChatFormatting.RED));
-            return 0;
-        }
-
-        point.setReward(item);
-        point.setRewardAmount(amount);
-        CapturePointManager.persist();
-
-        String itemName = item.getHoverName().getString();
-        context.getSource().sendSuccess(() ->
-                Component.translatable("capturepoints.success.final_reward_set",
-                        amount, itemName
-                ).withStyle(ChatFormatting.GREEN), true);
-        return 1;
-    }
-
-    private static int removeReward(CommandContext<CommandSourceStack> context) {
-        String name = StringArgumentType.getString(context, "name");
-
-        FinalCapturePoint point = CapturePointManager.getFinalPoint(name);
-        if (point == null) {
-            context.getSource().sendFailure(Component.translatable("capturepoints.error.final_point_not_found_short").withStyle(ChatFormatting.RED));
-            return 0;
-        }
-
-        point.setReward(new ItemStack(Items.AIR));
-        point.setRewardAmount(0);
-        CapturePointManager.persist();
-
-        context.getSource().sendSuccess(() ->
-                Component.translatable("capturepoints.success.final_reward_removed",
-                        Component.literal(name).withStyle(ChatFormatting.YELLOW)
-                ).withStyle(ChatFormatting.GREEN), true);
-        return 1;
-    }
 
     private static int setRadius(CommandContext<CommandSourceStack> context) {
         String name = StringArgumentType.getString(context, "name");

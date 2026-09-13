@@ -81,6 +81,7 @@ public final class MarkStorage {
         private String dimension;
         private String label;
         private int color;
+        private Boolean inWorld;
         private List<String> teams;
 
         private static StoredMark of(MapMark mark) {
@@ -92,6 +93,7 @@ public final class MarkStorage {
             stored.dimension = mark.dimension().toString();
             stored.label = mark.label();
             stored.color = mark.color();
+            stored.inWorld = mark.inWorld();
             stored.teams = new ArrayList<>(mark.teams());
             return stored;
         }
@@ -104,6 +106,7 @@ public final class MarkStorage {
                     world == null ? new ResourceLocation("minecraft", "overworld") : world,
                     label, color == 0 ? MapMark.DEFAULT_COLOR : color);
 
+            mark.setInWorld(inWorld == null || inWorld);
             if (teams != null) {
                 for (String team : teams) {
                     if (team != null && !team.isEmpty()) mark.allow(team);

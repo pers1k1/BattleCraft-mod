@@ -1,5 +1,6 @@
 package com.persiki84.zones.command;
 
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -93,6 +94,7 @@ public final class MarkCommand {
                         .then(labelEdit())
                         .then(colorEdit())
                         .then(Commands.literal("here").executes(MarkCommand::moveHere))
+                        .then(worldEdit())
                         .then(Commands.literal("everyone").executes(MarkCommand::showEveryone))
                         .then(teamEdit("show", true))
                         .then(teamEdit("hide", false)));
@@ -108,6 +110,12 @@ public final class MarkCommand {
         return Commands.literal("color")
                 .then(Commands.argument("value", IntegerArgumentType.integer())
                         .executes(MarkCommand::editColor));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> worldEdit() {
+        return Commands.literal("world")
+                .then(Commands.argument("shown", BoolArgumentType.bool())
+                        .executes(MarkCommand::editWorld));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> teamEdit(String name, boolean allowed) {
@@ -188,6 +196,14 @@ public final class MarkCommand {
         if (mark == null) return 0;
 
         mark.setColor(IntegerArgumentType.getInteger(context, "value"));
+        return apply(context, mark);
+    }
+
+    private static int editWorld(CommandContext<CommandSourceStack> context) {
+        MapMark mark = require(context);
+        if (mark == null) return 0;
+
+        mark.setInWorld(BoolArgumentType.getBool(context, "shown"));
         return apply(context, mark);
     }
 

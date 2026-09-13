@@ -9,6 +9,7 @@ import com.persiki84.battlecraft.modules.ModuleSwitches;
 import com.persiki84.shared.menu.MenuStates;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -25,6 +26,11 @@ public final class BattleCraftMenuState {
     public static final String RULE_MET = "met";
     public static final String RULE_HAVE = "have";
     public static final String RULE_NEED = "need";
+    public static final String START_COMMANDS = "startCommands";
+    public static final String STOP_COMMANDS = "stopCommands";
+    public static final String SURRENDER_COMMANDS = "surrenderCommands";
+
+    private static final int ADMIN_LEVEL = 2;
 
     private BattleCraftMenuState() {}
 
@@ -40,8 +46,35 @@ public final class BattleCraftMenuState {
         putRules(tag, config);
         putStatus(tag, config, player);
         putModules(tag);
+        putCommands(tag, config, player);
         tag.putBoolean(SOFT_DISABLED, BattleCraftManager.getInstance().isSoftDisabled());
         return tag;
+    }
+
+    // WHY: списки команд уходят только оператору: рядовой игрок читает снимок того же меню,
+    // WHY: а по ним видно, что сервер делает на старте и на сдаче
+    private static void putCommands(CompoundTag tag, BattleCraftConfig config, ServerPlayer player) {
+        if (!player.hasPermissions(ADMIN_LEVEL)) return;
+
+        tag.put(START_COMMANDS, lines(config.startCommands));
+        tag.put(STOP_COMMANDS, lines(config.stopCommands));
+        tag.put(SURRENDER_COMMANDS, lines(config.surrenderCommands));
+    }
+
+    private static ListTag lines(List<String> entries) {
+        ListTag list = new ListTag();
+        for (String entry : entries) {
+            list.add(StringTag.valueOf(entry));
+        }
+        return list;
+    }
+
+    public static List<String> commandsOf(CompoundTag state, String key) {
+        List<String> entries = new ArrayList<>();
+        for (Tag tag : state.getList(key, Tag.TAG_STRING)) {
+            entries.add(tag.getAsString());
+        }
+        return entries;
     }
 
     private static void putStatus(CompoundTag tag, BattleCraftConfig config, ServerPlayer player) {

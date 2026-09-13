@@ -28,5 +28,13 @@
   "sellmod.menu.remove_price": "Убрать из скупки",
   "sellmod.menu.empty_hand": "Рука пуста",
   "sellmod.menu.action.apply": "Применить",
-  "sellmod.menu.action.remove": "Убрать"
+  "sellmod.menu.action.remove": "Убрать",
+  "sellmod.menu.tab.item": "По идентификатору",
+  "sellmod.menu.item_id": "Идентификатор",
+  "sellmod.menu.item_id.hint": "Идентификатор предмета вида minecraft:diamond. Без двоеточия подставится minecraft.",
+  "sellmod.menu.item_id.placeholder": "minecraft:diamond",
+  "sellmod.menu.item_price": "Цена",
+  "sellmod.menu.item_set_price": "Задать цену",
+  "sellmod.menu.item_set_currency": "Сделать валютой",
+  "sellmod.menu.error_item": "Такого предмета нет"
 }

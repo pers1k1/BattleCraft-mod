@@ -1,10 +1,13 @@
 package com.persiki84.capturepoints.client.menu;
 
+import com.persiki84.capturepoints.capture.CaptureCommandRunner;
 import com.persiki84.capturepoints.capture.CaptureMode;
 import com.persiki84.capturepoints.capture.CooldownScope;
 import com.persiki84.capturepoints.capture.RewardSplit;
 import com.persiki84.capturepoints.menu.CapturePointMenuState;
+import com.persiki84.shared.Names;
 import com.persiki84.shared.client.menu.ActionRow;
+import com.persiki84.shared.client.menu.FieldRow;
 import com.persiki84.shared.client.menu.GlidingRow;
 import com.persiki84.shared.client.menu.ManagerScreen;
 import com.persiki84.shared.client.menu.MenuCommands;
@@ -38,12 +41,18 @@ public class CapturePointManagerScreen extends ManagerScreen {
     private static final int MAX_SECONDS = 3600;
     private static final int MAX_AMOUNT = 64;
     private static final int MAX_PERCENT = 2000;
+    private static final int MAX_LEVEL = 6;
+    private static final int EFFECT_LIMIT = 64;
     private static final int DEFAULT_RADIUS = 10;
     private static final int DEFAULT_CAPTURE = 30;
     private static final int DEFAULT_COOLDOWN = 60;
 
     private int tab;
     private String pointName;
+    private FieldRow commandRow;
+    private FieldRow buffRow;
+    private String fieldsFor;
+    private int buffLevel = 1;
     private MenuField nameField;
     private String newName = "";
     private int newRadius = DEFAULT_RADIUS;
@@ -59,6 +68,7 @@ public class CapturePointManagerScreen extends ManagerScreen {
     @Override
     protected List<Component> tabs() {
         return List.of(Component.translatable("capturepoints.menu.tab.points"),
+                Component.translatable("capturepoints.menu.tab.bonus"),
                 Component.translatable("capturepoints.menu.tab.common"),
                 Component.translatable("capturepoints.menu.tab.create"));
     }
@@ -81,8 +91,9 @@ public class CapturePointManagerScreen extends ManagerScreen {
 
         shownPoints = points.size();
         if (tab == 0) addPointRows();
-        if (tab == 1) place(commonRows());
-        if (tab == 2) addCreateRows();
+        if (tab == 1) place(bonusRows());
+        if (tab == 2) place(commonRows());
+        if (tab == 3) addCreateRows();
         addPointList(points);
     }
 
@@ -163,7 +174,6 @@ public class CapturePointManagerScreen extends ManagerScreen {
         rows.add(number("capturepoints.menu.cooldown", point, "cooldown", 0, MAX_SECONDS, 5,
                 value -> send(point, "setcooldown " + quoted(point) + " " + value)));
         rows.add(ownerRow(point));
-        addRewardRows(rows, point);
         addTuningRows(rows, point);
         addPointActions(rows, point);
         place(rows);
@@ -223,20 +233,172 @@ public class CapturePointManagerScreen extends ManagerScreen {
         return options;
     }
 
-    private void addRewardRows(List<AbstractWidget> rows, CompoundTag point) {
-        String reward = point.getString("rewardItem");
-        if (!reward.isEmpty()) {
-            rows.add(number("capturepoints.menu.reward", point, "rewardAmount", 1, MAX_AMOUNT, 1,
-                    value -> send(point, "setreward " + quoted(point) + " " + reward + " " + value)));
-        }
+    private List<AbstractWidget> bonusRows() {
+        CompoundTag point = current();
+        if (point == null) return List.of();
 
-        String income = point.getString("incomeItem");
-        if (!income.isEmpty()) {
-            rows.add(number("capturepoints.menu.income", point, "incomeAmount", 0, MAX_AMOUNT, 1,
-                    value -> send(point, "setincome " + quoted(point) + " " + income + " " + value)));
+        followPoint(point);
+        List<AbstractWidget> rows = new ArrayList<>();
+        addRewardRows(rows, point);
+        if (!point.getBoolean(CapturePointMenuState.FINAL_FLAG)) {
+            addIncomeRows(rows, point);
+            addBuffRows(rows, point);
         }
+        addCommandRows(rows, point);
+        return rows;
+    }
+
+    private void addRewardRows(List<AbstractWidget> rows, CompoundTag point) {
+        String name = point.getString("name");
+        rows.add(heading(Component.translatable("capturepoints.menu.group.reward")));
+        rows.add(reading("capturepoints.menu.reward_item", () -> itemLabel(live(name).getString("rewardItem"))));
+        rows.add(action("capturepoints.menu.take_hand", "capturepoints.menu.action.take",
+                () -> pickReward(point)));
+        rows.add(number("capturepoints.menu.reward", point, "rewardAmount", 0, MAX_AMOUNT, 1,
+                value -> applyReward(point, value)));
+    }
+
+    private void addIncomeRows(List<AbstractWidget> rows, CompoundTag point) {
+        String name = point.getString("name");
+        rows.add(heading(Component.translatable("capturepoints.menu.group.income")));
+        rows.add(reading("capturepoints.menu.income_item", () -> itemLabel(live(name).getString("incomeItem"))));
+        rows.add(action("capturepoints.menu.take_hand", "capturepoints.menu.action.take",
+                () -> pickIncome(point)));
+        rows.add(number("capturepoints.menu.income", point, "incomeAmount", 0, MAX_AMOUNT, 1,
+                value -> applyIncome(point, value)));
         rows.add(number("capturepoints.menu.income_interval", point, "incomeInterval", 1, MAX_SECONDS, 10,
                 value -> send(point, "setincomeinterval " + quoted(point) + " " + value)));
+    }
+
+    private void addBuffRows(List<AbstractWidget> rows, CompoundTag point) {
+        String name = point.getString("name");
+        rows.add(heading(Component.translatable("capturepoints.menu.group.buff")));
+        rows.add(reading("capturepoints.menu.buff", () -> effectLabel(live(name).getString("buff"))));
+        rows.add(buffRow());
+        rows.add(new NumberRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("capturepoints.menu.buff_level"), () -> buffLevel,
+                value -> buffLevel = value, 1, MAX_LEVEL, 1));
+        rows.add(action("capturepoints.menu.buff_apply", "capturepoints.menu.action.apply",
+                () -> applyBuff(point)));
+        rows.add(action("capturepoints.menu.buff_clear", "capturepoints.menu.action.clear",
+                () -> send(point, "clearbuff " + quoted(point))));
+    }
+
+    private void addCommandRows(List<AbstractWidget> rows, CompoundTag point) {
+        rows.add(heading(Component.translatable("capturepoints.menu.group.command")));
+        rows.add(commandRow());
+        rows.add(action("capturepoints.menu.command_apply", "capturepoints.menu.action.apply",
+                () -> applyCommand(point)));
+        rows.add(action("capturepoints.menu.command_clear", "capturepoints.menu.action.clear",
+                () -> send(point, "clearcommand " + quoted(point))));
+    }
+
+    // WHY: строки полей переживают пересборку экрана, поэтому их содержимое наводится на точку
+    // WHY: только при смене выбранной: иначе набранная команда стиралась бы каждым обновлением
+    private void followPoint(CompoundTag point) {
+        String name = point.getString("name") + '\n' + point.getString("command") + '\n' + point.getString("buff");
+        if (name.equals(fieldsFor)) return;
+
+        fieldsFor = name;
+        commandRow().box().setValue(point.getString("command"));
+        buffRow().box().setValue(point.getString("buff"));
+        buffLevel = Math.max(1, point.getInt("buffAmplifier") + 1);
+    }
+
+    private FieldRow commandRow() {
+        if (commandRow == null) {
+            commandRow = new FieldRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                    Component.translatable("capturepoints.menu.command"),
+                    Component.translatable("capturepoints.menu.command.placeholder"),
+                    "", CaptureCommandRunner.MAX_LENGTH, value -> { });
+            commandRow.hint("capturepoints.menu.command" + HINT_SUFFIX);
+        }
+        commandRow.setX(rowsLeft());
+        commandRow.setWidth(rowsWidth());
+        return commandRow;
+    }
+
+    private FieldRow buffRow() {
+        if (buffRow == null) {
+            buffRow = new FieldRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                    Component.translatable("capturepoints.menu.buff_id"),
+                    Component.translatable("capturepoints.menu.buff_id.placeholder"),
+                    "", EFFECT_LIMIT, value -> { });
+        }
+        buffRow.setX(rowsLeft());
+        buffRow.setWidth(rowsWidth());
+        return buffRow;
+    }
+
+    private void applyReward(CompoundTag point, int amount) {
+        if (amount <= 0) {
+            send(point, "removereward " + quoted(point));
+            return;
+        }
+
+        String item = live(point.getString("name")).getString("rewardItem");
+        if (item.isEmpty()) {
+            MenuFeedback.show(Component.translatable("capturepoints.menu.error.no_item"), true);
+            return;
+        }
+        send(point, "setreward " + quoted(point) + " " + item + " " + amount);
+    }
+
+    private void applyIncome(CompoundTag point, int amount) {
+        String item = live(point.getString("name")).getString("incomeItem");
+        if (item.isEmpty()) {
+            MenuFeedback.show(Component.translatable("capturepoints.menu.error.no_item"), true);
+            return;
+        }
+        send(point, "setincome " + quoted(point) + " " + item + " " + amount);
+    }
+
+    private void pickReward(CompoundTag point) {
+        String held = heldItem();
+        if (held.isEmpty()) {
+            MenuFeedback.show(Component.translatable("capturepoints.menu.error.empty_hand"), true);
+            return;
+        }
+
+        int amount = Math.max(1, valueOf(point.getString("name"), "rewardAmount"));
+        send(point, "setreward " + quoted(point) + " " + held + " " + amount);
+    }
+
+    private void pickIncome(CompoundTag point) {
+        String held = heldItem();
+        if (held.isEmpty()) {
+            MenuFeedback.show(Component.translatable("capturepoints.menu.error.empty_hand"), true);
+            return;
+        }
+
+        int amount = Math.max(1, valueOf(point.getString("name"), "incomeAmount"));
+        send(point, "setincome " + quoted(point) + " " + held + " " + amount);
+    }
+
+    private void applyBuff(CompoundTag point) {
+        String effect = buffRow().value().trim();
+        if (effect.isEmpty()) {
+            MenuFeedback.show(Component.translatable("capturepoints.menu.error.no_effect"), true);
+            return;
+        }
+        send(point, "setbuff " + quoted(point) + " \"" + effect + "\" " + (buffLevel - 1));
+    }
+
+    private void applyCommand(CompoundTag point) {
+        String command = commandRow().value().trim();
+        if (command.isEmpty()) {
+            send(point, "clearcommand " + quoted(point));
+            return;
+        }
+        send(point, "setcommand " + quoted(point) + " " + command);
+    }
+
+    private static Component itemLabel(String id) {
+        return id.isEmpty() ? Component.translatable("capturepoints.menu.none") : Names.item(id);
+    }
+
+    private static Component effectLabel(String id) {
+        return id.isEmpty() ? Component.translatable("capturepoints.menu.none") : Names.effect(id);
     }
 
     private void addPointActions(List<AbstractWidget> rows, CompoundTag point) {
@@ -260,8 +422,10 @@ public class CapturePointManagerScreen extends ManagerScreen {
     private NumberRow number(String label, CompoundTag point, String key, int minimum, int maximum, int step,
                              java.util.function.IntConsumer apply) {
         String name = point.getString("name");
-        return new NumberRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, Component.translatable(label),
+        NumberRow row = new NumberRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, Component.translatable(label),
                 () -> valueOf(name, key), apply, minimum, maximum, step);
+        row.hint(label + HINT_SUFFIX);
+        return row;
     }
 
     private static int valueOf(String name, String key) {
@@ -307,22 +471,29 @@ public class CapturePointManagerScreen extends ManagerScreen {
     private PickRow ownerRow(CompoundTag point) {
         List<String> teams = teamNames();
         List<Component> options = new ArrayList<>();
+        options.add(Component.translatable("capturepoints.menu.owner_none"));
         for (String team : teams) {
             options.add(Component.literal(team));
         }
         String name = point.getString("name");
-        return new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+        PickRow row = new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("capturepoints.menu.owner"), options,
-                () -> Math.max(0, teams.indexOf(live(name).getString("owner"))),
+                () -> teams.indexOf(live(name).getString("owner")) + 1,
                 picked -> applyOwner(point, teams, picked));
+        row.hint("capturepoints.menu.owner" + HINT_SUFFIX);
+        return row;
     }
 
     private void applyOwner(CompoundTag point, List<String> teams, int picked) {
+        if (picked == 0) {
+            send(point, "clearowner " + quoted(point));
+            return;
+        }
         if (teams.isEmpty()) {
             MenuFeedback.show(Component.translatable("capturepoints.menu.no_teams"), true);
             return;
         }
-        send(point, "setowner " + quoted(point) + " " + teams.get(picked));
+        send(point, "setowner " + quoted(point) + " " + teams.get(picked - 1));
     }
 
     private List<AbstractWidget> commonRows() {
@@ -430,7 +601,7 @@ public class CapturePointManagerScreen extends ManagerScreen {
         renderListWell(graphics);
 
         renderMissing(graphics);
-        if (tab == 2 && nameField != null) nameField.render(graphics);
+        if (tab == 3 && nameField != null) nameField.render(graphics);
     }
 
     private void renderMissing(GuiGraphics graphics) {
@@ -441,7 +612,7 @@ public class CapturePointManagerScreen extends ManagerScreen {
     }
 
     private Component missing() {
-        if (tab == 2) return null;
+        if (tab == 3) return null;
         if (points().isEmpty()) return Component.translatable("capturepoints.menu.empty");
         return current() == null ? Component.translatable("capturepoints.menu.pick_point") : null;
     }
@@ -449,7 +620,18 @@ public class CapturePointManagerScreen extends ManagerScreen {
     @Override
     public void tick() {
         MenuData.request(MENU_ID);
-        if (points().size() != shownPoints) rebuild();
+        if (stale(signature()) || points().size() != shownPoints) rebuild();
+    }
+
+    private static String signature() {
+        StringBuilder mark = new StringBuilder();
+        for (CompoundTag point : points()) {
+            mark.append(point.getString("name")).append(point.getBoolean(CapturePointMenuState.FINAL_FLAG))
+                    .append(point.getString("owner")).append(point.getString("rewardItem"))
+                    .append(point.getString("incomeItem")).append(point.getString("buff"))
+                    .append(point.getString("command")).append('\n');
+        }
+        return mark.toString();
     }
 
 }

@@ -292,6 +292,7 @@ public class CapturePointManager {
         CapturePoint point = session.getPoint();
         point.setOwnerTeam(team);
         CaptureRewards.pay(server, session, team);
+        CaptureCommandRunner.onCaptured(server, point, team);
 
         boolean isFinalPoint = point instanceof FinalCapturePoint;
         if (isFinalPoint) {

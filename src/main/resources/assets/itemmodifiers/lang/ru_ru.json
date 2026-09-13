@@ -79,7 +79,17 @@
   "itemmodifiers.menu.amount.hint": "Прибавка в единицах атрибута. Дробное значение вводится щелчком по числу, разделитель точка или запятая.",
   "itemmodifiers.menu.operation.hint": "«Прибавить» даёт единицы, обе умножающие операции считают проценты: от базового значения и от уже посчитанного итога.",
   "itemmodifiers.menu.target": "Куда записать",
-  "itemmodifiers.menu.target.hint": "«В руку» правит один предмет и едет с ним. «Всем такого вида» пишет в конфиг: модификатор получат все такие предметы, включая купленные в магазине.",
+  "itemmodifiers.menu.target.hint": "«В руку» правит один предмет и едет с ним. «Всем такого вида» пишет в конфиг по предмету из руки, а третья строка — по предмету, выбранному на вкладке «Предметы».",
   "itemmodifiers.menu.target.hand": "В предмет в руке",
-  "itemmodifiers.menu.target.kind": "Всем предметам этого вида"
+  "itemmodifiers.menu.target.kind": "Всем предметам этого вида",
+  "itemmodifiers.menu.target.picked": "Выбранному: %s",
+  "itemmodifiers.menu.tab.lore": "Описание",
+  "itemmodifiers.menu.lore.held": "Предмет в руке",
+  "itemmodifiers.menu.lore.empty_hand": "Рука пуста",
+  "itemmodifiers.menu.lore.text": "Строка описания",
+  "itemmodifiers.menu.lore.text.hint": "Строка ложится в описание предмета в руке. Символ & задаёт цвет и стиль: &c красный, &l жирный, &r сброс.",
+  "itemmodifiers.menu.lore.placeholder": "Текст строки",
+  "itemmodifiers.menu.lore.add": "Добавить строку",
+  "itemmodifiers.menu.lore.clear": "Очистить описание",
+  "itemmodifiers.menu.lore.error_empty": "Строка пуста"
 }

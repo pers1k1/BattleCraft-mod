@@ -16,6 +16,7 @@ public final class MapMark {
     private ResourceLocation dimension;
     private String label;
     private int color;
+    private boolean inWorld = true;
     private final Set<String> teams = new LinkedHashSet<>();
 
     public MapMark(String id, BlockPos position, ResourceLocation dimension, String label, int color) {
@@ -31,12 +32,14 @@ public final class MapMark {
     public ResourceLocation dimension() { return dimension; }
     public String label() { return label == null || label.isEmpty() ? id : label; }
     public int color() { return color; }
+    public boolean inWorld() { return inWorld; }
     public Set<String> teams() { return teams; }
 
     public void setPosition(BlockPos value) { this.position = value; }
     public void setDimension(ResourceLocation value) { this.dimension = value; }
     public void setLabel(String value) { this.label = value; }
     public void setColor(int value) { this.color = value; }
+    public void setInWorld(boolean value) { this.inWorld = value; }
 
     public boolean everyone() {
         return teams.isEmpty();
@@ -64,6 +67,7 @@ public final class MapMark {
         buf.writeResourceLocation(dimension);
         buf.writeUtf(label == null ? "" : label);
         buf.writeInt(color);
+        buf.writeBoolean(inWorld);
         buf.writeVarInt(teams.size());
         for (String team : teams) {
             buf.writeUtf(team);
@@ -73,6 +77,7 @@ public final class MapMark {
     public static MapMark read(FriendlyByteBuf buf) {
         MapMark mark = new MapMark(buf.readUtf(), buf.readBlockPos(), buf.readResourceLocation(),
                 buf.readUtf(), buf.readInt());
+        mark.setInWorld(buf.readBoolean());
 
         int count = buf.readVarInt();
         for (int index = 0; index < count; index++) {

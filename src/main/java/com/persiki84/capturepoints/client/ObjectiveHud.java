@@ -81,12 +81,13 @@ public final class ObjectiveHud {
         UiSound.alert();
     }
 
-    public static float render(GuiGraphics graphics, Minecraft mc, float centerX, float top, float delta) {
+    public static float render(GuiGraphics graphics, Minecraft mc, float centerX, float top, float delta,
+                               boolean wanted) {
         boolean active = !ClientGameData.isSoftDisabled()
                 && ClientGameData.getCurrentPhase() == BattleCraftManager.GamePhase.ACTIVE
                 && mc.player != null && mc.player.getTeam() != null;
 
-        float alpha = barToggle.update(active, delta);
+        float alpha = barToggle.update(active && wanted, delta);
         if (barToggle.live()) {
             measure(mc);
             trackFinal();
@@ -94,7 +95,7 @@ public final class ObjectiveHud {
         if (!active) {
             reset();
         }
-        if (barToggle.cleared()) {
+        if (barToggle.cleared() && !active) {
             heldTotal = 0;
             heldClock = "0:00";
         }
@@ -155,7 +156,8 @@ public final class ObjectiveHud {
                 UiTheme.alpha(theirsColor(), alpha));
     }
 
-    public static void renderBanner(GuiGraphics graphics, Minecraft mc, float screenWidth, float screenHeight) {
+    public static void renderBanner(GuiGraphics graphics, Minecraft mc, float screenWidth, float screenHeight,
+                                    float presence) {
         if (bannerText == null) return;
 
         long elapsed = System.currentTimeMillis() - bannerAt;
@@ -164,7 +166,8 @@ public final class ObjectiveHud {
             return;
         }
 
-        float alpha = Math.min(UiAnim.fadeIn(bannerAt, 280.0f), UiAnim.clamp01((bannerLife - elapsed) / 700.0f));
+        float fade = Math.min(UiAnim.fadeIn(bannerAt, 280.0f), UiAnim.clamp01((bannerLife - elapsed) / 700.0f));
+        float alpha = presence * fade;
         if (alpha <= 0.01f) return;
 
         float scale = UiScale.push(graphics);

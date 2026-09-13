@@ -50,5 +50,12 @@
   "quarrymod.menu.remove": "Убрать блок",
   "quarrymod.menu.info": "Сведения о блоке",
   "quarrymod.menu.block_cooldown_reset": "Сбросить кулдаун блока",
+  "quarrymod.menu.block_cooldown": "Кулдаун блока, с",
+  "quarrymod.menu.block_cooldown_set": "Задать кулдаун блока",
+  "quarrymod.menu.block_cooldown.hint": "Значение уйдёт блоку, на который вы смотрите, и перекроет общий кулдаун",
+  "quarrymod.menu.tab.list": "Список",
+  "quarrymod.menu.list.empty": "Карьерных блоков нет",
+  "quarrymod.menu.list.more": "Ещё блоков, не показано",
+  "quarrymod.menu.list.custom": "%s · кулдаун %s с",
   "quarrymod.menu.action.aimed": "По прицелу"
 }

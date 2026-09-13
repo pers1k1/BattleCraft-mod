@@ -82,6 +82,7 @@ public final class CapturePointMenuState {
         tag.putInt("incomeInterval", point.getIncomeIntervalSeconds());
         tag.putString("buff", point.getBuffEffect() == null ? "" : point.getBuffEffect());
         tag.putInt("buffAmplifier", point.getBuffAmplifier());
+        tag.putString("command", point.getCaptureCommand() == null ? "" : point.getCaptureCommand());
     }
 
     private static String itemId(net.minecraft.world.item.ItemStack stack) {

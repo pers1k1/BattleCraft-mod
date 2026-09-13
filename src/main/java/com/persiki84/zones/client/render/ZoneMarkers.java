@@ -97,8 +97,8 @@ public final class ZoneMarkers {
 
             project(MARK_PREFIX + mark.id(), Component.literal(mark.label()),
                     mark.position().getX() + 0.5, mark.position().getY() + LABEL_LIFT,
-                    mark.position().getZ() + 0.5, markColor(mark), MARK_RANGE, shown,
-                    camera, view, projection, screenWidth, screenHeight);
+                    mark.position().getZ() + 0.5, markColor(mark), MARK_RANGE,
+                    shown && mark.inWorld(), camera, view, projection, screenWidth, screenHeight);
         }
     }
 

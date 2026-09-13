@@ -2,13 +2,16 @@ package com.persiki84.battlecraft.client.menu;
 
 import com.persiki84.battlecraft.menu.AnnounceMenuState;
 import com.persiki84.battlecraft.menu.BattleCraftMenuState;
+import com.persiki84.battlecraft.menu.ConfigMenuState;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.shared.client.menu.ActionRow;
+import com.persiki84.shared.client.menu.FieldRow;
 import com.persiki84.shared.client.menu.HeadingRow;
 import com.persiki84.shared.client.menu.ManagerScreen;
 import com.persiki84.shared.client.menu.MenuCommands;
 import com.persiki84.shared.client.menu.MenuData;
+import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.MenuScreens;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.ToggleRow;
@@ -18,12 +21,15 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 public class BattleCraftMenuScreen extends ManagerScreen {
     private static final String MENU_ID = BattleCraftMenuState.MENU_ID;
     private static final String COMMAND = "battlecraft";
     private static final int ROW_MARGIN = 24;
+    private static final int MAX_COMMAND = 180;
     private static final String LOBBY_PHASE = "LOBBY";
 
     private static final String[] SETTING_GROUPS = {
@@ -73,9 +79,11 @@ public class BattleCraftMenuScreen extends ManagerScreen {
             {"battlecraft.menu.combat", ModuleMenuStates.COMBAT},
             {"battlecraft.menu.modifiers", ModuleMenuStates.MODIFIERS},
             {"battlecraft.menu.sell", ModuleMenuStates.SELL},
-            {"battlecraft.menu.announce", AnnounceMenuState.MENU_ID}
+            {"battlecraft.menu.announce", AnnounceMenuState.MENU_ID},
+            {"battlecraft.menu.configs", ConfigMenuState.MENU_ID}
     };
 
+    private final Map<CommandList, FieldRow> commandFields = new EnumMap<>(CommandList.class);
     private int tab;
 
     public BattleCraftMenuScreen() {
@@ -96,6 +104,7 @@ public class BattleCraftMenuScreen extends ManagerScreen {
         return List.of(Component.translatable("battlecraft.menu.tab.match"),
                 Component.translatable("battlecraft.menu.tab.settings"),
                 Component.translatable("battlecraft.menu.tab.modules"),
+                Component.translatable("battlecraft.menu.tab.commands"),
                 Component.translatable("battlecraft.menu.tab.manage"));
     }
 
@@ -126,7 +135,8 @@ public class BattleCraftMenuScreen extends ManagerScreen {
             case 0 -> matchRows();
             case 1 -> settingRows();
             case 2 -> moduleRows();
-            case 3 -> manageRows();
+            case 3 -> commandRows();
+            case 4 -> manageRows();
             default -> null;
         };
     }
@@ -277,6 +287,8 @@ public class BattleCraftMenuScreen extends ManagerScreen {
                 () -> send("force start")));
         rows.add(action("battlecraft.menu.force_stop", "battlecraft.menu.action.stop",
                 () -> send("force stop")));
+        rows.add(action("battlecraft.menu.force_grace", "battlecraft.menu.action.clear",
+                () -> send("force grace")));
         rows.add(new ToggleRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("battlecraft.menu.enabled"),
                 () -> !state().getBoolean(BattleCraftMenuState.SOFT_DISABLED),
@@ -298,7 +310,7 @@ public class BattleCraftMenuScreen extends ManagerScreen {
         rows.add(new ToggleRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("battlecraft.menu.require_teams"),
                 () -> state().getBoolean("requireTeams"),
-                value -> send("config requireTeams " + value))
+                value -> send("config set requireTeams " + value))
                 .hint("battlecraft.menu.require_teams" + HINT_SUFFIX));
         rows.add(action("battlecraft.menu.lobby_here", "battlecraft.menu.action.place",
                 () -> send("config lobbyhere")));
@@ -339,6 +351,64 @@ public class BattleCraftMenuScreen extends ManagerScreen {
         return row;
     }
 
+    private List<AbstractWidget> commandRows() {
+        List<AbstractWidget> rows = new ArrayList<>();
+        for (CommandList list : CommandList.values()) {
+            addCommandRows(rows, list);
+        }
+        return rows;
+    }
+
+    private void addCommandRows(List<AbstractWidget> rows, CommandList list) {
+        rows.add(heading(list.group()));
+
+        List<String> entries = BattleCraftMenuState.commandsOf(state(), list.key());
+        for (String entry : entries) {
+            rows.add(commandRow(list, entry));
+        }
+        if (entries.isEmpty()) rows.add(reading("battlecraft.menu.commands.empty", Component::empty));
+
+        rows.add(commandField(list));
+        rows.add(action("battlecraft.menu.commands.new", "battlecraft.menu.action.add",
+                () -> addCommand(list)));
+    }
+
+    private ActionRow commandRow(CommandList list, String entry) {
+        return new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, Component.literal(entry),
+                () -> Component.translatable("battlecraft.menu.commands.remove"),
+                () -> send(list.branch() + " removecommand " + entry)).alerting();
+    }
+
+    // WHY: строка поля переживает пересборку: новая на каждый кадр стирала бы набранный текст
+    // WHY: и уводила бы курсор из поля на первой же смене состояния меню
+    private FieldRow commandField(CommandList list) {
+        FieldRow field = commandFields.computeIfAbsent(list, kind -> newCommandField());
+        field.setX(rowsLeft());
+        field.setWidth(rowsWidth());
+        return field;
+    }
+
+    private FieldRow newCommandField() {
+        FieldRow field = new FieldRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("battlecraft.menu.commands.text"),
+                Component.translatable("battlecraft.menu.commands.text.placeholder"),
+                "", MAX_COMMAND, value -> {});
+        field.hint("battlecraft.menu.commands.text" + HINT_SUFFIX);
+        return field;
+    }
+
+    private void addCommand(CommandList list) {
+        FieldRow field = commandFields.get(list);
+        String text = field == null ? "" : field.value().trim();
+        if (text.isEmpty()) {
+            MenuFeedback.show(Component.translatable("battlecraft.menu.commands.error.empty"), true);
+            return;
+        }
+
+        send(list.branch() + " addcommand " + text);
+        field.box().setValue("");
+    }
+
     private List<AbstractWidget> manageRows() {
         List<AbstractWidget> rows = new ArrayList<>();
         for (String[] entry : MANAGED) {
@@ -360,9 +430,22 @@ public class BattleCraftMenuScreen extends ManagerScreen {
         }
     }
 
+    // WHY: хаб раскладывается один раз на вход, поэтому добавленную или убранную строку списка
+    // WHY: видно только по смене их числа: значения в самих строках и так читаются живьём
     @Override
     public void tick() {
         MenuData.request(MENU_ID);
+
+        List<AbstractWidget> rows = rowsOf(tab);
+        if (stale(signature()) || (rows != null && rows.size() != sourceRows)) rebuild();
+    }
+
+    private static String signature() {
+        StringBuilder mark = new StringBuilder();
+        for (CommandList list : CommandList.values()) {
+            mark.append(BattleCraftMenuState.commandsOf(state(), list.key())).append('\n');
+        }
+        return mark.toString();
     }
 
     @Override
@@ -375,6 +458,35 @@ public class BattleCraftMenuScreen extends ManagerScreen {
     private record Setting(String key, int minimum, int maximum, int step, int group, int divisor) {
         Setting(String key, int minimum, int maximum, int step, int group) {
             this(key, minimum, maximum, step, group, 1);
+        }
+    }
+
+    private enum CommandList {
+        START("force start", BattleCraftMenuState.START_COMMANDS, "battlecraft.menu.group.start_commands"),
+        STOP("force stop", BattleCraftMenuState.STOP_COMMANDS, "battlecraft.menu.group.stop_commands"),
+        SURRENDER("surrender", BattleCraftMenuState.SURRENDER_COMMANDS,
+                "battlecraft.menu.group.surrender_commands");
+
+        private final String branch;
+        private final String key;
+        private final String group;
+
+        CommandList(String branch, String key, String group) {
+            this.branch = branch;
+            this.key = key;
+            this.group = group;
+        }
+
+        String branch() {
+            return branch;
+        }
+
+        String key() {
+            return key;
+        }
+
+        String group() {
+            return group;
         }
     }
 }
