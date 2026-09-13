@@ -28,7 +28,8 @@ public enum GameRule {
     NO_REFIT_IN_COMBAT("no_refit_in_combat", true),
     NO_ENCHANT_GLINT("no_enchant_glint", true),
     CHECK_CONFIGS("check_configs", true),
-    CAPTURE_GLOW("capture_glow", true);
+    CAPTURE_GLOW("capture_glow", true),
+    IFF_DEVICE("iff_device", true);
 
     private final String id;
     private final boolean enabledByDefault;

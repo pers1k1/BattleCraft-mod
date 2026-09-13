@@ -10,6 +10,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.persiki84.battlecraft.BattleCraftCommands;
 import com.persiki84.zones.ZonesMod;
 import com.persiki84.zones.mark.MapMark;
+import com.persiki84.zones.mark.MarkKind;
 import com.persiki84.zones.mark.MarkRegistry;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -92,6 +93,8 @@ public final class MarkCommand {
                 .then(Commands.argument("id", StringArgumentType.word())
                         .suggests(MARK_IDS)
                         .then(labelEdit())
+                        .then(kindEdit())
+                        .then(lineEdit())
                         .then(colorEdit())
                         .then(Commands.literal("here").executes(MarkCommand::moveHere))
                         .then(worldEdit())
@@ -104,6 +107,65 @@ public final class MarkCommand {
         return Commands.literal("label")
                 .then(Commands.argument("text", StringArgumentType.greedyString())
                         .executes(MarkCommand::editLabel));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> kindEdit() {
+        LiteralArgumentBuilder<CommandSourceStack> branch = Commands.literal("kind");
+        for (MarkKind kind : MarkKind.values()) {
+            branch.then(Commands.literal(kind.id()).executes(context -> editKind(context, kind)));
+        }
+        return branch;
+    }
+
+    // WHY: строки надписи правятся по номеру, а первая это та же подпись метки: отдельной ветки
+    // WHY: под неё нет, иначе у одной строки оказалось бы два имени в дереве команд
+    private static LiteralArgumentBuilder<CommandSourceStack> lineEdit() {
+        return Commands.literal("line")
+                .then(Commands.literal("add")
+                        .then(Commands.argument("text", StringArgumentType.greedyString())
+                                .executes(MarkCommand::addLine)))
+                .then(Commands.literal("set")
+                        .then(Commands.argument("index", IntegerArgumentType.integer(0, MapMark.MAX_LINES - 1))
+                                .then(Commands.argument("text", StringArgumentType.greedyString())
+                                        .executes(MarkCommand::setLine))))
+                .then(Commands.literal("remove")
+                        .then(Commands.argument("index", IntegerArgumentType.integer(1, MapMark.MAX_LINES - 1))
+                                .executes(MarkCommand::removeLine)));
+    }
+
+    private static int editKind(CommandContext<CommandSourceStack> context, MarkKind kind) {
+        MapMark mark = require(context);
+        if (mark == null) return 0;
+
+        mark.setKind(kind);
+        if (kind == MarkKind.TEXT) mark.setInWorld(false);
+        return apply(context, mark);
+    }
+
+    private static int addLine(CommandContext<CommandSourceStack> context) {
+        MapMark mark = require(context);
+        if (mark == null) return 0;
+        if (!mark.addLine(label(context))) return fail(context, "zones.mark.error.too_many_lines", MapMark.MAX_LINES);
+
+        return apply(context, mark);
+    }
+
+    private static int setLine(CommandContext<CommandSourceStack> context) {
+        MapMark mark = require(context);
+        if (mark == null) return 0;
+
+        int index = IntegerArgumentType.getInteger(context, "index");
+        if (!mark.setLine(index, label(context))) return fail(context, "zones.mark.error.no_line", index);
+        return apply(context, mark);
+    }
+
+    private static int removeLine(CommandContext<CommandSourceStack> context) {
+        MapMark mark = require(context);
+        if (mark == null) return 0;
+
+        int index = IntegerArgumentType.getInteger(context, "index");
+        if (!mark.removeLine(index)) return fail(context, "zones.mark.error.no_line", index);
+        return apply(context, mark);
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> colorEdit() {

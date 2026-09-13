@@ -27,6 +27,8 @@ public class ClientCaptureData {
     private static final Map<String, ZoneArea> pointAreas = new HashMap<>();
     private static final Map<String, ZoneArea> finalPointAreas = new HashMap<>();
     private static final Map<String, CaptureMode> pointModes = new HashMap<>();
+    private static final Set<String> optionalPoints = new HashSet<>();
+    private static final Set<String> hiddenFromHud = new HashSet<>();
     private static final Map<String, Session> sessions = new HashMap<>();
     private static final Map<String, String> pointOwnersView = Collections.unmodifiableMap(pointOwners);
     private static final Map<String, String> finalPointOwnersView = Collections.unmodifiableMap(finalPointOwners);
@@ -105,6 +107,8 @@ public class ClientCaptureData {
         finalPointPositions.clear();
         finalPointAreas.clear();
         pointModes.clear();
+        optionalPoints.clear();
+        hiddenFromHud.clear();
         sessions.clear();
         localCapturingPoint = null;
         localAttackerTeam = null;
@@ -144,8 +148,7 @@ public class ClientCaptureData {
     public static void removeFinalPoint(String pointName) {
         finalPointOwners.remove(pointName);
         finalPointPositions.remove(pointName);
-        pointModes.remove(pointName);
-        forgetProgress(pointName);
+        forgetPoint(pointName);
     }
 
     public static void removePoint(String pointName) {
@@ -155,7 +158,13 @@ public class ClientCaptureData {
         finalPointOwners.remove(pointName);
         finalPointPositions.remove(pointName);
         finalPointAreas.remove(pointName);
+        forgetPoint(pointName);
+    }
+
+    private static void forgetPoint(String pointName) {
         pointModes.remove(pointName);
+        optionalPoints.remove(pointName);
+        hiddenFromHud.remove(pointName);
         forgetProgress(pointName);
     }
 
@@ -169,7 +178,7 @@ public class ClientCaptureData {
             pointOwners.put(entry.getKey(), entry.getValue().owner);
             pointPositions.put(entry.getKey(), entry.getValue().pos());
             pointAreas.put(entry.getKey(), entry.getValue().area);
-            pointModes.put(entry.getKey(), entry.getValue().mode);
+            rememberFlags(entry.getKey(), entry.getValue());
         }
     }
 
@@ -183,8 +192,32 @@ public class ClientCaptureData {
             finalPointOwners.put(entry.getKey(), entry.getValue().owner);
             finalPointPositions.put(entry.getKey(), entry.getValue().pos());
             finalPointAreas.put(entry.getKey(), entry.getValue().area);
-            pointModes.put(entry.getKey(), entry.getValue().mode);
+            rememberFlags(entry.getKey(), entry.getValue());
         }
+    }
+
+    private static void rememberFlags(String name, PointSyncData data) {
+        pointModes.put(name, data.mode);
+        if (data.required) {
+            optionalPoints.remove(name);
+        } else {
+            optionalPoints.add(name);
+        }
+        if (data.shownInHud) {
+            hiddenFromHud.remove(name);
+        } else {
+            hiddenFromHud.add(name);
+        }
+    }
+
+    public static boolean isPointRequired(String pointName) {
+        return !optionalPoints.contains(pointName);
+    }
+
+    // WHY: невидимая в HUD точка остаётся на карте и берётся как обычно: прячется только полоса
+    // WHY: целей и метка над местностью, потому что иначе её нечем было бы найти
+    public static boolean isPointShownInHud(String pointName) {
+        return !hiddenFromHud.contains(pointName);
     }
 
     private static boolean inCurrentDimension(PointSyncData data) {
@@ -286,13 +319,16 @@ public class ClientCaptureData {
         return session == null ? 0L : session.updatedAt;
     }
 
+    // WHY: то же правило, что на сервере в CapturePointManager: финальную открывают обязательные
+    // WHY: точки, а когда обязательных нет вовсе - открывать нечего, и она доступна сразу
     public static boolean areAllPointsCapturedBySameTeam() {
-        if (pointOwners.isEmpty()) {
-            return false;
-        }
-
         String firstTeam = null;
-        for (String owner : pointOwners.values()) {
+        boolean anyRequired = false;
+        for (Map.Entry<String, String> point : pointOwners.entrySet()) {
+            if (!isPointRequired(point.getKey())) continue;
+
+            anyRequired = true;
+            String owner = point.getValue();
             if (owner == null) {
                 return false;
             }
@@ -303,7 +339,7 @@ public class ClientCaptureData {
             }
         }
 
-        return true;
+        return !anyRequired || firstTeam != null;
     }
 
     private static final class Session {

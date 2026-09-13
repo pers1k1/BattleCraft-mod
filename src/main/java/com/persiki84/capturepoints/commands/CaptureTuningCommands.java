@@ -1,5 +1,6 @@
 package com.persiki84.capturepoints.commands;
 
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -18,6 +19,7 @@ import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.ObjIntConsumer;
 
@@ -46,7 +48,30 @@ public final class CaptureTuningCommands {
                 .then(numberBranch("setrollback", points, lookup, 1, MAX_PERCENT, CapturePoint::setRollbackSpeed))
                 .then(numberBranch("setpressuredrollback", points, lookup, 1, MAX_PERCENT, CapturePoint::setPressuredRollbackSpeed))
                 .then(numberBranch("setownedrollback", points, lookup, 1, MAX_PERCENT, CapturePoint::setOwnedRollbackSpeed))
-                .then(numberBranch("setteamcooldown", points, lookup, 0, MAX_COOLDOWN, CapturePoint::setTeamCooldown));
+                .then(numberBranch("setteamcooldown", points, lookup, 0, MAX_COOLDOWN, CapturePoint::setTeamCooldown))
+                .then(flagBranch("setrequired", points, lookup, CapturePoint::setRequired))
+                .then(flagBranch("sethud", points, lookup, CapturePoint::setShownInHud));
+    }
+
+    // WHY: обязательность и показ в HUD живут в общей ветке обоих корней, как бонусы точки:
+    // WHY: заведённое только у обычных точек финальные молча не получают
+    private static LiteralArgumentBuilder<CommandSourceStack> flagBranch(
+            String literal, SuggestionProvider<CommandSourceStack> points, Function<String, CapturePoint> lookup,
+            BiConsumer<CapturePoint, Boolean> apply) {
+        return Commands.literal(literal)
+                .then(Commands.argument("name", StringArgumentType.string())
+                        .suggests(points)
+                        .then(Commands.argument("value", BoolArgumentType.bool())
+                                .executes(context -> applyFlag(context, lookup, apply))));
+    }
+
+    private static int applyFlag(CommandContext<CommandSourceStack> context, Function<String, CapturePoint> lookup,
+                                 BiConsumer<CapturePoint, Boolean> apply) {
+        CapturePoint point = resolve(context, lookup);
+        if (point == null) return 0;
+
+        apply.accept(point, BoolArgumentType.getBool(context, "value"));
+        return confirm(context, point);
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> numberBranch(

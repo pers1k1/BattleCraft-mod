@@ -67,21 +67,21 @@ public final class ShopSection {
 
     // WHY: скрытое от команды не доезжает до клиента вовсе, а не прячется в его интерфейсе:
     // WHY: чужой ассортимент это игровая информация, и её нельзя отдавать по слову клиента
-    public void write(FriendlyByteBuf buf, String viewer, boolean full) {
+    public void write(FriendlyByteBuf buf, ShopViewer viewer, boolean full) {
         buf.writeUtf(id);
         buf.writeUtf(title());
         access.write(buf);
 
-        List<ShopSection> shownChildren = visibleChildren(viewer, full);
+        List<ShopSection> shownChildren = visibleChildren(viewer.team(), full);
         buf.writeInt(shownChildren.size());
         for (ShopSection child : shownChildren) {
             child.write(buf, viewer, full);
         }
 
-        List<ShopEntry> shownEntries = visibleEntries(viewer, full);
+        List<ShopEntry> shownEntries = visibleEntries(viewer.team(), full);
         buf.writeInt(shownEntries.size());
         for (ShopEntry entry : shownEntries) {
-            entry.write(buf);
+            entry.write(buf, viewer.key(entry.scope()));
         }
     }
 

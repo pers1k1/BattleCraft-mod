@@ -297,7 +297,8 @@ public final class ShopCommand {
                 .then(Commands.literal("order").then(sectionNode(order(entryNode(), ShopCommand::orderEntry))))
                 .then(moveItemBranch())
                 .then(stockBranch())
-                .then(restockBranch());
+                .then(restockBranch())
+                .then(scopeBranch());
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> moveItemBranch() {
@@ -376,6 +377,26 @@ public final class ShopCommand {
                                         IntegerArgumentType.getInteger(context, "restock")))))));
     }
 
+    private static LiteralArgumentBuilder<CommandSourceStack> scopeBranch() {
+        RequiredArgumentBuilder<CommandSourceStack, String> entry = entryNode();
+        for (StockScope scope : StockScope.values()) {
+            entry.then(Commands.literal(scope.id()).executes(context -> setScope(context, scope)));
+        }
+        return Commands.literal("scope").then(sectionNode(entry));
+    }
+
+    // WHY: область склада решает, чей остаток тратит покупка: общий на всех, свой у команды
+    // WHY: или свой у каждого игрока - поэтому смена области возвращает всем полный запас
+    private static int setScope(CommandContext<CommandSourceStack> context, StockScope scope) {
+        ShopEntry entry = requireEntry(context);
+        if (entry == null) return 0;
+
+        entry.setScope(scope);
+        ShopCatalog.persist();
+        return report(context, "zones.shop.success.scope_set", entry.id(),
+                Component.translatable(scope.label()));
+    }
+
     private static LiteralArgumentBuilder<CommandSourceStack> restockBranch() {
         return Commands.literal("restock").then(sectionNode(entryNode()
                 .then(Commands.argument("seconds", IntegerArgumentType.integer(0))
@@ -437,7 +458,6 @@ public final class ShopCommand {
         if (outcome != Outcome.DONE) return fail(context, refusal(outcome), GunSmith.optionName(option));
 
         ShopCatalog.persist();
-        ZonesMod.syncShopToEveryone(context.getSource().getServer());
         return report(context, "zones.shop.success.attached", GunSmith.optionName(option), entry.stack().getHoverName());
     }
 
@@ -458,7 +478,6 @@ public final class ShopCommand {
         if (outcome != Outcome.DONE) return fail(context, refusal(outcome), GunSmith.slotName(slot));
 
         ShopCatalog.persist();
-        ZonesMod.syncShopToEveryone(context.getSource().getServer());
         return report(context, "zones.shop.success.detached", GunSmith.slotName(slot), entry.stack().getHoverName());
     }
 

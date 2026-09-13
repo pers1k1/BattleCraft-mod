@@ -34,6 +34,11 @@ public class KeyRow extends MenuRow {
         return listening;
     }
 
+    @Override
+    public boolean capturing() {
+        return listening();
+    }
+
     // WHY: строка ловит клавишу раньше экрана, поэтому чужой обработчик обязан спросить её первой,
     // WHY: иначе Escape уводит мастер на шаг назад вместо отмены назначения
     public boolean take(int key, int scan) {

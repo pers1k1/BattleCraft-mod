@@ -179,6 +179,7 @@ public class MinimapOverlay {
         int pinged = 0;
         for (MapMark mark : ClientMarkData.all()) {
             if (mc.level == null || !mc.level.dimension().location().equals(mark.dimension())) continue;
+            if (MapLabels.isLabel(mark)) continue;
             pinged++;
             renderMarker(guiGraphics, mark.position().getX() + 0.5, mark.position().getZ() + 0.5,
                     mapX, mapZ, zoom, cx, cy, mark.color(), mark.label(),

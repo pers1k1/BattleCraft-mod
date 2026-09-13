@@ -127,7 +127,10 @@ public class FinalPointCommand {
                                 .executes(FinalPointCommand::setServerMarkers)))
                 .then(Commands.literal("markers")
                         .then(Commands.argument("enabled", BoolArgumentType.bool())
-                                .executes(PointCommands::setLocalMarkers)));
+                                .executes(PointCommands::setLocalMarkers)))
+                .then(Commands.literal("openeronly")
+                        .then(Commands.argument("enabled", BoolArgumentType.bool())
+                                .executes(FinalPointCommand::setOpenerOnly)));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> createBranch() {
@@ -592,6 +595,15 @@ public class FinalPointCommand {
                     false
             );
         }
+        return 1;
+    }
+
+    private static int setOpenerOnly(CommandContext<CommandSourceStack> context) {
+        boolean enabled = BoolArgumentType.getBool(context, "enabled");
+        CapturePointManager.setFinalForOpenerOnly(enabled);
+        context.getSource().sendSuccess(() -> Component.translatable(enabled
+                ? "capturepoints.success.final_opener_only"
+                : "capturepoints.success.final_opener_any").withStyle(ChatFormatting.GREEN), true);
         return 1;
     }
 

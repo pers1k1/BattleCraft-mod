@@ -80,6 +80,8 @@ public final class MarkStorage {
         private int z;
         private String dimension;
         private String label;
+        private List<String> lines;
+        private String kind;
         private int color;
         private Boolean inWorld;
         private List<String> teams;
@@ -92,6 +94,8 @@ public final class MarkStorage {
             stored.z = mark.position().getZ();
             stored.dimension = mark.dimension().toString();
             stored.label = mark.label();
+            stored.lines = new ArrayList<>(mark.lines());
+            stored.kind = mark.kind().id();
             stored.color = mark.color();
             stored.inWorld = mark.inWorld();
             stored.teams = new ArrayList<>(mark.teams());
@@ -106,6 +110,10 @@ public final class MarkStorage {
                     world == null ? new ResourceLocation("minecraft", "overworld") : world,
                     label, color == 0 ? MapMark.DEFAULT_COLOR : color);
 
+            // WHY: у файла прошлой версии есть только label, и он обязан остаться единственной
+            // WHY: строкой надписи: пустой список стёр бы подписи всех существующих меток
+            if (lines != null && !lines.isEmpty()) mark.restoreLines(lines);
+            mark.setKind(MarkKind.byId(kind == null ? MarkKind.DEFAULT.id() : kind));
             mark.setInWorld(inWorld == null || inWorld);
             if (teams != null) {
                 for (String team : teams) {

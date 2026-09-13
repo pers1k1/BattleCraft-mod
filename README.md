@@ -168,7 +168,7 @@ Announcements carry their own duration, from two to sixty seconds, set in the pa
 
 Every row of the `/bc` hub now has an explanation - match actions, the status lines, all twenty lobby and stamina settings, and each entry of the manage tab. Until now only the module switches had them, which is why hovering the other tabs looked as though hints were broken.
 
-Version 2026.9.12v2-alpha - the first public build of the rewritten interface, and a test one: it went out without a full play-through, so report anything that looks wrong.
+Version 2026.9.14-prealpha - built but never played through, so report anything that looks wrong.
 
 ## Shop, modifiers and map, 12 September 2026 (second pass)
 
@@ -299,6 +299,47 @@ of its own rather than only appearing as an unmet checklist item, game rules can
 rules panel, and a team can be created under any name instead of the four suggested ones. The build
 config check - snapshot, recheck, clear and forgetting a single path - has a panel instead of living
 only in chat.
+
+## Shop stock, map labels, point roles and the IFF device, 14 September 2026
+
+A shop item chooses whose stock a purchase spends. Shared keeps one count for the whole server, the
+way it always worked; team gives every team its own count and its own restock timer; personal gives
+every player theirs. A pickaxe limited to one every thirty seconds no longer queues the whole team
+behind one man, and nothing has to be left unlimited to avoid it. The setting is a row on the Stock
+tab of the shop panel and the command `shop item scope <section> <item> shared|team|player`. Changing
+the scope returns everyone to a full stock, because a personal remainder cannot be handed to a team.
+A purchase from a personal or team stock is now sent back only to the people it concerns instead of
+the whole catalogue going out to everybody.
+
+The map carries labels: text without a plate, without a dot, glowing in its own colour. The middle
+mouse button opens a menu of actions on the point it was pressed at, so teleport has company instead
+of being the only thing that button does: teleport here, a new label, and on an existing label - edit
+the text, add a line, drop the last line, change the colour and delete it. Lines are added up to six;
+the first line is the caption the mark panel already edits. An operator moves a label by double
+clicking it and dragging; a single click keeps placing a personal marker as before. Hovering a label
+raises a soft aura in its colour, an armed label breathes, and both the action menu and the text box
+arrive with an animation rather than appearing whole. Labels obey the same team visibility as marks,
+so a line can be shown to one team and hidden from the rest, and they sit in the mark panel with a
+kind row and the line list.
+
+A capture point is required or optional. The final point opens once one team holds every required
+point; an optional one is taken for income, bonuses or a command and nobody waits for it. If a map
+carries no required points at all, the final one is open from the start - there is nothing to fulfil.
+A point can also be hidden from the HUD while staying on the map: it drops out of the objective bar
+and out of the world tags but is captured as usual. Both are rows on the point tab and the commands
+`setrequired` and `sethud` of either root. A new switch decides whether the final point belongs to the
+team that opened it: with it on, the side that collected every required point cannot have its win
+taken by a rival who walks onto the final point it just unlocked.
+
+While a match runs every player carries the SuperbWarfare IFF device in its Curios slot. It cannot be
+dropped, cannot be taken out of the slot - anything found in the inventory goes back within a second -
+and it is removed when the match ends or the rule is turned off. The rule lives with the other combat
+rules; without SuperbWarfare or Curios on the server the row says so instead of pretending to work,
+and nothing is issued.
+
+The vanilla `/clear` walks the inventory and the crafting grid only, so anything worn in a Curios slot
+survived it. It now clears those slots too, with the same count and the same `maxCount` limit, and
+with a count-only run when the limit is zero.
 
 ## Releases
 

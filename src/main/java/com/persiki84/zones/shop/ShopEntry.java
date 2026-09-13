@@ -3,18 +3,25 @@ package com.persiki84.zones.shop;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 public final class ShopEntry {
     public static final int UNLIMITED = -1;
+    public static final String OWN_POOL = "";
 
     private final String id;
     private final ItemStack stack;
     private final ShopAccess access = new ShopAccess();
+    private final Map<String, StockPool> pools = new LinkedHashMap<>();
     private int price;
     private String description;
     private int stock = UNLIMITED;
-    private int available = UNLIMITED;
     private int restockSeconds;
-    private long readyAt;
+    private StockScope scope = StockScope.DEFAULT;
 
     public ShopEntry(String id, ItemStack stack, int price, String description) {
         this.id = id;
@@ -29,77 +36,118 @@ public final class ShopEntry {
     public int price() { return price; }
     public String description() { return description; }
     public int stock() { return stock; }
-    public int available() { return available; }
     public int restockSeconds() { return restockSeconds; }
-    public long readyAt() { return readyAt; }
+    public StockScope scope() { return scope; }
 
     public void setPrice(int price) { this.price = price; }
     public void setDescription(String description) { this.description = description; }
 
     public int bundle() { return Math.max(1, stack.getCount()); }
 
-    public int availableItems() { return limited() ? available * bundle() : UNLIMITED; }
-
     public boolean limited() { return stock != UNLIMITED; }
 
-    public boolean soldOut() { return limited() && available <= 0; }
+    // WHY: клиенту приезжает ровно один склад - тот, из которого покупает он сам, поэтому
+    // WHY: безключевые ответы это его собственный запас, а сервер всегда спрашивает по ключу
+    public int available() { return availableIn(OWN_POOL); }
+
+    public int availableItems() { return limited() ? available() * bundle() : UNLIMITED; }
+
+    public boolean soldOut() { return soldOutIn(OWN_POOL); }
+
+    public int remainingSeconds(long now) { return remainingSecondsIn(OWN_POOL, now); }
+
+    public int availableIn(String key) {
+        if (!limited()) return UNLIMITED;
+
+        StockPool pool = pools.get(key);
+        return pool == null ? stock : pool.available();
+    }
+
+    public boolean soldOutIn(String key) {
+        return limited() && availableIn(key) <= 0;
+    }
+
+    public int remainingSecondsIn(String key, long now) {
+        StockPool pool = pools.get(key);
+        return pool == null ? 0 : pool.remainingSeconds(now);
+    }
 
     public void setStock(int stock, int restockSeconds) {
         this.stock = stock < 0 ? UNLIMITED : stock;
         this.restockSeconds = Math.max(0, restockSeconds);
-        this.available = this.stock;
-        this.readyAt = 0L;
+        pools.clear();
     }
 
     public void setRestockSeconds(int seconds) {
         this.restockSeconds = Math.max(0, seconds);
     }
 
-    // WHY: товар ищется по идентификатору в пределах раздела вместе с его отделами, поэтому
-    // WHY: перенос в раздел с таким же идентификатором обязан дать товару свободное имя
+    // WHY: склады разных областей несопоставимы: личный остаток нельзя выдать команде,
+    // WHY: поэтому смена области возвращает всем полный запас, а не переносит остатки
+    public void setScope(StockScope scope) {
+        this.scope = scope == null ? StockScope.DEFAULT : scope;
+        pools.clear();
+    }
+
     public ShopEntry renamed(String newId) {
         ShopEntry copy = new ShopEntry(newId, stack, price, description);
         copy.access.restore(access.list());
         copy.stock = stock;
-        copy.available = available;
         copy.restockSeconds = restockSeconds;
-        copy.readyAt = readyAt;
+        copy.scope = scope;
+        for (Map.Entry<String, StockPool> pool : pools.entrySet()) {
+            copy.pools.put(pool.getKey(), new StockPool(pool.getValue().available(), pool.getValue().readyAt()));
+        }
         return copy;
     }
 
-    public void restore(int available, long readyAt) {
-        this.available = limited() ? Math.min(available, stock) : UNLIMITED;
-        this.readyAt = readyAt;
+    public void restorePool(String key, int available, long readyAt) {
+        if (!limited()) return;
+
+        StockPool pool = new StockPool(Math.min(available, stock), readyAt);
+        if (pool.full(stock)) return;
+        pools.put(key == null ? OWN_POOL : key, pool);
     }
 
-    public int take(int units, long now) {
+    public List<String> poolKeys() {
+        return new ArrayList<>(pools.keySet());
+    }
+
+    public StockPool pool(String key) {
+        return pools.get(key);
+    }
+
+    public int take(String key, int units, long now) {
         if (!limited()) return units;
-
-        int taken = Math.min(units, Math.max(0, available));
-        available -= taken;
-        if (available <= 0 && restockSeconds > 0) {
-            readyAt = now + restockSeconds * 1000L;
-        }
-        return taken;
+        return pools.computeIfAbsent(key, unused -> new StockPool(stock, 0L))
+                .take(units, restockSeconds, now);
     }
 
+    // WHY: наполнившийся склад равен новому, поэтому он выбрасывается из карты: иначе у личного
+    // WHY: запаса копится по записи на каждого, кто хоть раз покупал, и они едут в файл навсегда
     public boolean restockIfDue(long now) {
-        if (!limited() || available > 0 || readyAt <= 0L || now < readyAt) return false;
+        if (!limited() || pools.isEmpty()) return false;
 
-        available = stock;
-        readyAt = 0L;
-        return true;
+        boolean changed = false;
+        Iterator<Map.Entry<String, StockPool>> cursor = pools.entrySet().iterator();
+        while (cursor.hasNext()) {
+            StockPool pool = cursor.next().getValue();
+            changed |= pool.refillIfDue(stock, now);
+            if (pool.full(stock)) cursor.remove();
+        }
+        return changed;
     }
 
-    public void write(FriendlyByteBuf buf) {
+    public void write(FriendlyByteBuf buf, String key) {
         buf.writeUtf(id);
         buf.writeItem(stack);
         buf.writeInt(price);
         buf.writeUtf(description == null ? "" : description);
         buf.writeInt(stock);
-        buf.writeInt(available);
+        buf.writeInt(availableIn(key));
         buf.writeInt(restockSeconds);
-        buf.writeVarInt(remainingSeconds(System.currentTimeMillis()));
+        buf.writeVarInt(remainingSecondsIn(key, System.currentTimeMillis()));
+        buf.writeUtf(scope.id());
         access.write(buf);
     }
 
@@ -111,17 +159,14 @@ public final class ShopEntry {
 
         ShopEntry entry = new ShopEntry(id, stack, price, description.isEmpty() ? null : description);
         entry.stock = buf.readInt();
-        entry.available = buf.readInt();
+        int available = buf.readInt();
         entry.restockSeconds = buf.readInt();
 
         int waiting = buf.readVarInt();
-        entry.readyAt = waiting <= 0 ? 0L : System.currentTimeMillis() + waiting * 1000L;
+        entry.restorePool(OWN_POOL, available,
+                waiting <= 0 ? 0L : System.currentTimeMillis() + waiting * 1000L);
+        entry.scope = StockScope.byId(buf.readUtf());
         entry.access.read(buf);
         return entry;
-    }
-
-    public int remainingSeconds(long now) {
-        if (readyAt <= 0L || now >= readyAt) return 0;
-        return (int) Math.ceil((readyAt - now) / 1000.0);
     }
 }

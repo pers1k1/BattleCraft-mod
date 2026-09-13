@@ -372,6 +372,7 @@ public final class CaptureSessions {
 
             String team = CapturePointManager.teamOf(player);
             if (team == null || team.equals(point.getOwnerTeam())) continue;
+            if (point instanceof FinalCapturePoint && !CapturePointManager.mayTakeFinal(team)) continue;
             if (TeamCooldowns.blocked(team, point.getName())) continue;
             if (isCapturing(player.getUUID())) continue;
             if (point.getArea().contains(player.getX(), player.getY(), player.getZ(), EDGE_TOLERANCE)) return player;
@@ -454,6 +455,10 @@ public final class CaptureSessions {
     private static boolean mayStart(ServerPlayer player, CapturePoint point, String team) {
         if (point instanceof FinalCapturePoint && !CapturePointManager.isFinalPointAvailable()) {
             return refuse(player, Component.translatable("capturepoints.capture.final_unavailable")
+                    .withStyle(ChatFormatting.RED, ChatFormatting.BOLD));
+        }
+        if (point instanceof FinalCapturePoint && !CapturePointManager.mayTakeFinal(team)) {
+            return refuse(player, Component.translatable("capturepoints.capture.final_not_yours")
                     .withStyle(ChatFormatting.RED, ChatFormatting.BOLD));
         }
         if (point.isOnCooldown()) {

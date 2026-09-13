@@ -77,6 +77,8 @@ public final class MarkerRenderer {
                                         Map<String, String> points, boolean isFinal) {
         for (Map.Entry<String, String> entry : points.entrySet()) {
             String name = entry.getKey();
+            if (!ClientCaptureData.isPointShownInHud(name)) continue;
+
             BlockPos pos = isFinal
                     ? ClientCaptureData.getFinalPointPosition(name)
                     : ClientCaptureData.getPointPosition(name);

@@ -37,7 +37,8 @@ public class GameRulesScreen extends PanelScreen {
             GameRule.ESCORT_PROJECTILES,
             GameRule.NO_REFIT_WHEN_HURT,
             GameRule.NO_REFIT_IN_COMBAT,
-            GameRule.CAPTURE_GLOW
+            GameRule.CAPTURE_GLOW,
+            GameRule.IFF_DEVICE
     };
 
     private static final GameRule[] PARKOUR_RULES = {
@@ -50,6 +51,15 @@ public class GameRulesScreen extends PanelScreen {
             GameRule.STAMINA_LIMITS_MOVES,
             GameRule.NO_SPRINT_BOOST_WITH_GUN
     };
+
+    // WHY: без SuperbWarfare или Curios выдавать нечего, и строка обязана сказать почему,
+    // WHY: а не молча включаться в положение, которое ничего не делает
+    private static void block(GameRule rule, ToggleRow row) {
+        if (rule != GameRule.IFF_DEVICE) return;
+        if (MenuData.state(ModuleMenuStates.GAME_RULES).getBoolean(ModuleMenuStates.IFF_AVAILABLE)) return;
+
+        row.block(Component.translatable("battlecraft.rule.iff_device.missing"));
+    }
 
     public GameRulesScreen() {
         super(Component.translatable("battlecraft.rules.title"));
@@ -74,6 +84,7 @@ public class GameRulesScreen extends PanelScreen {
             ToggleRow row = toggle(rule.label(), () -> MenuData.state(menuId()).getBoolean(rule.id()),
                     on -> send(COMMAND + " set " + rule.id() + " " + on));
             row.hint((Component) null);
+            block(rule, row);
             rows.add(row);
             rows.add(reading(rule.hint(), Component::empty));
         }

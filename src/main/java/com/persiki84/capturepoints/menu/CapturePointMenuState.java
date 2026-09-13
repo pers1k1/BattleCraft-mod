@@ -17,6 +17,7 @@ public final class CapturePointMenuState {
     public static final String DENY_PLACE = "denyPlace";
     public static final String CAPTURE_MARKERS = "captureMarkers";
     public static final String FINAL_MARKERS = "finalMarkers";
+    public static final String FINAL_OPENER_ONLY = "finalOpenerOnly";
     public static final String FINAL_FLAG = "final";
 
     private static final int TICKS_PER_SECOND = 20;
@@ -44,6 +45,7 @@ public final class CapturePointMenuState {
         tag.putBoolean(DENY_PLACE, BlockProtectionHandler.isPlacementDenied());
         tag.putBoolean(CAPTURE_MARKERS, CapturePointManager.isGlobalCaptureMarkers());
         tag.putBoolean(FINAL_MARKERS, CapturePointManager.isGlobalFinalMarkers());
+        tag.putBoolean(FINAL_OPENER_ONLY, CapturePointManager.isFinalForOpenerOnly());
         return tag;
     }
 
@@ -58,6 +60,8 @@ public final class CapturePointMenuState {
         tag.putInt("captureTime", point.getCaptureTime() / TICKS_PER_SECOND);
         tag.putInt("cooldown", point.getCooldown() / TICKS_PER_SECOND);
         tag.putString("owner", point.getOwnerTeam() == null ? "" : point.getOwnerTeam());
+        tag.putBoolean("required", point.isRequired());
+        tag.putBoolean("shownInHud", point.isShownInHud());
         putRewards(tag, point);
         putTuning(tag, point);
         return tag;

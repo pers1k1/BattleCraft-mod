@@ -18,6 +18,7 @@ import com.persiki84.battlecraft.client.hud.GogglesHud;
 import com.persiki84.battlecraft.client.hud.BottomHud;
 import com.persiki84.battlecraft.client.hud.EffectsHud;
 import com.persiki84.battlecraft.client.hud.HudConfig;
+import com.persiki84.battlecraft.compat.iff.IffService;
 import com.persiki84.battlecraft.client.hud.AnnounceHud;
 import com.persiki84.battlecraft.client.hud.MessageHud;
 import com.persiki84.battlecraft.client.hud.ScanHud;
@@ -78,6 +79,7 @@ public class BattleCraftMod {
         }
 
         MinecraftForge.EVENT_BUS.register(this);
+        MinecraftForge.EVENT_BUS.register(new IffService());
         BattleCraftManager.getInstance();
     }
 
@@ -164,11 +166,13 @@ public class BattleCraftMod {
             if (config.getSpec() == HudConfig.SPEC) LauncherTheme.apply();
         }
 
+        // WHY: сохранять здесь нельзя - на первом запуске клавиши модов ещё не прочитаны из файла,
+        // WHY: и запись уносит раскладку лаунчера на дефолты; значение уйдёт на диск со штатным
+        // WHY: сохранением игры, а каждый запуск ставит его заново
         private static void widenChatLines() {
             Options options = Minecraft.getInstance().options;
             if (options == null || options.chatLineSpacing().get() >= CHAT_LINE_SPACING) return;
             options.chatLineSpacing().set(CHAT_LINE_SPACING);
-            options.save();
         }
     }
 }

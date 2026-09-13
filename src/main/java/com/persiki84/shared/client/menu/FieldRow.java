@@ -42,6 +42,11 @@ public class FieldRow extends MenuRow {
         return box;
     }
 
+    @Override
+    public boolean capturing() {
+        return box.isFocused();
+    }
+
     public String value() {
         return box.getValue();
     }

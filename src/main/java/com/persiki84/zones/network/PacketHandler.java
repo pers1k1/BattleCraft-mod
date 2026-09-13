@@ -121,5 +121,14 @@ public class PacketHandler {
                 ShopRefreshPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER)
         );
+
+        INSTANCE.registerMessage(
+                id(),
+                MarkEditPacket.class,
+                MarkEditPacket::encode,
+                MarkEditPacket::decode,
+                MarkEditPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER)
+        );
     }
 }

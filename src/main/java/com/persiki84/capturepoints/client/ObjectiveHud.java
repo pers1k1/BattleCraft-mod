@@ -196,8 +196,13 @@ public final class ObjectiveHud {
 
         int mine = 0;
         int theirs = 0;
+        int counted = 0;
         String enemy = null;
-        for (String owner : owners.values()) {
+        for (Map.Entry<String, String> point : owners.entrySet()) {
+            if (!ClientCaptureData.isPointShownInHud(point.getKey())) continue;
+
+            counted++;
+            String owner = point.getValue();
             if (owner == null || owner.isEmpty()) continue;
             if (owner.equals(team)) {
                 mine++;
@@ -209,7 +214,7 @@ public final class ObjectiveHud {
 
         heldMine = mine;
         heldTheirs = theirs;
-        heldTotal = owners.size();
+        heldTotal = counted;
         heldMineColor = MapRenderUtil.getTeamColor(team);
         heldTheirsColor = enemy == null ? UiAccent.color() : MapRenderUtil.getTeamColor(enemy);
 

@@ -362,13 +362,13 @@ public class CapturePointManager {
         return team == null ? null : team.getName();
     }
 
+    // WHY: финальную открывают только обязательные точки: необязательная берётся ради дохода
+    // WHY: и бонусов, и ждать её захвата команде незачем
     public static String getTeamWithAllPoints() {
-        if (capturePoints.isEmpty()) {
-            return null;
-        }
-
         String firstTeam = null;
         for (CapturePoint point : capturePoints.values()) {
+            if (!point.isRequired()) continue;
+
             String owner = point.getOwnerTeam();
             if (owner == null) {
                 return null;
@@ -382,8 +382,33 @@ public class CapturePointManager {
         return firstTeam;
     }
 
+    public static boolean hasRequiredPoints() {
+        for (CapturePoint point : capturePoints.values()) {
+            if (point.isRequired()) return true;
+        }
+        return false;
+    }
+
+    // WHY: условий нет - значит выполнять нечего, и финальная открыта с начала матча; иначе карта
+    // WHY: из одних необязательных точек кончалась бы матчем, который невозможно выиграть
     public static boolean isFinalPointAvailable() {
-        return getTeamWithAllPoints() != null;
+        return !hasRequiredPoints() || getTeamWithAllPoints() != null;
+    }
+
+    // WHY: без этого правила команда, собравшая все обязательные точки, открывала финальную
+    // WHY: сопернику: тот приходил на готовое и забирал матч, не взяв ни одной точки
+    public static boolean mayTakeFinal(String team) {
+        if (!finalForOpenerOnly) return true;
+
+        String opener = getTeamWithAllPoints();
+        return opener == null || opener.equals(team);
+    }
+
+    public static boolean isFinalForOpenerOnly() { return finalForOpenerOnly; }
+
+    public static void setFinalForOpenerOnly(boolean value) {
+        finalForOpenerOnly = value;
+        persist();
     }
 
     public static void resetAllPoints() {
@@ -459,6 +484,7 @@ public class CapturePointManager {
         }
     }
 
+    private static boolean finalForOpenerOnly;
     private static boolean globalCaptureMarkers = true;
     private static boolean globalFinalMarkers = true;
 
@@ -493,6 +519,7 @@ public class CapturePointManager {
 
     private static CompoundTag snapshot() {
         CompoundTag mainTag = new CompoundTag();
+        mainTag.putBoolean("finalForOpenerOnly", finalForOpenerOnly);
         mainTag.putBoolean("globalCaptureMarkers", globalCaptureMarkers);
         mainTag.putBoolean("globalFinalMarkers", globalFinalMarkers);
         mainTag.putBoolean("blockProtection", BlockProtectionHandler.isProtectionEnabled());
@@ -544,6 +571,7 @@ public class CapturePointManager {
     }
 
     private static void restore(CompoundTag mainTag) {
+        finalForOpenerOnly = mainTag.getBoolean("finalForOpenerOnly");
         globalCaptureMarkers = !mainTag.contains("globalCaptureMarkers") || mainTag.getBoolean("globalCaptureMarkers");
         globalFinalMarkers = !mainTag.contains("globalFinalMarkers") || mainTag.getBoolean("globalFinalMarkers");
         BlockProtectionHandler.setProtectionEnabled(mainTag.getBoolean("blockProtection"));

@@ -18,6 +18,7 @@ import com.persiki84.zones.client.ClientShopData;
 import com.persiki84.zones.shop.ShopAccess;
 import com.persiki84.zones.shop.ShopEntry;
 import com.persiki84.zones.shop.ShopSection;
+import com.persiki84.zones.shop.StockScope;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -46,6 +47,8 @@ public class ShopAdminScreen extends ManagerScreen {
     private static final Pattern ID_PATTERN = Pattern.compile("[a-z0-9_.-]+");
 
     private static final ShopAccess EMPTY_ACCESS = new ShopAccess();
+    private static final StockScope[] SCOPES = StockScope.values();
+    private static final List<Component> SCOPE_LABELS = scopeLabels();
 
     private int tab;
     private int accessTarget;
@@ -66,6 +69,14 @@ public class ShopAdminScreen extends ManagerScreen {
     private String newSectionTitle = "";
     private int shownSections = -1;
     private String shownLayout = "";
+
+    private static List<Component> scopeLabels() {
+        List<Component> labels = new ArrayList<>();
+        for (StockScope scope : SCOPES) {
+            labels.add(Component.translatable(scope.label()));
+        }
+        return labels;
+    }
 
     public ShopAdminScreen() {
         super(Component.translatable("zones.shopadmin.title"));
@@ -115,24 +126,34 @@ public class ShopAdminScreen extends ManagerScreen {
         addSectionList(sections);
     }
 
-    // WHY: перестановка и перенос не меняют числа строк, поэтому обновление экрана по размеру
-    // WHY: списка пропускало бы их: сравниваем сам порядок идентификаторов
+    // WHY: перестановка, переименование и правка цены не меняют числа строк, поэтому обновление
+    // WHY: экрана по размеру списка их пропускало: подпись ведёт и порядок, и сами значения
     private String layoutSignature() {
         StringBuilder signature = new StringBuilder();
         for (ShopSection section : ClientShopData.sections()) {
-            signature.append(section.id()).append('/');
+            signature.append(section.id()).append('=').append(section.title())
+                    .append(section.access().list()).append('/');
         }
 
         ShopSection section = current();
         if (section == null) return signature.toString();
 
         for (String childId : section.childIds()) {
-            signature.append(childId).append(':');
+            ShopSection child = section.child(childId);
+            signature.append(childId).append('=').append(child.title())
+                    .append(child.access().list()).append(':');
         }
         for (ShopEntry entry : entries()) {
-            signature.append(entry.id()).append(',');
+            appendEntry(signature, entry);
         }
         return signature.toString();
+    }
+
+    private static void appendEntry(StringBuilder signature, ShopEntry entry) {
+        signature.append(entry.id()).append('|').append(entry.price()).append('|')
+                .append(entry.stock()).append('|').append(entry.restockSeconds()).append('|')
+                .append(entry.scope().id()).append('|').append(entry.description())
+                .append('|').append(entry.access().list()).append(',');
     }
 
     // WHY: описание правится текстом, а не строкой-переключателем: поле ввода живёт до пересборки
@@ -342,9 +363,29 @@ public class ShopAdminScreen extends ManagerScreen {
         for (ShopEntry entry : entries()) {
             rows.add(stockRow(entry));
             rows.add(restockRow(entry));
+            rows.add(scopeRow(entry));
         }
         if (rows.isEmpty()) rows.add(emptyRow());
         return rows;
+    }
+
+    // WHY: у общего склада один остаток на весь сервер, у командного свой у каждой команды,
+    // WHY: у личного свой у каждого игрока: без этого лимит в одну штуку держит очередь из всей команды
+    private PickRow scopeRow(ShopEntry entry) {
+        String id = entry.id();
+        PickRow row = new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.shopadmin.scope"), SCOPE_LABELS,
+                () -> scopeOf(id).ordinal(),
+                picked -> send("item scope " + sectionId + " " + id + " " + SCOPES[picked].id()));
+        row.hint("zones.shopadmin.scope.hint");
+        return row;
+    }
+
+    private StockScope scopeOf(String id) {
+        for (ShopEntry entry : entries()) {
+            if (entry.id().equals(id)) return entry.scope();
+        }
+        return StockScope.DEFAULT;
     }
 
     // WHY: склад хранится связками по размеру покупки, а игрок задаёт лимит штуками, поэтому строка
@@ -892,7 +933,11 @@ public class ShopAdminScreen extends ManagerScreen {
 
     @Override
     public void tick() {
-        if (ClientShopData.sections().size() != shownSections || !layoutSignature().equals(shownLayout)) rebuild();
+        if (typingInRow()) return;
+
+        String signature = layoutSignature();
+        if (ClientShopData.sections().size() == shownSections && signature.equals(shownLayout)) return;
+        rebuild();
     }
 
 }

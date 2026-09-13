@@ -648,9 +648,16 @@ public abstract class ManagerScreen extends GlassScreen {
     // WHY: количеству, их не замечает: список сверяется подписью, как состав магазина
     protected boolean stale(String signature) {
         if (signature.equals(shownSignature)) return false;
+        if (typingInRow()) return false;
 
         shownSignature = signature;
         return true;
+    }
+
+    // WHY: пересборка заменяет виджеты, а набранное живёт в самой строке: обновление снимка
+    // WHY: посреди набора числа или клавиши стирало бы ввод у того, кто как раз печатает
+    protected boolean typingInRow() {
+        return getFocused() instanceof MenuRow row && row.capturing();
     }
 
     protected static String heldItem() {

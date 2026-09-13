@@ -12,6 +12,7 @@ import com.persiki84.quarrymod.data.QuarryBlock;
 import com.persiki84.quarrymod.data.QuarryBlockManager;
 import com.persiki84.quarrymod.data.QuarryBlockRule;
 import com.persiki84.sellmod.SellManager;
+import com.persiki84.battlecraft.compat.iff.IffDevice;
 import com.persiki84.battlecraft.rules.GameRule;
 import com.persiki84.battlecraft.rules.GameRules;
 import com.persiki84.shared.gunsmith.GunSmith;
@@ -40,6 +41,7 @@ public final class ModuleMenuStates {
     public static final String MODIFIERS = "itemmodifiers";
     public static final String SHOP = "shop";
     public static final String GAME_RULES = "gamerules";
+    public static final String IFF_AVAILABLE = "iffAvailable";
     public static final String TEAMS = "teams";
     public static final String MAP = "map";
 
@@ -144,6 +146,9 @@ public final class ModuleMenuStates {
         for (GameRule rule : GameRule.values()) {
             tag.putBoolean(rule.id(), GameRules.allows(rule));
         }
+        // WHY: правило про свой-чужой держится на чужом моде, и строка меню обязана знать об этом
+        // WHY: от сервера: наличие мода у клиента ничего не говорит о том, что стоит на сервере
+        tag.putBoolean(IFF_AVAILABLE, IffDevice.available());
         return tag;
     }
 

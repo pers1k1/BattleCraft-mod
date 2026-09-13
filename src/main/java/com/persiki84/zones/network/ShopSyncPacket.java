@@ -2,6 +2,7 @@ package com.persiki84.zones.network;
 
 import com.persiki84.zones.client.ClientShopData;
 import com.persiki84.zones.shop.ShopSection;
+import com.persiki84.zones.shop.ShopViewer;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -12,20 +13,20 @@ import java.util.function.Supplier;
 
 public class ShopSyncPacket {
     private final List<ShopSection> sections = new ArrayList<>();
-    private final String viewer;
+    private final ShopViewer viewer;
     private final boolean full;
 
-    public ShopSyncPacket(Collection<ShopSection> sections, String viewer, boolean full) {
+    public ShopSyncPacket(Collection<ShopSection> sections, ShopViewer viewer, boolean full) {
         this.viewer = viewer;
         this.full = full;
         for (ShopSection section : sections) {
-            if (full || section.access().visibleTo(viewer)) this.sections.add(section);
+            if (full || section.access().visibleTo(viewer.team())) this.sections.add(section);
         }
     }
 
     private ShopSyncPacket(List<ShopSection> decoded) {
         this.sections.addAll(decoded);
-        this.viewer = null;
+        this.viewer = ShopViewer.NOBODY;
         this.full = true;
     }
 

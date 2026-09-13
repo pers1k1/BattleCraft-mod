@@ -12,7 +12,10 @@ import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.PickRow;
 import com.persiki84.shared.client.menu.ToggleRow;
 import com.persiki84.shared.client.ui.UiButton;
+import com.persiki84.zones.mark.MapMark;
+import com.persiki84.zones.mark.MarkKind;
 import com.persiki84.zones.mark.MarkMenuState;
+import com.persiki84.zones.mark.MarkPalette;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -36,11 +39,6 @@ public class MarkManagerScreen extends ManagerScreen {
     private static final int LABEL_LIMIT = 48;
     private static final Pattern ID_PATTERN = Pattern.compile("[A-Za-z0-9_.+-]+");
 
-    private static final int[] COLORS = {
-            0xFFE7E9F4, 0xFFCE2A22, 0xFF3F7BD8, 0xFF3FA75A,
-            0xFFE0B33C, 0xFFD9772E, 0xFF9B59B6, 0xFF34C6C6
-    };
-
     private int tab;
     private String markId;
     private FieldRow labelRow;
@@ -50,6 +48,7 @@ public class MarkManagerScreen extends ManagerScreen {
     private MenuField labelField;
     private String newId = "";
     private String newLabel = "";
+    private String newLine = "";
     private boolean placed;
     private int newX;
     private int newY;
@@ -156,6 +155,8 @@ public class MarkManagerScreen extends ManagerScreen {
         rows.add(reading("zones.mark.menu.position", () -> position(id)));
         rows.add(labelRow());
         rows.add(action("zones.mark.menu.rename", "zones.mark.menu.action.apply", () -> applyLabel(id)));
+        rows.add(kindRow(id));
+        addLineRows(rows, id);
         rows.add(colorRow(id));
         rows.add(new ToggleRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("zones.mark.menu.everyone"),
@@ -165,6 +166,48 @@ public class MarkManagerScreen extends ManagerScreen {
         rows.add(action("zones.mark.menu.move", "zones.mark.menu.action.here", () -> send("edit " + id + " here")));
         rows.add(deleteRow(id));
         return rows;
+    }
+
+    private PickRow kindRow(String id) {
+        List<Component> options = new ArrayList<>();
+        for (MarkKind kind : MarkKind.values()) {
+            options.add(Component.translatable(kind.label()));
+        }
+        PickRow row = new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.mark.menu.kind"), options,
+                () -> MarkKind.byId(live(id).getString("kind")).ordinal(),
+                picked -> send("edit " + id + " kind " + MarkKind.values()[picked].id()));
+        row.hint("zones.mark.menu.kind" + HINT_SUFFIX);
+        return row;
+    }
+
+    // WHY: первая строка это подпись метки, и она правится полем выше: здесь только продолжение
+    // WHY: надписи, поэтому снять можно любую строку кроме первой
+    private void addLineRows(List<AbstractWidget> rows, String id) {
+        ListTag lines = live(id).getList("lines", Tag.TAG_STRING);
+        for (int index = 1; index < lines.size(); index++) {
+            int line = index;
+            rows.add(action("zones.mark.menu.line", "zones.mark.menu.action.remove_line",
+                    () -> send("edit " + id + " line remove " + line))
+                    .note(Component.literal(lines.getString(line))));
+        }
+        if (lines.size() < MapMark.MAX_LINES) {
+            rows.add(new FieldRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                    Component.translatable("zones.mark.menu.add_line"),
+                    Component.translatable("zones.mark.menu.add_line.hint"), "", LABEL_LIMIT,
+                    value -> newLine = value));
+            rows.add(action("zones.mark.menu.add_line", "zones.mark.menu.action.add",
+                    () -> applyNewLine(id)));
+        }
+    }
+
+    private void applyNewLine(String id) {
+        String value = newLine.trim();
+        if (value.isEmpty()) return;
+
+        send("edit " + id + " line add " + value);
+        newLine = "";
+        rebuild();
     }
 
     // WHY: метка, снятая с мира, остаётся на миникарте и полной карте: это ориентир для карты,
@@ -239,20 +282,13 @@ public class MarkManagerScreen extends ManagerScreen {
 
     private PickRow colorRow(String id) {
         List<Component> options = new ArrayList<>();
-        for (int index = 0; index < COLORS.length; index++) {
-            options.add(Component.translatable("zones.mark.menu.color." + index));
+        for (int index = 0; index < MarkPalette.COLORS.length; index++) {
+            options.add(MarkPalette.name(index));
         }
         return new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("zones.mark.menu.color"), options,
-                () -> colorIndex(live(id).getInt("color")),
-                picked -> send("edit " + id + " color " + COLORS[picked]));
-    }
-
-    private static int colorIndex(int color) {
-        for (int index = 0; index < COLORS.length; index++) {
-            if (COLORS[index] == color) return index;
-        }
-        return 0;
+                () -> MarkPalette.indexOf(live(id).getInt("color")),
+                picked -> send("edit " + id + " color " + MarkPalette.COLORS[picked]));
     }
 
     private List<AbstractWidget> teamRows() {

@@ -10,6 +10,8 @@ import com.persiki84.capturepoints.client.ClientCaptureData;
 import com.persiki84.minimap.network.MapMarkerSyncPacket;
 import com.persiki84.minimap.network.MapMarkerUpdatePacket;
 import com.persiki84.minimap.network.MapTeleportPacket;
+import com.persiki84.zones.mark.MarkPalette;
+import com.persiki84.zones.network.MarkEditPacket;
 import com.persiki84.minimap.network.MapWorldMarkerSyncPacket;
 import com.persiki84.minimap.network.PacketHandler;
 import com.persiki84.minimap.network.PlayerPositionSyncPacket;
@@ -31,6 +33,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class MapScreen extends Screen {
@@ -43,6 +47,15 @@ public class MapScreen extends Screen {
     private static final float BASE_RADIUS = 5.0f;
     private static final float MARKER_DOT = 2.0f;
     private static final Component BASE_LABEL = Component.translatable("zones.marker.base");
+    private static final long DOUBLE_CLICK_MS = 400L;
+
+    private final MapActionMenu actions = new MapActionMenu();
+    private final MapTextPrompt prompt = new MapTextPrompt();
+    private String hoveredLabel;
+    private String armedLabel;
+    private String clickedLabel;
+    private long clickedAt;
+    private boolean movedLabel;
     private double mapX = 0;
     private double mapZ = 0;
     private float zoom = 1.0f;
@@ -81,6 +94,7 @@ public class MapScreen extends Screen {
         renderGrid(guiGraphics, centerX, centerY);
         renderPoints(guiGraphics, centerX, centerY);
         renderMarkers(guiGraphics, centerX, centerY);
+        renderLabels(guiGraphics, mouseX, mouseY, centerX, centerY);
 
         guiGraphics.disableScissor();
 
@@ -88,6 +102,8 @@ public class MapScreen extends Screen {
         renderChrome(guiGraphics, mouseX, mouseY, centerX, centerY);
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
+        actions.render(guiGraphics, this.font, mouseX, mouseY);
+        prompt.render(guiGraphics, this.font, this.width, this.height);
     }
 
     private void applyZoom(int mouseX, int mouseY, int centerX, int centerY) {
@@ -154,6 +170,7 @@ public class MapScreen extends Screen {
         int pinged = 0;
         for (MapMark mark : ClientMarkData.all()) {
             if (mc.level == null || !mc.level.dimension().location().equals(mark.dimension())) continue;
+            if (MapLabels.isLabel(mark)) continue;
             pinged++;
             renderMarker(guiGraphics, mark.position().getX() + 0.5, mark.position().getZ() + 0.5,
                     centerX, centerY, mark.color(), mark.label(),
@@ -199,9 +216,7 @@ public class MapScreen extends Screen {
         UiRender.labelCentered(guiGraphics, this.font, readout, UiMetrics.MARGIN + readoutWidth / 2.0f,
                 UiRender.centerY(UiMetrics.MARGIN, rowHeight, scale), scale, UiAccent.text());
 
-        Component hint = Component.translatable(canTeleport()
-                ? "minimap.screen.hint.operator"
-                : "minimap.screen.hint");
+        Component hint = Component.translatable(hintKey());
         float hintWidth = UiMetrics.cardWidth(UiRender.width(this.font, hint) * scale);
         float hintY = this.height - UiMetrics.MARGIN_WIDE - rowHeight;
         UiGlass.panel(guiGraphics, (this.width - hintWidth) / 2.0f, hintY, hintWidth, rowHeight,
@@ -285,9 +300,146 @@ public class MapScreen extends Screen {
         labelAbove(guiGraphics, name, screenX, screenY, 4.1f, UiAccent.text());
     }
 
+
+    private String hintKey() {
+        if (!canEdit()) return "minimap.screen.hint";
+        if (armedLabel != null) return "minimap.screen.hint.dragging";
+        return hoveredLabel == null ? "minimap.screen.hint.operator" : "minimap.screen.hint.label";
+    }
+
+    private void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY, int centerX, int centerY) {
+        hoveredLabel = canEdit() && !actions.open() && !prompt.open()
+                ? MapLabels.under(this.font, mouseX, mouseY, mapX, mapZ, zoom, centerX, centerY)
+                : null;
+        MapLabels.render(guiGraphics, this.font, mapX, mapZ, zoom, centerX, centerY, hoveredLabel, armedLabel);
+    }
+
+    private boolean canEdit() {
+        Minecraft mc = Minecraft.getInstance();
+        return mc.player != null && mc.player.hasPermissions(OPERATOR_LEVEL);
+    }
+
+    private double worldXAt(double mouseX) {
+        return mapX + (mouseX - this.width / 2.0) / zoom;
+    }
+
+    private double worldZAt(double mouseY) {
+        return mapZ + (mouseY - this.height / 2.0) / zoom;
+    }
+
+    // WHY: на колесе раньше был один телепорт, и просто добавить к нему надписи некуда: окно
+    // WHY: выбора спрашивает, что сделать с точкой, по которой щёлкнули
+    private void openActions(double mouseX, double mouseY) {
+        String id = MapLabels.under(this.font, mouseX, mouseY, mapX, mapZ, zoom,
+                this.width / 2, this.height / 2);
+        List<MapActionMenu.Item> items = new ArrayList<>();
+        items.add(MapActionMenu.Item.of("minimap.map.action.teleport",
+                () -> teleportTo(worldXAt(mouseX), worldZAt(mouseY))));
+
+        if (id == null) {
+            items.add(MapActionMenu.Item.of("minimap.map.action.new_label",
+                    () -> askNewLabel(worldXAt(mouseX), worldZAt(mouseY))));
+        } else {
+            addLabelActions(items, id, mouseX, mouseY);
+        }
+        actions.show(this.font, mouseX, mouseY, this.width, this.height, items);
+    }
+
+    private void addLabelActions(List<MapActionMenu.Item> items, String id, double mouseX, double mouseY) {
+        MapMark mark = ClientMarkData.byId(id);
+        if (mark == null) return;
+
+        items.add(MapActionMenu.Item.of("minimap.map.action.edit_line", () -> askLine(id)));
+        items.add(MapActionMenu.Item.of("minimap.map.action.add_line", () -> askNewLine(id)));
+        if (mark.lines().size() > 1) {
+            items.add(MapActionMenu.Item.of("minimap.map.action.remove_line",
+                    () -> send(MarkEditPacket.Action.REMOVE_LINE, id, 0, 0,
+                            mark.lines().size() - 1, 0, "")));
+        }
+        items.add(MapActionMenu.Item.of("minimap.map.action.color", () -> openColors(id, mouseX, mouseY)));
+        items.add(MapActionMenu.Item.of("minimap.map.action.delete",
+                () -> send(MarkEditPacket.Action.DELETE, id, 0, 0, 0, 0, "")));
+    }
+
+    private void openColors(String id, double mouseX, double mouseY) {
+        List<MapActionMenu.Item> items = new ArrayList<>();
+        for (int index = 0; index < MarkPalette.COLORS.length; index++) {
+            int color = MarkPalette.COLORS[index];
+            items.add(MapActionMenu.Item.colored(MarkPalette.name(index), color,
+                    () -> send(MarkEditPacket.Action.COLOR, id, 0, 0, 0, color, "")));
+        }
+        actions.show(this.font, mouseX, mouseY, this.width, this.height, items);
+    }
+
+    private void askNewLabel(double worldX, double worldZ) {
+        prompt.ask(Component.translatable("minimap.map.prompt.new_label"), "",
+                text -> send(MarkEditPacket.Action.CREATE, "", Mth.floor(worldX), Mth.floor(worldZ),
+                        0, MapMark.DEFAULT_COLOR, text));
+    }
+
+    // WHY: текущий текст берётся в момент открытия окна, а не в момент сборки меню: снимок
+    // WHY: меток приходит заново каждую правку, и объект из старого снимка уже не тот
+    private void askLine(String id) {
+        MapMark mark = ClientMarkData.byId(id);
+        if (mark == null) return;
+
+        prompt.ask(Component.translatable("minimap.map.prompt.edit_line"), mark.lines().get(0),
+                text -> send(MarkEditPacket.Action.SET_LINE, id, 0, 0, 0, 0, text));
+    }
+
+    private void askNewLine(String id) {
+        prompt.ask(Component.translatable("minimap.map.prompt.add_line"), "",
+                text -> send(MarkEditPacket.Action.ADD_LINE, id, 0, 0, 0, 0, text));
+    }
+
+    private static void send(MarkEditPacket.Action action, String id, int x, int z,
+                             int line, int color, String text) {
+        com.persiki84.zones.network.PacketHandler.INSTANCE.sendToServer(
+                new MarkEditPacket(action, id, x, z, line, color, text));
+    }
+
+    private void teleportTo(double worldX, double worldZ) {
+        PacketHandler.INSTANCE.sendToServer(new MapTeleportPacket(worldX, worldZ));
+        onClose();
+    }
+
+    // WHY: перетаскивание разрешено только после двойного щелчка: одиночный по карте ставит
+    // WHY: личную метку, и надпись уезжала бы от любого промаха мимо неё
+    private boolean armLabel(String id) {
+        long now = System.currentTimeMillis();
+        boolean again = id.equals(clickedLabel) && now - clickedAt < DOUBLE_CLICK_MS;
+        clickedLabel = id;
+        clickedAt = now;
+
+        if (!again) return false;
+        armedLabel = id;
+        movedLabel = false;
+        return true;
+    }
+
+    private void dragLabel(double mouseX, double mouseY) {
+        movedLabel = true;
+        MapLabels.hold(armedLabel, Mth.floor(worldXAt(mouseX)), Mth.floor(worldZAt(mouseY)));
+    }
+
+    private void dropLabel(double mouseX, double mouseY) {
+        if (movedLabel) {
+            int x = Mth.floor(worldXAt(mouseX));
+            int z = Mth.floor(worldZAt(mouseY));
+            MapLabels.hold(armedLabel, x, z);
+            send(MarkEditPacket.Action.MOVE, armedLabel, x, z, 0, 0, "");
+            armedLabel = null;
+        }
+        movedLabel = false;
+    }
+
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            if (armedLabel != null) {
+                dragLabel(mouseX, mouseY);
+                return true;
+            }
             hasDragged = true;
             mapX -= dragX / zoom;
             mapZ -= dragY / zoom;
@@ -298,37 +450,54 @@ public class MapScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (actions.open() || prompt.open()) return true;
+
         targetZoom = (float) Math.max(0.1, Math.min(10.0, targetZoom + delta * 0.15 * targetZoom));
         return true;
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE && teleportToCursor(mouseX, mouseY)) return true;
+        if (prompt.open()) return true;
+        if (actions.open()) {
+            actions.click(mouseX, mouseY);
+            return true;
+        }
+        if (button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
+            if (canEdit()) openActions(mouseX, mouseY);
+            return true;
+        }
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && grabLabel(mouseX, mouseY)) return true;
 
+        armedLabel = null;
         hasDragged = false;
         clickedWidget = super.mouseClicked(mouseX, mouseY, button);
         return true;
     }
 
-    private boolean teleportToCursor(double mouseX, double mouseY) {
-        Minecraft mc = Minecraft.getInstance();
-        if (!canTeleport()) return false;
+    private boolean grabLabel(double mouseX, double mouseY) {
+        if (!canEdit()) return false;
 
-        double worldX = mapX + (mouseX - this.width / 2.0) / zoom;
-        double worldZ = mapZ + (mouseY - this.height / 2.0) / zoom;
-        PacketHandler.INSTANCE.sendToServer(new MapTeleportPacket(worldX, worldZ));
-        onClose();
+        String id = MapLabels.under(this.font, mouseX, mouseY, mapX, mapZ, zoom,
+                this.width / 2, this.height / 2);
+        if (id == null) return false;
+
+        hasDragged = false;
+        clickedWidget = false;
+        if (!id.equals(armedLabel)) armedLabel = null;
+        armLabel(id);
         return true;
-    }
-
-    private boolean canTeleport() {
-        Minecraft mc = Minecraft.getInstance();
-        return mc.player != null && mc.player.hasPermissions(OPERATOR_LEVEL);
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (prompt.open() || actions.open()) return true;
+
+        if (armedLabel != null && button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            dropLabel(mouseX, mouseY);
+            return true;
+        }
+
         if (clickedWidget) {
             clickedWidget = false;
             return super.mouseReleased(mouseX, mouseY, button);
@@ -365,6 +534,28 @@ public class MapScreen extends Screen {
             return dx * dx + dz * dz < reach * reach;
         }
         return false;
+    }
+
+    @Override
+    public boolean charTyped(char symbol, int modifiers) {
+        if (prompt.open()) return prompt.charTyped(symbol);
+        return super.charTyped(symbol, modifiers);
+    }
+
+    @Override
+    public boolean keyPressed(int key, int scan, int modifiers) {
+        if (prompt.open()) return prompt.keyPressed(key);
+        if (key != GLFW.GLFW_KEY_ESCAPE) return super.keyPressed(key, scan, modifiers);
+
+        if (actions.open()) {
+            actions.close();
+            return true;
+        }
+        if (armedLabel != null) {
+            armedLabel = null;
+            return true;
+        }
+        return super.keyPressed(key, scan, modifiers);
     }
 
     @Override

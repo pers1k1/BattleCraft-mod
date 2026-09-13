@@ -174,9 +174,30 @@ public class CapturePointManagerScreen extends ManagerScreen {
         rows.add(number("capturepoints.menu.cooldown", point, "cooldown", 0, MAX_SECONDS, 5,
                 value -> send(point, "setcooldown " + quoted(point) + " " + value)));
         rows.add(ownerRow(point));
+        addVisibilityRows(rows, point);
         addTuningRows(rows, point);
         addPointActions(rows, point);
         place(rows);
+    }
+
+    // WHY: обязательность есть только у обычной точки: финальная сама открывается ими, и строка
+    // WHY: у неё означала бы условие для самой себя
+    private void addVisibilityRows(List<AbstractWidget> rows, CompoundTag point) {
+        String name = point.getString("name");
+        if (!point.getBoolean(CapturePointMenuState.FINAL_FLAG)) {
+            rows.add(pointToggle("capturepoints.menu.required", name, "required",
+                    value -> send(point, "setrequired " + quoted(point) + " " + value)));
+        }
+        rows.add(pointToggle("capturepoints.menu.shown_in_hud", name, "shownInHud",
+                value -> send(point, "sethud " + quoted(point) + " " + value)));
+    }
+
+    private ToggleRow pointToggle(String label, String name, String key,
+                                  java.util.function.Consumer<Boolean> apply) {
+        ToggleRow row = new ToggleRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable(label), () -> live(name).getBoolean(key), apply);
+        row.hint(label + ".hint");
+        return row;
     }
 
     private void addTuningRows(List<AbstractWidget> rows, CompoundTag point) {
@@ -510,6 +531,9 @@ public class CapturePointManagerScreen extends ManagerScreen {
                 value -> raw(POINT_COMMAND + " serverviewmarkers " + value)));
         rows.add(toggle("capturepoints.menu.final_markers", CapturePointMenuState.FINAL_MARKERS,
                 value -> raw(FINAL_COMMAND + " serverviewmarkers " + value)));
+        rows.add(toggle("capturepoints.menu.final_opener_only", CapturePointMenuState.FINAL_OPENER_ONLY,
+                value -> raw(FINAL_COMMAND + " openeronly " + value))
+                .hint("capturepoints.menu.final_opener_only.hint"));
         rows.add(action("capturepoints.menu.reset_all", "capturepoints.menu.action.reset",
                 () -> raw(POINT_COMMAND + " resetall")));
         return rows;
@@ -629,7 +653,8 @@ public class CapturePointManagerScreen extends ManagerScreen {
             mark.append(point.getString("name")).append(point.getBoolean(CapturePointMenuState.FINAL_FLAG))
                     .append(point.getString("owner")).append(point.getString("rewardItem"))
                     .append(point.getString("incomeItem")).append(point.getString("buff"))
-                    .append(point.getString("command")).append('\n');
+                    .append(point.getString("command")).append(point.getBoolean("required"))
+                    .append(point.getBoolean("shownInHud")).append('\n');
         }
         return mark.toString();
     }

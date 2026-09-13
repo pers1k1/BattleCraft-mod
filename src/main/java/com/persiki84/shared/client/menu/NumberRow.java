@@ -240,6 +240,11 @@ public class NumberRow extends MenuRow {
         push(sign * step, true);
     }
 
+    @Override
+    public boolean capturing() {
+        return typing;
+    }
+
     private void beginTyping() {
         UiSound.press();
         typing = true;

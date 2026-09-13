@@ -61,19 +61,20 @@ public final class ShopTransactions {
             return;
         }
 
-        if (entry.soldOut()) {
+        String pool = ShopViewer.of(player).key(entry.scope());
+        if (entry.soldOutIn(pool)) {
             deny(player, "zones.shop.error.sold_out");
             return;
         }
 
         int balance = countCurrency(player);
-        int units = affordableUnits(entry, amount, balance);
+        int units = affordableUnits(entry, pool, amount, balance);
         if (units <= 0) {
             deny(player, "zones.shop.error.not_enough", entry.price() - balance);
             return;
         }
 
-        checkout(player, entry, entry.take(units, System.currentTimeMillis()));
+        checkout(player, entry, entry.take(pool, units, System.currentTimeMillis()));
     }
 
     // WHY: клиентский пакет это заявка: ограничение по командам обязано проверяться здесь,
@@ -100,13 +101,13 @@ public final class ShopTransactions {
         // WHY: покупка меняет на диске только остаток склада, поэтому у безлимитного товара нечего
         // WHY: писать и нечего рассылать: каталог уходил всем и переписывался файлом на каждый чек
         ShopCatalog.persist();
-        ZonesMod.syncShopToEveryone(player.getServer());
+        ZonesMod.syncShopAfterPurchase(player, entry.scope());
     }
 
-    private static int affordableUnits(ShopEntry entry, int amount, int balance) {
+    private static int affordableUnits(ShopEntry entry, String pool, int amount, int balance) {
         int ceiling = Math.max(1, MAX_ITEMS_PER_PURCHASE / entry.bundle());
         int wanted = Math.max(1, Math.min(amount, ceiling));
-        if (entry.limited()) wanted = Math.min(wanted, entry.available());
+        if (entry.limited()) wanted = Math.min(wanted, entry.availableIn(pool));
         if (entry.price() <= 0) return wanted;
         return Math.min(wanted, balance / entry.price());
     }

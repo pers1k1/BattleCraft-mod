@@ -112,6 +112,30 @@ public final class ShopStorage {
         }
     }
 
+    private static long readyAtOf(ShopEntry entry, String key) {
+        StockPool pool = entry.pool(key);
+        return pool == null ? 0L : pool.readyAt();
+    }
+
+    private static final class StoredPool {
+        private String key;
+        private int available;
+        private long readyAt;
+
+        private static List<StoredPool> of(ShopEntry entry) {
+            List<StoredPool> stored = new ArrayList<>();
+            for (String key : entry.poolKeys()) {
+                StockPool pool = entry.pool(key);
+                StoredPool line = new StoredPool();
+                line.key = key;
+                line.available = pool.available();
+                line.readyAt = pool.readyAt();
+                stored.add(line);
+            }
+            return stored;
+        }
+    }
+
     private static final class StoredEntry {
         private String id;
         private String stackNbt;
@@ -121,6 +145,8 @@ public final class ShopStorage {
         private int available = ShopEntry.UNLIMITED;
         private int restockSeconds;
         private long readyAt;
+        private String scope;
+        private List<StoredPool> pools;
         private List<String> teams;
 
         private static StoredEntry of(ShopEntry entry) {
@@ -132,9 +158,24 @@ public final class ShopStorage {
             stored.stock = entry.stock();
             stored.available = entry.available();
             stored.restockSeconds = entry.restockSeconds();
-            stored.readyAt = entry.readyAt();
+            stored.scope = entry.scope().id();
+            stored.pools = StoredPool.of(entry);
+            stored.available = entry.availableIn(ShopEntry.OWN_POOL);
+            stored.readyAt = readyAtOf(entry, ShopEntry.OWN_POOL);
             stored.teams = entry.access().list();
             return stored;
+        }
+
+        // WHY: файл старой версии не знает про склады по командам и игрокам, поэтому пара
+        // WHY: available/readyAt в его корне это общий склад, и она читается как единственный пул
+        private void restorePools(ShopEntry entry) {
+            if (pools == null) {
+                entry.restorePool(ShopEntry.OWN_POOL, available, readyAt);
+                return;
+            }
+            for (StoredPool pool : pools) {
+                entry.restorePool(pool.key, pool.available, pool.readyAt);
+            }
         }
 
         private ShopEntry toEntry() {
@@ -144,7 +185,8 @@ public final class ShopStorage {
 
                 ShopEntry entry = new ShopEntry(id, stack, price, description);
                 entry.setStock(stock, restockSeconds);
-                entry.restore(available, readyAt);
+                entry.setScope(StockScope.byId(scope));
+                restorePools(entry);
                 entry.access().restore(teams);
                 return entry;
             } catch (CommandSyntaxException e) {

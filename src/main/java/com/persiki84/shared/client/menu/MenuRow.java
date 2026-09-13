@@ -19,6 +19,9 @@ import net.minecraft.network.chat.Component;
 import java.util.function.Supplier;
 
 public abstract class MenuRow extends AbstractWidget implements GlidingRow {
+    // WHY: апдейтер экрана пересобирает строки, а пересборка теряет набранное: пока строка ловит
+    // WHY: клавиши, экран обязан стоять на месте, иначе цифра или клавиша пропадают на полпути
+
     protected static final float LABEL_SCALE = 1.0f;
     protected static final float TRACKING = 0.3f;
     protected static final float PAD = UiMetrics.PAD_WIDE;
@@ -67,6 +70,10 @@ public abstract class MenuRow extends AbstractWidget implements GlidingRow {
     }
 
     protected abstract void renderValue(GuiGraphics graphics, int mouseX, int mouseY, float focus);
+
+    public boolean capturing() {
+        return false;
+    }
 
     public MenuRow note(Component text) {
         note = text;

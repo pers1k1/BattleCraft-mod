@@ -22,6 +22,8 @@ import com.persiki84.zones.client.menu.MarkManagerScreen;
 import com.persiki84.zones.client.menu.ShopAdminScreen;
 import com.persiki84.zones.client.menu.ZoneManagerScreen;
 import com.persiki84.zones.shop.ShopCatalog;
+import com.persiki84.zones.shop.ShopViewer;
+import com.persiki84.zones.shop.StockScope;
 import net.minecraft.nbt.CompoundTag;
 
 import java.util.ArrayList;
@@ -146,10 +148,29 @@ public class ZonesMod {
     // WHY: каталог у каждого свой, потому что отделы и товары ограничиваются командами;
     // WHY: оператору уходит полный, иначе ему нечего было бы править в админском экране
     public static void syncShopTo(ServerPlayer player) {
-        Team team = player.getTeam();
         PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player),
-                new ShopSyncPacket(ShopCatalog.sections(),
-                        team == null ? null : team.getName(), player.hasPermissions(2)));
+                new ShopSyncPacket(ShopCatalog.sections(), ShopViewer.of(player), player.hasPermissions(2)));
+    }
+
+    // WHY: личный и командный склад после покупки меняются только у покупателя и его команды,
+    // WHY: поэтому весь каталог всему серверу рассылается лишь на общем запасе
+    public static void syncShopAfterPurchase(ServerPlayer buyer, StockScope scope) {
+        MinecraftServer server = buyer.getServer();
+        if (server == null) return;
+
+        if (scope == StockScope.PLAYER) {
+            syncShopTo(buyer);
+            return;
+        }
+        if (scope == StockScope.SHARED) {
+            syncShopToEveryone(server);
+            return;
+        }
+
+        Team team = buyer.getTeam();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (team == null ? player == buyer : team == player.getTeam()) syncShopTo(player);
+        }
     }
 
     public static void syncShopToEveryone(MinecraftServer server) {

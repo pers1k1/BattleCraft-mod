@@ -33,6 +33,9 @@ public class CapturePoint {
     private int incomeTimer;
     private int incomeIntervalSeconds;
 
+    private boolean required = true;
+    private boolean shownInHud = true;
+
     private CaptureMode mode;
     private RewardSplit rewardSplit;
     private int captureSpeed;
@@ -163,6 +166,12 @@ public class CapturePoint {
     public void incrementIncomeTimer() { this.incomeTimer++; }
     public void resetIncomeTimer() { this.incomeTimer = 0; }
 
+    public boolean isRequired() { return required; }
+    public void setRequired(boolean value) { this.required = value; }
+
+    public boolean isShownInHud() { return shownInHud; }
+    public void setShownInHud(boolean value) { this.shownInHud = value; }
+
     public CaptureMode getMode() { return mode; }
     public void setMode(CaptureMode mode) { this.mode = mode == null ? CaptureMode.DEFAULT : mode; }
 
@@ -233,6 +242,8 @@ public class CapturePoint {
         tag.putInt("ownedRollbackSpeed", ownedRollbackSpeed);
         tag.putInt("teamCooldown", teamCooldown);
         tag.putString("teamCooldownScope", teamCooldownScope.id());
+        tag.putBoolean("required", required);
+        tag.putBoolean("shownInHud", shownInHud);
     }
 
     protected static void readTuning(CompoundTag tag, CapturePoint point) {
@@ -246,6 +257,10 @@ public class CapturePoint {
         point.teamCooldown = tag.contains("teamCooldown")
                 ? Math.max(0, tag.getInt("teamCooldown"))
                 : DEFAULT_TEAM_COOLDOWN;
+        // WHY: отсутствие ключа у точки со старого сервера значит «как было»: обязательна и видна,
+        // WHY: иначе первое же чтение сняло бы с матча все условия открытия финальной
+        point.required = !tag.contains("required") || tag.getBoolean("required");
+        point.shownInHud = !tag.contains("shownInHud") || tag.getBoolean("shownInHud");
     }
 
     private static int percentOr(CompoundTag tag, String key, int fallback) {

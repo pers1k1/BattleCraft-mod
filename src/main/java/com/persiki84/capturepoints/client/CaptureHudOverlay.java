@@ -163,6 +163,7 @@ public class CaptureHudOverlay {
 
     private static void claimRow(Map<String, String> owners, boolean isFinal, long now) {
         for (Map.Entry<String, String> entry : owners.entrySet()) {
+            if (!ClientCaptureData.isPointShownInHud(entry.getKey())) continue;
             claimPill(entry.getKey(), entry.getValue(), isFinal, now);
         }
     }
@@ -184,6 +185,7 @@ public class CaptureHudOverlay {
     }
 
     private static boolean listed(String name, boolean isFinal, boolean finalsOpen) {
+        if (!ClientCaptureData.isPointShownInHud(name)) return false;
         if (isFinal) return finalsOpen && ClientCaptureData.getAllFinalPointOwners().containsKey(name);
         return ClientCaptureData.getAllPointOwners().containsKey(name);
     }
