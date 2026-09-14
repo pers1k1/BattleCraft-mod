@@ -14,12 +14,12 @@ import org.lwjgl.glfw.GLFW;
 
 @Mod.EventBusSubscriber(modid = CapturePointsMod.MOD_ID, value = Dist.CLIENT)
 public class KeyBindings {
-    public static final String CATEGORY = "key.categories." + CapturePointsMod.MOD_ID;
+    public static final String CATEGORY = "key.categories.battlecraft";
 
     public static final KeyMapping CAPTURE_KEY = new KeyMapping(
             "key." + CapturePointsMod.MOD_ID + ".capture",
             InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_RIGHT_ALT,
+            GLFW.GLFW_KEY_LEFT_ALT,
             CATEGORY
     );
 

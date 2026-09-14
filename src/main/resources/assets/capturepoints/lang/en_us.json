@@ -1,7 +1,6 @@
 {
   "capturepoints.prefix": "[CapturePoint] ",
   "capturepoints.error.player_only": "This command can only be used by a player",
-  "key.categories.capturepoints": "Capture Points",
   "key.capturepoints.capture": "Capture Point",
   "capturepoints.error.point_exists": "Capture point '%s' already exists!",
   "capturepoints.error.point_not_found": "Capture point not found!",

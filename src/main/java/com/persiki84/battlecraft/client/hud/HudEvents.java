@@ -18,6 +18,7 @@ import com.persiki84.shared.client.ui.UiBackdrop;
 import com.persiki84.shared.client.ui.UiCamera;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiLens;
+import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiQuality;
 import com.persiki84.shared.client.ui.UiVital;
 import net.minecraft.client.Minecraft;
@@ -130,6 +131,7 @@ public final class HudEvents {
         if (event.phase != TickEvent.Phase.START) return;
         UiFrame.advance();
         UiAccent.advance(UiFrame.delta());
+        UiPalette.advance(UiFrame.delta());
         HudInk.advance(UiFrame.delta());
         HudLayout.washTints(UiFrame.delta());
         ScreenVeil.advance(UiFrame.delta());

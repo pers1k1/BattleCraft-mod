@@ -1,7 +1,6 @@
 {
   "capturepoints.prefix": "[CapturePoint] ",
   "capturepoints.error.player_only": "Эту команду может использовать только игрок",
-  "key.categories.capturepoints": "Точки Захвата",
   "key.capturepoints.capture": "Захватить точку",
   "capturepoints.error.point_exists": "Точка с названием '%s' уже существует!",
   "capturepoints.error.point_not_found": "Точка не найдена!",

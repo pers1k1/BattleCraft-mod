@@ -1,5 +1,4 @@
 {
-  "category.minimap": "Minimap",
   "key.minimap.open_map": "Open Map",
   "minimap.settings.title": "Minimap Settings",
   "minimap.settings.minimap": "Minimap: %s",

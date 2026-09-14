@@ -1,5 +1,4 @@
 {
-  "category.minimap": "Мини-карта",
   "key.minimap.open_map": "Открыть карту",
   "minimap.settings.title": "Настройки миникарты",
   "minimap.settings.minimap": "Миникарта: %s",

@@ -3,7 +3,7 @@
   "knockdown.error.player_only": "This command can only be used by a player",
   "item.knockdown.injector": "Injector",
   "key.knockdown.revive": "Revive Player",
-  "key.categories.knockdown": "Knockdown Mod",
+  "key.knockdown.surrender": "Surrender",
   "knockdown.msg.too_weak": "You are too weak...",
   "knockdown.msg.heavily_wounded": "You are heavily wounded!",
   "knockdown.msg.injector_cooldown": "Injector recharging...",

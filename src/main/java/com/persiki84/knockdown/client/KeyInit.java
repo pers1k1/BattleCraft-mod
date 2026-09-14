@@ -15,15 +15,15 @@ public class KeyInit {
     public static final KeyMapping REVIVE_KEY = new KeyMapping(
             "key.knockdown.revive",
             InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_RIGHT_ALT,
-            "key.categories.knockdown"
+            GLFW.GLFW_KEY_LEFT_ALT,
+            "key.categories.battlecraft"
     );
 
     public static final KeyMapping SURRENDER_KEY = new KeyMapping(
             "key.knockdown.surrender",
             InputConstants.Type.KEYSYM,
             GLFW.GLFW_KEY_K,
-            "key.categories.knockdown"
+            "key.categories.battlecraft"
     );
 
     @SubscribeEvent

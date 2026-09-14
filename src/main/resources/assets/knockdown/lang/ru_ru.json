@@ -3,7 +3,7 @@
   "knockdown.error.player_only": "Эту команду может использовать только игрок",
   "item.knockdown.injector": "Инъектор",
   "key.knockdown.revive": "Поднять игрока",
-  "key.categories.knockdown": "Нокдаун Мод",
+  "key.knockdown.surrender": "Сдаться",
   "knockdown.msg.too_weak": "Вы слишком слабы...",
   "knockdown.msg.heavily_wounded": "Вы тяжело ранены!",
   "knockdown.msg.injector_cooldown": "Инъектор перезаряжается...",

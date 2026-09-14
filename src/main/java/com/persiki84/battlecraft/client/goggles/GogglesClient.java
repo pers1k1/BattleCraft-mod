@@ -34,7 +34,7 @@ public final class GogglesClient {
 
     public static final KeyMapping ZOOM = new KeyMapping(
             "key." + BattleCraftMod.MOD_ID + ".goggles_zoom",
-            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_V, KeyInputHandler.CATEGORY);
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_Y, KeyInputHandler.CATEGORY);
 
     private static final float ZOOM_STEP = 0.15f;
     private static final float ZOOM_DEPTH = 0.67f;

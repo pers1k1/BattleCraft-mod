@@ -22,7 +22,7 @@ import org.lwjgl.glfw.GLFW;
 public final class RadioTalk {
     public static final KeyMapping TALK = new KeyMapping(
             "key." + BattleCraftMod.MOD_ID + ".radio_talk",
-            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT, KeyInputHandler.CATEGORY);
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_CAPS_LOCK, KeyInputHandler.CATEGORY);
 
     private static final long REFRESH_MS = 400L;
     private static final long NOTICE_MS = 2500L;

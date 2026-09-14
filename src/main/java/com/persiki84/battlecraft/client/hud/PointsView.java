@@ -16,7 +16,7 @@ import org.lwjgl.glfw.GLFW;
 public final class PointsView {
     public static final KeyMapping SHOW_POINTS = new KeyMapping(
             "key." + BattleCraftMod.MOD_ID + ".points_hud",
-            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_I, KeyInputHandler.CATEGORY);
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_GRAVE_ACCENT, KeyInputHandler.CATEGORY);
 
     private static final long HOLD_FROM_MS = 200L;
 

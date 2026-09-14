@@ -450,11 +450,22 @@ public final class ShopGrid {
         renderPrice(graphics, entry, x, y, taken, focus);
     }
 
+    // WHY: renderItem принимает целые координаты, а плитка едет субпиксельно - значок прыгал по
+    // WHY: целым пикселям и отставал от карточки рывками. Место задаёт матрица, рисуется в ноль
+    private void paintItem(GuiGraphics graphics, ShopEntry entry, float x, float y) {
+        graphics.pose().pushPose();
+        graphics.pose().translate(x, y, 0.0f);
+        try {
+            graphics.renderItem(entry.stack(), 0, 0);
+            graphics.renderItemDecorations(font(), entry.stack(), 0, 0);
+        } finally {
+            graphics.pose().popPose();
+        }
+    }
+
     private void renderTileBody(GuiGraphics graphics, ShopView.Found found, float x, float y, boolean showSection) {
         ShopEntry entry = found.entry();
-        int itemX = (int) (x + TILE_SIZE / 2.0f - 8.0f);
-        graphics.renderItem(entry.stack(), itemX, (int) y + ITEM_TOP);
-        graphics.renderItemDecorations(font(), entry.stack(), itemX, (int) y + ITEM_TOP);
+        paintItem(graphics, entry, x + TILE_SIZE / 2.0f - 8.0f, y + ITEM_TOP);
 
         float textWidth = TILE_SIZE - UiMetrics.GAP * 2.0f;
         if (showSection) {
