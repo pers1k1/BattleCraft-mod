@@ -26,15 +26,29 @@ public final class ModSounds {
     // WHY: у нескольких сигналов один и тот же семпл, а реестр не терпит повторной регистрации имени
     private static void declare() {
         Set<String> declared = new HashSet<>();
+        declareInterface(declared);
+        declareRadio(declared);
+    }
+
+    private static void declareInterface(Set<String> declared) {
         for (UiSoundScheme scheme : UiSoundScheme.values()) {
             if (!scheme.sampled()) continue;
 
             for (UiCue cue : UiCue.values()) {
-                String path = "ui." + scheme.id() + "." + cue.sample();
-                if (!declared.add(path)) continue;
-                SOUNDS.register(path, () -> SoundEvent.createVariableRangeEvent(
-                        new ResourceLocation(BattleCraftMod.MOD_ID, path)));
+                name(declared, "ui." + scheme.id() + "." + cue.sample());
             }
         }
+    }
+
+    private static void declareRadio(Set<String> declared) {
+        for (RadioCue cue : RadioCue.values()) {
+            name(declared, cue.path());
+        }
+    }
+
+    private static void name(Set<String> declared, String path) {
+        if (!declared.add(path)) return;
+        SOUNDS.register(path, () -> SoundEvent.createVariableRangeEvent(
+                new ResourceLocation(BattleCraftMod.MOD_ID, path)));
     }
 }

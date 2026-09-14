@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.persiki84.battlecraft.mixin.voicechat",
+  "plugin": "com.persiki84.battlecraft.compat.voicechat.VoicechatMixinPlugin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "battlecraft.refmap.json",
+  "client": [
+    "PTTKeyHandlerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

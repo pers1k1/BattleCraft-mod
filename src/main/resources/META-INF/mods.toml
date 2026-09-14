@@ -11,6 +11,9 @@ config="battlecraft.extrasounds.mixins.json"
 [[mixins]]
 config="battlecraft.superbwarfare.mixins.json"
 
+[[mixins]]
+config="battlecraft.voicechat.mixins.json"
+
 [[mods]]
 modId="battlecraft"
 version="${mod_version}"

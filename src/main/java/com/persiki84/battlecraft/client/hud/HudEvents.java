@@ -5,6 +5,8 @@ import com.persiki84.shared.client.ui.UiGlassStyle;
 import com.persiki84.battlecraft.client.custom.HudLayout;
 import com.persiki84.battlecraft.client.island.IslandModel;
 import com.persiki84.battlecraft.client.media.MediaWatch;
+import com.persiki84.battlecraft.client.voice.RadioChirp;
+import com.persiki84.battlecraft.client.voice.RadioTalk;
 import com.persiki84.shared.client.menu.ScreenVeil;
 import com.persiki84.battlecraft.BattleCraftMod;
 import com.persiki84.battlecraft.client.ClientGameRules;
@@ -103,11 +105,15 @@ public final class HudEvents {
             StaminaBridge.clear();
             AmmoHud.forget();
             VoiceBridge.clear();
+            RadioChirp.forget();
+            RadioTalk.forget();
             return;
         }
         StaminaBridge.poll(mc.player);
         AmmoHud.poll(mc.player);
         VoiceBridge.poll();
+        RadioChirp.tick(mc.player);
+        RadioTalk.tick(mc.player);
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)

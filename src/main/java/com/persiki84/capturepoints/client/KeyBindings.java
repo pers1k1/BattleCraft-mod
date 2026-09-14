@@ -19,7 +19,7 @@ public class KeyBindings {
     public static final KeyMapping CAPTURE_KEY = new KeyMapping(
             "key." + CapturePointsMod.MOD_ID + ".capture",
             InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_G,
+            GLFW.GLFW_KEY_RIGHT_ALT,
             CATEGORY
     );
 

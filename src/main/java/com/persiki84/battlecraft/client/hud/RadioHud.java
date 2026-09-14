@@ -3,6 +3,7 @@ package com.persiki84.battlecraft.client.hud;
 import com.persiki84.battlecraft.client.custom.HudBox;
 import com.persiki84.battlecraft.client.custom.HudLayout;
 import com.persiki84.battlecraft.client.custom.HudSlot;
+import com.persiki84.battlecraft.client.voice.RadioTalk;
 import com.persiki84.battlecraft.client.voice.VoiceTape;
 import com.persiki84.battlecraft.client.voice.VoiceTraffic;
 import com.persiki84.battlecraft.compat.walkie.Walkie;
@@ -133,9 +134,7 @@ public final class RadioHud {
     }
 
     private static boolean sending(Minecraft mc, long now) {
-        return mc.player != null
-                && !Walkie.transmitting(mc.player).isEmpty()
-                && VoiceTraffic.own().talking(now);
+        return RadioTalk.speaking(mc.player, now);
     }
 
     private static void stack(HudBox box) {

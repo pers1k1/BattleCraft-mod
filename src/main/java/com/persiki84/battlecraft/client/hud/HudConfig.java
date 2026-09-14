@@ -21,6 +21,7 @@ public final class HudConfig {
     private static ForgeConfigSpec.BooleanValue RADIO_STATIC;
     private static ForgeConfigSpec.BooleanValue VOICE_TRACE;
     private static ForgeConfigSpec.DoubleValue RADIO_NOISE;
+    private static ForgeConfigSpec.BooleanValue RADIO_CHIRP;
     private static ForgeConfigSpec.BooleanValue STATUS_BARS;
     private static ForgeConfigSpec.BooleanValue EFFECT_CHIPS;
     private static ForgeConfigSpec.BooleanValue BOSS_BARS;
@@ -100,6 +101,8 @@ public final class HudConfig {
                 .define("radioStatic", true);
         RADIO_NOISE = BUILDER.comment("Сила помех рации, 1 это обычная")
                 .defineInRange("radioNoise", 1.0, 0.0, 2.0);
+        RADIO_CHIRP = BUILDER.comment("Щелчки рации: своя передача, чужая передача, питание")
+                .define("radioChirp", true);
     }
 
     private static ForgeConfigSpec.BooleanValue definePointsInHud() {
@@ -528,6 +531,14 @@ public final class HudConfig {
 
     public static void radioNoise(float value) {
         if (SPEC.isLoaded()) RADIO_NOISE.set((double) value);
+    }
+
+    public static boolean radioChirp() {
+        return read(RADIO_CHIRP, true);
+    }
+
+    public static void radioChirp(boolean value) {
+        if (SPEC.isLoaded()) RADIO_CHIRP.set(value);
     }
 
     public static float visualizerGain() {

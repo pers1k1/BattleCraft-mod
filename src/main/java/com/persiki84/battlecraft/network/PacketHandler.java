@@ -38,6 +38,18 @@ public class PacketHandler {
         registerAnnounce();
         registerAnnounceRequest();
         registerRadioTalk();
+        registerRadioKey();
+    }
+
+    private static void registerRadioKey() {
+        INSTANCE.registerMessage(
+                id(),
+                C2SRadioKeyPacket.class,
+                C2SRadioKeyPacket::encode,
+                C2SRadioKeyPacket::decode,
+                C2SRadioKeyPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER)
+        );
     }
 
     private static void registerRadioTalk() {

@@ -36,6 +36,17 @@ public final class RestrictedClient {
             "de.maxhenkel.voicechat.gui.CreateGroupScreen"
     );
 
+    // WHY: настройки чужих модов правятся файлом, а не в игре: пак раздаёт свои значения, и
+    // WHY: игрок, поменявший их на ходу, играет по другим правилам. Экраны режутся по классу,
+    // WHY: а не по клавише: к ним ведёт ещё и список модов, а клавишу можно назначить заново.
+    // WHY: сверено по jar-ам сборки: TACZ и SuperbWarfare рисуют настройки чужим Cloth Config
+    // WHY: (отсюда начало имени, а не точное: экран строится подклассами), ParCool своим экраном
+    private static final Set<String> CONFIG_SCREENS = Set.of(
+            "me.shedaniel.clothconfig2",
+            "com.alrex.parcool.client.gui.ParCoolSettingScreen",
+            "com.alrex.parcool.client.gui.Setting"
+    );
+
     private RestrictedClient() {}
 
     @SubscribeEvent
@@ -132,7 +143,15 @@ public final class RestrictedClient {
         if (screen == null) return false;
         if (screen instanceof AdvancementsScreen) return ClientGameRules.allows(GameRule.BLOCK_ADVANCEMENTS);
         if (screen instanceof ModListScreen) return ClientGameRules.allows(GameRule.BLOCK_MOD_LIST);
-        return FORBIDDEN_SCREENS.contains(screen.getClass().getName())
-                && ClientGameRules.allows(GameRule.BLOCK_VOICE_GROUPS);
+        String name = screen.getClass().getName();
+        if (configScreen(name)) return ClientGameRules.allows(GameRule.BLOCK_MOD_CONFIGS);
+        return FORBIDDEN_SCREENS.contains(name) && ClientGameRules.allows(GameRule.BLOCK_VOICE_GROUPS);
+    }
+
+    private static boolean configScreen(String name) {
+        for (String prefix : CONFIG_SCREENS) {
+            if (name.startsWith(prefix)) return true;
+        }
+        return false;
     }
 }

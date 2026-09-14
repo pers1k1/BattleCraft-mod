@@ -14,6 +14,8 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,6 +28,7 @@ public final class RadioRelay {
     private static final long SWEEP_MS = 200L;
     private static final float CLEAN_SHARE = 0.35f;
     private static final int FAINT_SIGNAL = 3;
+    private static final UUID[] NOBODY = new UUID[0];
 
     private static final Map<UUID, Long> swept = new ConcurrentHashMap<>();
 
@@ -33,7 +36,9 @@ public final class RadioRelay {
 
     @SubscribeEvent
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-        swept.remove(event.getEntity().getUUID());
+        UUID id = event.getEntity().getUUID();
+        swept.remove(id);
+        RadioAir.forget(id);
     }
 
     // WHY: голосовой пакет приходит пятьдесят раз в секунду и не в серверном потоке: обход
@@ -51,21 +56,58 @@ public final class RadioRelay {
         server.execute(() -> sweep(server, speaker));
     }
 
+    // WHY: зовут из обработчика клавиши эфира, он уже в серверном потоке
+    public static void arm(ServerPlayer speaker) {
+        if (!Walkie.available()) return;
+
+        swept.put(speaker.getUUID(), System.currentTimeMillis());
+        sweep(speaker);
+    }
+
     private static void sweep(MinecraftServer server, UUID speakerId) {
         ServerPlayer speaker = server.getPlayerList().getPlayer(speakerId);
-        if (speaker == null) return;
+        if (speaker == null) {
+            RadioAir.forget(speakerId);
+            return;
+        }
+        sweep(speaker);
+    }
 
-        ItemStack sending = Walkie.transmitting(speaker);
-        if (sending.isEmpty()) return;
+    private static void sweep(ServerPlayer speaker) {
+        UUID speakerId = speaker.getUUID();
+        ItemStack hand = Walkie.transmitting(speaker);
+        boolean vest = hand.isEmpty();
+        ItemStack sending = vest ? vest(speaker) : hand;
+        if (sending.isEmpty()) {
+            RadioAir.route(speakerId, NOBODY);
+            return;
+        }
 
-        int canal = Walkie.canal(sending);
-        for (ServerPlayer listener : server.getPlayerList().getPlayers()) {
+        RadioAir.route(speakerId, reach(speaker, Walkie.canal(sending), vest));
+    }
+
+    // WHY: с рацией в руке звук рассылает сам чужой мод, и дублировать его нельзя - слушатель
+    // WHY: получил бы две копии речи. Наш путь работает ровно там, где чужой молчит: рация не в
+    // WHY: руках, зажата клавиша эфира, и это та же рация, которой игрок слушает частоту
+    private static ItemStack vest(ServerPlayer speaker) {
+        if (!RadioAir.onAir(speaker.getUUID())) return ItemStack.EMPTY;
+
+        ItemStack carried = Walkie.listening(speaker);
+        return carried.isEmpty() || Walkie.muted(carried) ? ItemStack.EMPTY : carried;
+    }
+
+    private static UUID[] reach(ServerPlayer speaker, int canal, boolean vest) {
+        UUID speakerId = speaker.getUUID();
+        List<UUID> listeners = new ArrayList<>();
+        for (ServerPlayer listener : speaker.server.getPlayerList().getPlayers()) {
             if (listener.getUUID().equals(speakerId)) continue;
             if (!hears(speaker, listener, canal)) continue;
 
             PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> listener),
                     new S2CRadioTalkPacket(speakerId, friendly(speaker, listener), signal(speaker, listener)));
+            if (vest) listeners.add(listener.getUUID());
         }
+        return listeners.isEmpty() ? NOBODY : listeners.toArray(new UUID[0]);
     }
 
     private static boolean hears(ServerPlayer speaker, ServerPlayer listener, int canal) {

@@ -1,4 +1,52 @@
 {
+  "radio.incoming_close": {
+    "sounds": [
+      {
+        "name": "battlecraft:radio/incoming_close",
+        "stream": false
+      }
+    ]
+  },
+  "radio.incoming_open": {
+    "sounds": [
+      {
+        "name": "battlecraft:radio/incoming_open",
+        "stream": false
+      }
+    ]
+  },
+  "radio.key_down": {
+    "sounds": [
+      {
+        "name": "battlecraft:radio/key_down",
+        "stream": false
+      }
+    ]
+  },
+  "radio.key_up": {
+    "sounds": [
+      {
+        "name": "battlecraft:radio/key_up",
+        "stream": false
+      }
+    ]
+  },
+  "radio.power_off": {
+    "sounds": [
+      {
+        "name": "battlecraft:radio/power_off",
+        "stream": false
+      }
+    ]
+  },
+  "radio.power_on": {
+    "sounds": [
+      {
+        "name": "battlecraft:radio/power_on",
+        "stream": false
+      }
+    ]
+  },
   "ui.future.click": {
     "sounds": [
       {

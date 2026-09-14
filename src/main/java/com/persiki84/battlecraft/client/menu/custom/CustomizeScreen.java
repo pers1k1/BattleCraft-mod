@@ -13,6 +13,7 @@ import com.persiki84.battlecraft.client.custom.UserPreset;
 import com.persiki84.battlecraft.client.hud.HudConfig;
 import com.persiki84.battlecraft.compat.walkie.Walkie;
 import com.persiki84.battlecraft.client.hud.PointsView;
+import com.persiki84.battlecraft.client.voice.RadioTalk;
 import com.persiki84.battlecraft.client.voice.VoiceOptions;
 import com.persiki84.battlecraft.client.voice.VoiceRows;
 import com.persiki84.battlecraft.client.DiscordRpcManager;
@@ -381,7 +382,19 @@ public final class CustomizeScreen extends ManagerScreen {
         built.add(toggle("battlecraft.custom.radio_hud", HudConfig::radioHud, HudConfig::radioHud));
         built.add(toggle("battlecraft.custom.voice_trace", HudConfig::voiceTrace, HudConfig::voiceTrace));
         built.add(toggle("battlecraft.custom.radio_static", HudConfig::radioStatic, HudConfig::radioStatic));
+        built.add(toggle("battlecraft.custom.radio_chirp", HudConfig::radioChirp, HudConfig::radioChirp));
+        built.add(radioKeyRow());
         built.add(noiseRow());
+    }
+
+    private KeyRow radioKeyRow() {
+        KeyRow row = new KeyRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("battlecraft.custom.radio_key"),
+                () -> RadioTalk.keyName(Component.translatable("battlecraft.key.unbound")),
+                RadioTalk::key);
+        row.hint("battlecraft.custom.radio_key" + HINT_SUFFIX);
+        bindingRows.add(row);
+        return row;
     }
 
     private SliderRow noiseRow() {

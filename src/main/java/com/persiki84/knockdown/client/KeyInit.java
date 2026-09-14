@@ -15,7 +15,7 @@ public class KeyInit {
     public static final KeyMapping REVIVE_KEY = new KeyMapping(
             "key.knockdown.revive",
             InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_G,
+            GLFW.GLFW_KEY_RIGHT_ALT,
             "key.categories.knockdown"
     );
 

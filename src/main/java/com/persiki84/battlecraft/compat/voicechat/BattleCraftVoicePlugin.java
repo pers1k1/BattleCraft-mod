@@ -31,6 +31,7 @@ public class BattleCraftVoicePlugin implements VoicechatPlugin {
         VoicechatConnection sender = event.getSenderConnection();
         if (sender == null || sender.getPlayer() == null) return;
         if (sender.getPlayer().getPlayer() instanceof ServerPlayer speaker) {
+            RadioSender.relay(event, speaker.getUUID());
             RadioRelay.onSpeak(speaker.getUUID());
         }
     }

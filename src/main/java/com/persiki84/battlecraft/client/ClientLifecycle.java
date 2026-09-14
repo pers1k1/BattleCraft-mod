@@ -5,6 +5,8 @@ import com.persiki84.battlecraft.client.hud.AnnounceHud;
 import com.persiki84.battlecraft.client.hud.RadioHud;
 import com.persiki84.battlecraft.client.island.IslandModel;
 import com.persiki84.battlecraft.client.media.MediaWatch;
+import com.persiki84.battlecraft.client.voice.RadioChirp;
+import com.persiki84.battlecraft.client.voice.RadioTalk;
 import com.persiki84.shared.client.menu.MenuData;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
@@ -30,6 +32,8 @@ public final class ClientLifecycle {
         IslandModel.forget();
         AnnounceHud.forget();
         RadioHud.forget();
+        RadioChirp.forget();
+        RadioTalk.forget();
     }
 
     @SubscribeEvent

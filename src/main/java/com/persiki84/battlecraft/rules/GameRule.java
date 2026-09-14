@@ -5,6 +5,7 @@ public enum GameRule {
     BLOCK_DEBUG_KEYS("block_debug_keys", true),
     BLOCK_ADVANCEMENTS("block_advancements", true),
     BLOCK_MOD_LIST("block_mod_list", true),
+    BLOCK_MOD_CONFIGS("block_mod_configs", true),
     BLOCK_VOICE_GROUPS("block_voice_groups", true),
     BLOCK_RESOURCE_PACKS("block_resource_packs", true),
     AIM_WALKS("aim_walks", true),

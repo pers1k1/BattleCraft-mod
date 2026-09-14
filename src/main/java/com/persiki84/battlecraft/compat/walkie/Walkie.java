@@ -25,6 +25,7 @@ public final class Walkie {
     private static Class<?> radioItem;
     private static Method inHand;
     private static Method activated;
+    private static Method optimal;
     private static Method canReach;
     private static Method rangeOf;
     private static Field crossDimensions;
@@ -51,6 +52,22 @@ public final class Walkie {
         }
     }
 
+    // WHY: лучшая по дальности рация в хотбаре или левой руке независимо от включения: по ней
+    // WHY: клиент отличает «рации нет» от «рация выключена», когда игрок жмёт клавишу эфира
+    public static ItemStack carried(Player player) {
+        if (!available() || player == null) return ItemStack.EMPTY;
+        try {
+            ItemStack stack = (ItemStack) optimal.invoke(null, player);
+            return stack == null ? ItemStack.EMPTY : stack;
+        } catch (Throwable error) {
+            fail(error);
+            return ItemStack.EMPTY;
+        }
+    }
+
+    // WHY: чужой мод считает приём по хотбару и левой руке, а не по рукам: рация на поясе
+    // WHY: слышит всегда. Наша передача с пояса обязана брать ровно эту же рацию, иначе игрок
+    // WHY: говорит с одной, а слышит ответ на другой
     public static ItemStack listening(Player player) {
         if (!available() || player == null) return ItemStack.EMPTY;
         try {
@@ -136,6 +153,7 @@ public final class Walkie {
             radioItem = Class.forName("fr.flaton.walkietalkie.item.WalkieTalkieItem");
             inHand = util.getMethod("getWalkieTalkieInHand", Player.class);
             activated = util.getMethod("getWalkieTalkieActivated", Player.class);
+            optimal = util.getMethod("getOptimalWalkieTalkieRange", Player.class);
             canReach = util.getMethod("canBroadcastToReceiver", Level.class, Level.class,
                     Vec3.class, Vec3.class, int.class);
             rangeOf = radioItem.getMethod("getRange");

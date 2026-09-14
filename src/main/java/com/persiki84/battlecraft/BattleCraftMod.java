@@ -25,6 +25,7 @@ import com.persiki84.battlecraft.client.hud.ScanHud;
 import com.persiki84.battlecraft.client.hud.ToastHud;
 import com.persiki84.battlecraft.client.hud.VitalVeil;
 import com.persiki84.battlecraft.client.hud.PointsView;
+import com.persiki84.battlecraft.client.voice.RadioTalk;
 import com.persiki84.battlecraft.client.hud.RadioHud;
 import com.persiki84.battlecraft.client.hud.VoiceHud;
 import com.persiki84.battlecraft.client.menu.BattleCraftMenuScreen;
@@ -133,6 +134,7 @@ public class BattleCraftMod {
             event.register(GogglesClient.SWITCH_MODE);
             event.register(GogglesClient.ZOOM);
             event.register(PointsView.SHOW_POINTS);
+            event.register(RadioTalk.TALK);
         }
 
         @SubscribeEvent

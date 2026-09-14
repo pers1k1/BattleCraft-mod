@@ -25,7 +25,8 @@ public enum InterfaceFlag {
     ISLAND_COVER_TINT("islandCoverTint", true, HudConfig::islandCoverTint, HudConfig::islandCoverTint),
     RADIO_HUD("radioHud", true, HudConfig::radioHud, HudConfig::radioHud),
     VOICE_TRACE("voiceTrace", true, HudConfig::voiceTrace, HudConfig::voiceTrace),
-    RADIO_STATIC("radioStatic", true, HudConfig::radioStatic, HudConfig::radioStatic);
+    RADIO_STATIC("radioStatic", true, HudConfig::radioStatic, HudConfig::radioStatic),
+    RADIO_CHIRP("radioChirp", true, HudConfig::radioChirp, HudConfig::radioChirp);
 
     public interface Switch {
         void set(boolean value);
