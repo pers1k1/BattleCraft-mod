@@ -2,6 +2,7 @@ package com.persiki84.battlecraft.client;
 
 import com.persiki84.battlecraft.BattleCraftMod;
 import com.persiki84.battlecraft.client.hud.AnnounceHud;
+import com.persiki84.battlecraft.client.hud.RadioHud;
 import com.persiki84.battlecraft.client.island.IslandModel;
 import com.persiki84.battlecraft.client.media.MediaWatch;
 import com.persiki84.shared.client.menu.MenuData;
@@ -28,6 +29,7 @@ public final class ClientLifecycle {
         MenuData.forget();
         IslandModel.forget();
         AnnounceHud.forget();
+        RadioHud.forget();
     }
 
     @SubscribeEvent

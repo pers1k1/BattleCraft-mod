@@ -25,6 +25,7 @@ import com.persiki84.battlecraft.client.hud.ScanHud;
 import com.persiki84.battlecraft.client.hud.ToastHud;
 import com.persiki84.battlecraft.client.hud.VitalVeil;
 import com.persiki84.battlecraft.client.hud.PointsView;
+import com.persiki84.battlecraft.client.hud.RadioHud;
 import com.persiki84.battlecraft.client.hud.VoiceHud;
 import com.persiki84.battlecraft.client.menu.BattleCraftMenuScreen;
 import com.persiki84.battlecraft.client.menu.panel.PanelScreens;
@@ -114,6 +115,7 @@ public class BattleCraftMod {
             event.registerAbove(VanillaGuiOverlay.POTION_ICONS.id(), "battlecraft_effects", EffectsHud.OVERLAY);
             event.registerAboveAll("battlecraft_ammo", AmmoHud.OVERLAY);
             event.registerAboveAll("battlecraft_voice", VoiceHud.OVERLAY);
+            event.registerAboveAll("battlecraft_radio", RadioHud.OVERLAY);
             event.registerAboveAll("battlecraft_goggles", GogglesHud.OVERLAY);
             event.registerAboveAll("battlecraft_toasts", ToastHud.OVERLAY);
             event.registerAboveAll("battlecraft_messages", MessageHud.OVERLAY);

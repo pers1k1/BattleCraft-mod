@@ -11,6 +11,7 @@ import com.persiki84.battlecraft.client.custom.PaletteKey;
 import com.persiki84.battlecraft.client.custom.PresetLibrary;
 import com.persiki84.battlecraft.client.custom.UserPreset;
 import com.persiki84.battlecraft.client.hud.HudConfig;
+import com.persiki84.battlecraft.compat.walkie.Walkie;
 import com.persiki84.battlecraft.client.hud.PointsView;
 import com.persiki84.battlecraft.client.voice.VoiceOptions;
 import com.persiki84.battlecraft.client.voice.VoiceRows;
@@ -56,6 +57,8 @@ public final class CustomizeScreen extends ManagerScreen {
     private static final float DIAL_LEAST = 0.25f;
     private static final float DIAL_MOST = 2.0f;
     private static final float DIAL_STEP = 0.05f;
+    private static final float NOISE_LEAST = 0.0f;
+    private static final float NOISE_MOST = 2.0f;
     private static final float MARKER_LEAST = 0.5f;
     private static final float MARKER_MOST = 1.5f;
     private static final int TAB_PRESETS = 3;
@@ -340,6 +343,7 @@ public final class CustomizeScreen extends ManagerScreen {
         built.add(pointsKeyRow());
         addIslandRows(built);
         addVoiceRows(built);
+        addRadioRows(built);
         built.add(heading("battlecraft.custom.group.elements"));
         built.add(heading("battlecraft.custom.hud.in_chat"));
         for (HudSlot slot : HudSlot.values()) {
@@ -366,6 +370,26 @@ public final class CustomizeScreen extends ManagerScreen {
                 bindingRows.add(key);
             }
         }
+    }
+
+    // WHY: без мода рации строк нет вовсе: ручки помех и карточек эфира нечем проверить,
+    // WHY: а выключатель того, чего в сборке нет, читается как поломка
+    private void addRadioRows(List<AbstractWidget> built) {
+        if (!Walkie.available()) return;
+
+        built.add(heading("battlecraft.custom.group.radio"));
+        built.add(toggle("battlecraft.custom.radio_hud", HudConfig::radioHud, HudConfig::radioHud));
+        built.add(toggle("battlecraft.custom.voice_trace", HudConfig::voiceTrace, HudConfig::voiceTrace));
+        built.add(toggle("battlecraft.custom.radio_static", HudConfig::radioStatic, HudConfig::radioStatic));
+        built.add(noiseRow());
+    }
+
+    private SliderRow noiseRow() {
+        SliderRow row = new SliderRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("battlecraft.custom.radio_noise"),
+                HudConfig::radioNoise, HudConfig::radioNoise, NOISE_LEAST, NOISE_MOST, DIAL_STEP);
+        row.hint("battlecraft.custom.radio_noise" + HINT_SUFFIX);
+        return row.readout(0, 100.0f, "%");
     }
 
     // WHY: строки вкладки кэшируются, поэтому строка клавиши переживает уход на другую вкладку

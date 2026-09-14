@@ -37,6 +37,18 @@ public class PacketHandler {
         registerConfigSnapshot();
         registerAnnounce();
         registerAnnounceRequest();
+        registerRadioTalk();
+    }
+
+    private static void registerRadioTalk() {
+        INSTANCE.registerMessage(
+                id(),
+                S2CRadioTalkPacket.class,
+                S2CRadioTalkPacket::encode,
+                S2CRadioTalkPacket::decode,
+                S2CRadioTalkPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT)
+        );
     }
 
     private static void registerAnnounce() {

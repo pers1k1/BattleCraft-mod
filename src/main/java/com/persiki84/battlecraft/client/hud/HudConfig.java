@@ -17,6 +17,10 @@ public final class HudConfig {
     private static ForgeConfigSpec.BooleanValue HUD_ACCENT_TEXT;
     private static ForgeConfigSpec.DoubleValue MARKER_SCALE;
     private static ForgeConfigSpec.BooleanValue POINTS_IN_HUD;
+    private static ForgeConfigSpec.BooleanValue RADIO_HUD;
+    private static ForgeConfigSpec.BooleanValue RADIO_STATIC;
+    private static ForgeConfigSpec.BooleanValue VOICE_TRACE;
+    private static ForgeConfigSpec.DoubleValue RADIO_NOISE;
     private static ForgeConfigSpec.BooleanValue STATUS_BARS;
     private static ForgeConfigSpec.BooleanValue EFFECT_CHIPS;
     private static ForgeConfigSpec.BooleanValue BOSS_BARS;
@@ -84,6 +88,18 @@ public final class HudConfig {
         HUD_ACCENT_TEXT = defineHudAccentText();
         MARKER_SCALE = defineMarkerScale();
         POINTS_IN_HUD = definePointsInHud();
+        defineRadio();
+    }
+
+    private static void defineRadio() {
+        RADIO_HUD = BUILDER.comment("Карточки передач рации в интерфейсе")
+                .define("radioHud", true);
+        VOICE_TRACE = BUILDER.comment("Лента записи рядом со значком микрофона, пока идёт разговор")
+                .define("voiceTrace", true);
+        RADIO_STATIC = BUILDER.comment("Искажение голоса в рации и помехи по дальности")
+                .define("radioStatic", true);
+        RADIO_NOISE = BUILDER.comment("Сила помех рации, 1 это обычная")
+                .defineInRange("radioNoise", 1.0, 0.0, 2.0);
     }
 
     private static ForgeConfigSpec.BooleanValue definePointsInHud() {
@@ -480,6 +496,38 @@ public final class HudConfig {
 
     public static void islandVisualizer(boolean value) {
         if (SPEC.isLoaded()) ISLAND_VISUALIZER.set(value);
+    }
+
+    public static boolean radioHud() {
+        return read(RADIO_HUD, true);
+    }
+
+    public static void radioHud(boolean value) {
+        if (SPEC.isLoaded()) RADIO_HUD.set(value);
+    }
+
+    public static boolean voiceTrace() {
+        return read(VOICE_TRACE, true);
+    }
+
+    public static void voiceTrace(boolean value) {
+        if (SPEC.isLoaded()) VOICE_TRACE.set(value);
+    }
+
+    public static boolean radioStatic() {
+        return read(RADIO_STATIC, true);
+    }
+
+    public static void radioStatic(boolean value) {
+        if (SPEC.isLoaded()) RADIO_STATIC.set(value);
+    }
+
+    public static float radioNoise() {
+        return SPEC.isLoaded() ? RADIO_NOISE.get().floatValue() : 1.0f;
+    }
+
+    public static void radioNoise(float value) {
+        if (SPEC.isLoaded()) RADIO_NOISE.set((double) value);
     }
 
     public static float visualizerGain() {

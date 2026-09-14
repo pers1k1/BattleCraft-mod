@@ -22,7 +22,10 @@ public enum InterfaceFlag {
     ISLAND_BAR("islandBar", true, HudConfig::islandBar, HudConfig::islandBar),
     ISLAND_TIME("islandTime", true, HudConfig::islandTime, HudConfig::islandTime),
     ISLAND_VISUALIZER("islandVisualizer", true, HudConfig::islandVisualizer, HudConfig::islandVisualizer),
-    ISLAND_COVER_TINT("islandCoverTint", true, HudConfig::islandCoverTint, HudConfig::islandCoverTint);
+    ISLAND_COVER_TINT("islandCoverTint", true, HudConfig::islandCoverTint, HudConfig::islandCoverTint),
+    RADIO_HUD("radioHud", true, HudConfig::radioHud, HudConfig::radioHud),
+    VOICE_TRACE("voiceTrace", true, HudConfig::voiceTrace, HudConfig::voiceTrace),
+    RADIO_STATIC("radioStatic", true, HudConfig::radioStatic, HudConfig::radioStatic);
 
     public interface Switch {
         void set(boolean value);

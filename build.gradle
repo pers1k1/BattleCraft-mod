@@ -66,11 +66,13 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 repositories {
     mavenCentral()
     maven { url 'https://maven.firstdark.dev/releases' }
+    maven { url 'https://maven.maxhenkel.de/repository/public' }
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    compileOnly 'de.maxhenkel.voicechat:voicechat-api:2.6.20'
     minecraftLibrary fg.deobf('dev.firstdark.discordrpc:discord-rpc:1.0.4')
     implementation fg.deobf('dev.firstdark.discordrpc:discord-rpc:1.0.4')
     jarJar 'dev.firstdark.discordrpc:discord-rpc:[1.0.4, 2.0.0)'

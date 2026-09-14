@@ -9,6 +9,7 @@ import com.persiki84.battlecraft.client.hud.GogglesHud;
 import com.persiki84.battlecraft.client.hud.BottomHud;
 import com.persiki84.battlecraft.client.hud.EffectsHud;
 import com.persiki84.battlecraft.client.hud.MessageHud;
+import com.persiki84.battlecraft.client.hud.RadioHud;
 import com.persiki84.battlecraft.client.hud.ScanHud;
 import com.persiki84.battlecraft.client.hud.ToastHud;
 import com.persiki84.battlecraft.client.hud.VoiceHud;
@@ -51,6 +52,7 @@ public final class HudSample {
             case OBJECTIVE -> ObjectiveHud.preview(graphics, box.centerX(), box.y(), alpha, UiFrame.delta());
             case AMMO -> AmmoHud.preview(graphics, box, alpha);
             case VOICE -> VoiceHud.preview(graphics, box, alpha);
+            case RADIO -> RadioHud.preview(graphics, box, alpha);
             case GOGGLES -> GogglesHud.preview(graphics, box, alpha);
             case CURRENCY -> CurrencyHud.preview(graphics, box, alpha);
             case EFFECTS -> EffectsHud.preview(graphics, box, alpha);

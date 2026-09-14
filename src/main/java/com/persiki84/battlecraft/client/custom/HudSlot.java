@@ -7,6 +7,7 @@ public enum HudSlot {
     STATUS("status", HudAnchor.BOTTOM_RIGHT, 8.0f, 0.0f, true, 128.0f, 65.5f),
     AMMO("ammo", HudAnchor.BOTTOM_RIGHT, 8.0f, 0.0f, true, 84.0f, 30.0f),
     VOICE("voice", HudAnchor.BOTTOM_RIGHT, 8.0f, 0.0f, true, 15.0f, 15.0f),
+    RADIO("radio", HudAnchor.BOTTOM_RIGHT, 8.0f, 0.0f, true, 122.0f, 33.0f),
     CURRENCY("currency", HudAnchor.BOTTOM_RIGHT, 8.0f, 0.0f, true, 84.0f, 22.0f),
     GOGGLES("goggles", HudAnchor.BOTTOM_RIGHT, 8.0f, 0.0f, true, 84.0f, 26.0f),
     MINIMAP("minimap", HudAnchor.TOP_RIGHT, 8.0f, 0.0f, false, 100.0f, 100.0f),
