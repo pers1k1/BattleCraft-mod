@@ -4,6 +4,9 @@ import com.persiki84.shared.zone.ZoneArea;
 import com.persiki84.shared.zone.ZoneShape;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
@@ -11,6 +14,9 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.registries.ForgeRegistries;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class CapturePoint {
     private String name;
@@ -26,7 +32,7 @@ public class CapturePoint {
     private String buffEffect;
     private int buffAmplifier;
 
-    private String captureCommand;
+    private final List<String> captureCommands = new ArrayList<>();
 
     private ItemStack incomeItem;
     private int passiveIncomeAmount;
@@ -50,6 +56,7 @@ public class CapturePoint {
     public static final int DEFAULT_PRESSURED_ROLLBACK_SPEED = 400;
     public static final int DEFAULT_OWNED_ROLLBACK_SPEED = 800;
     public static final int DEFAULT_TEAM_COOLDOWN = 30;
+    public static final int MAX_COMMANDS = 8;
 
     public CapturePoint(String name, ZoneArea area, int captureTime, int cooldown) {
         this.name = name;
@@ -65,7 +72,6 @@ public class CapturePoint {
         this.buffEffect = null;
         this.buffAmplifier = 0;
 
-        this.captureCommand = null;
 
         this.incomeItem = new ItemStack(Items.AIR);
         this.passiveIncomeAmount = 0;
@@ -133,10 +139,32 @@ public class CapturePoint {
     public int getBuffAmplifier() { return buffAmplifier; }
     public void setBuffAmplifier(int amplifier) { this.buffAmplifier = amplifier; }
 
-    public String getCaptureCommand() { return captureCommand; }
+    public List<String> getCaptureCommands() { return captureCommands; }
 
+    public boolean addCaptureCommand(String command) {
+        String cleaned = command == null ? "" : command.trim();
+        if (cleaned.isEmpty() || captureCommands.size() >= MAX_COMMANDS) return false;
+
+        captureCommands.add(cleaned);
+        return true;
+    }
+
+    public boolean removeCaptureCommand(int index) {
+        if (index < 0 || index >= captureCommands.size()) return false;
+
+        captureCommands.remove(index);
+        return true;
+    }
+
+    public void clearCaptureCommands() {
+        captureCommands.clear();
+    }
+
+    // WHY: старая команда `setcommand` задавала единственную команду, и её смысл сохранён:
+    // WHY: она заменяет список целиком, а не дописывает - иначе повтор набивал бы дубли
     public void setCaptureCommand(String command) {
-        this.captureCommand = command == null || command.isBlank() ? null : command.trim();
+        captureCommands.clear();
+        addCaptureCommand(command);
     }
 
     public boolean hasReward() {
@@ -223,7 +251,7 @@ public class CapturePoint {
 
         if (buffEffect != null) tag.putString("buffEffect", buffEffect);
         tag.putInt("buffAmplifier", buffAmplifier);
-        if (captureCommand != null) tag.putString("captureCommand", captureCommand);
+        writeCommands(tag);
 
         tag.putString("incomeItem", ForgeRegistries.ITEMS.getKey(incomeItem.getItem()).toString());
         tag.putInt("passiveIncomeAmount", passiveIncomeAmount);
@@ -231,6 +259,29 @@ public class CapturePoint {
         writeTuning(tag);
 
         return tag;
+    }
+
+    private void writeCommands(CompoundTag tag) {
+        if (captureCommands.isEmpty()) return;
+
+        ListTag stored = new ListTag();
+        for (String command : captureCommands) {
+            stored.add(StringTag.valueOf(command));
+        }
+        tag.put("captureCommands", stored);
+    }
+
+    // WHY: у точки со старого сервера лежит одна строка `captureCommand`, и она обязана стать
+    // WHY: первой командой списка: иначе захват молча перестанет запускать то, что настроено
+    private static void readCommands(CompoundTag tag, CapturePoint point) {
+        if (tag.contains("captureCommands")) {
+            ListTag stored = tag.getList("captureCommands", Tag.TAG_STRING);
+            for (int index = 0; index < stored.size(); index++) {
+                point.addCaptureCommand(stored.getString(index));
+            }
+            return;
+        }
+        if (tag.contains("captureCommand")) point.addCaptureCommand(tag.getString("captureCommand"));
     }
 
     private void writeTuning(CompoundTag tag) {
@@ -294,7 +345,7 @@ public class CapturePoint {
 
         if (tag.contains("buffEffect")) point.buffEffect = tag.getString("buffEffect");
         if (tag.contains("buffAmplifier")) point.buffAmplifier = tag.getInt("buffAmplifier");
-        if (tag.contains("captureCommand")) point.setCaptureCommand(tag.getString("captureCommand"));
+        readCommands(tag, point);
 
         if (tag.contains("incomeItem")) {
             Item incomeStored = ForgeRegistries.ITEMS.getValue(new ResourceLocation(tag.getString("incomeItem")));

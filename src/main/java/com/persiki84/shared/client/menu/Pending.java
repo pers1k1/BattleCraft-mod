@@ -12,6 +12,11 @@ final class Pending {
         wantedAt = System.currentTimeMillis();
     }
 
+    void take(Pending older) {
+        wanted = older.wanted;
+        wantedAt = older.wantedAt;
+    }
+
     int resolve(int actual) {
         if (wanted == NONE) return actual;
         if (wanted == actual || System.currentTimeMillis() - wantedAt > LIFE_MS) {

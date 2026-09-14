@@ -19,12 +19,21 @@ public final class CaptureCommandRunner {
 
     private CaptureCommandRunner() {}
 
+    // WHY: источник команды строится один раз на захват, а не на строку: он лезет за измерением
+    // WHY: и позицией точки, и повторять это на каждую команду списка незачем
     public static void onCaptured(MinecraftServer server, CapturePoint point, String team) {
-        String command = point.getCaptureCommand();
-        if (server == null || command == null) return;
+        if (server == null || point.getCaptureCommands().isEmpty()) return;
 
+        CommandSourceStack source = sourceAt(server, point);
+        for (String command : point.getCaptureCommands()) {
+            run(server, source, point, team, command);
+        }
+    }
+
+    private static void run(MinecraftServer server, CommandSourceStack source, CapturePoint point,
+                            String team, String command) {
         try {
-            server.getCommands().performPrefixedCommand(sourceAt(server, point), filled(command, point, team));
+            server.getCommands().performPrefixedCommand(source, filled(command, point, team));
         } catch (RuntimeException failure) {
             CapturePointsMod.LOGGER.error("Capture command of point {} failed: {}", point.getName(), command, failure);
         }

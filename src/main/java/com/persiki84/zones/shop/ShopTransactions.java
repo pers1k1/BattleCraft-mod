@@ -100,7 +100,7 @@ public final class ShopTransactions {
 
         // WHY: покупка меняет на диске только остаток склада, поэтому у безлимитного товара нечего
         // WHY: писать и нечего рассылать: каталог уходил всем и переписывался файлом на каждый чек
-        ShopCatalog.persist();
+        ShopCatalog.persistSoon();
         ZonesMod.syncShopAfterPurchase(player, entry.scope());
     }
 

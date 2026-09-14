@@ -38,6 +38,7 @@ public final class MarkMenuState {
         tag.putBoolean("everyone", mark.everyone());
         tag.putBoolean("inWorld", mark.inWorld());
         tag.putString("kind", mark.kind().id());
+        tag.putInt("scale", mark.scalePercent());
 
         ListTag lines = new ListTag();
         for (String line : mark.lines()) {

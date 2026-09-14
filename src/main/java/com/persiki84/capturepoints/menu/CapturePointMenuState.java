@@ -6,6 +6,7 @@ import com.persiki84.capturepoints.event.BlockProtectionHandler;
 import com.persiki84.shared.menu.MenuStates;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.registries.ForgeRegistries;
 
@@ -86,7 +87,11 @@ public final class CapturePointMenuState {
         tag.putInt("incomeInterval", point.getIncomeIntervalSeconds());
         tag.putString("buff", point.getBuffEffect() == null ? "" : point.getBuffEffect());
         tag.putInt("buffAmplifier", point.getBuffAmplifier());
-        tag.putString("command", point.getCaptureCommand() == null ? "" : point.getCaptureCommand());
+        ListTag commands = new ListTag();
+        for (String command : point.getCaptureCommands()) {
+            commands.add(StringTag.valueOf(command));
+        }
+        tag.put("commands", commands);
     }
 
     private static String itemId(net.minecraft.world.item.ItemStack stack) {

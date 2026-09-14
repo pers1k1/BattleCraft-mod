@@ -1,6 +1,7 @@
 package com.persiki84.capturepoints.client.menu;
 
 import com.persiki84.capturepoints.capture.CaptureCommandRunner;
+import com.persiki84.capturepoints.capture.CapturePoint;
 import com.persiki84.capturepoints.capture.CaptureMode;
 import com.persiki84.capturepoints.capture.CooldownScope;
 import com.persiki84.capturepoints.capture.RewardSplit;
@@ -305,13 +306,35 @@ public class CapturePointManagerScreen extends ManagerScreen {
                 () -> send(point, "clearbuff " + quoted(point))));
     }
 
+    // WHY: команд у точки несколько, и настраивать их вслепую нельзя: список показывает каждую
+    // WHY: целиком и снимает её отдельной кнопкой, а поле ниже только добавляет новую
     private void addCommandRows(List<AbstractWidget> rows, CompoundTag point) {
         rows.add(heading(Component.translatable("capturepoints.menu.group.command")));
-        rows.add(commandRow());
-        rows.add(action("capturepoints.menu.command_apply", "capturepoints.menu.action.apply",
-                () -> applyCommand(point)));
-        rows.add(action("capturepoints.menu.command_clear", "capturepoints.menu.action.clear",
-                () -> send(point, "clearcommand " + quoted(point))));
+
+        ListTag commands = point.getList("commands", Tag.TAG_STRING);
+        for (int index = 0; index < commands.size(); index++) {
+            rows.add(commandEntry(point, index, commands.getString(index)));
+        }
+        if (commands.isEmpty()) rows.add(reading("capturepoints.menu.command_none", Component::empty));
+
+        if (commands.size() < CapturePoint.MAX_COMMANDS) {
+            rows.add(commandRow());
+            rows.add(action("capturepoints.menu.command_apply", "capturepoints.menu.action.add",
+                    () -> applyCommand(point)));
+        }
+        if (!commands.isEmpty()) {
+            rows.add(action("capturepoints.menu.command_clear", "capturepoints.menu.action.clear",
+                    () -> send(point, "clearcommand " + quoted(point))).alerting());
+        }
+    }
+
+    private ActionRow commandEntry(CompoundTag point, int index, String command) {
+        ActionRow row = new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("capturepoints.menu.command_line", index + 1),
+                () -> Component.translatable("capturepoints.menu.action.remove"),
+                () -> send(point, "removecommand " + quoted(point) + " " + (index + 1)));
+        row.note(Component.literal(command));
+        return row;
     }
 
     // WHY: строки полей переживают пересборку экрана, поэтому их содержимое наводится на точку
@@ -407,11 +430,10 @@ public class CapturePointManagerScreen extends ManagerScreen {
 
     private void applyCommand(CompoundTag point) {
         String command = commandRow().value().trim();
-        if (command.isEmpty()) {
-            send(point, "clearcommand " + quoted(point));
-            return;
-        }
-        send(point, "setcommand " + quoted(point) + " " + command);
+        if (command.isEmpty()) return;
+
+        send(point, "addcommand " + quoted(point) + " " + command);
+        commandRow().box().setValue("");
     }
 
     private static Component itemLabel(String id) {
@@ -435,9 +457,20 @@ public class CapturePointManagerScreen extends ManagerScreen {
                 Component.translatable("capturepoints.menu.remove"),
                 () -> Component.translatable("capturepoints.menu.action.delete"), () -> {
             send(point, "remove " + quoted(point));
-            pointName = null;
+            pointName = neighbourPoint(point.getString("name"));
             rebuild();
         }).alerting());
+    }
+
+    // WHY: точки удаляют подряд, и прыжок к первой означает листать список заново
+    private static String neighbourPoint(String removed) {
+        String previous = null;
+        for (CompoundTag point : points()) {
+            String name = point.getString("name");
+            if (name.equals(removed)) return previous;
+            previous = name;
+        }
+        return null;
     }
 
     private NumberRow number(String label, CompoundTag point, String key, int minimum, int maximum, int step,
@@ -653,7 +686,7 @@ public class CapturePointManagerScreen extends ManagerScreen {
             mark.append(point.getString("name")).append(point.getBoolean(CapturePointMenuState.FINAL_FLAG))
                     .append(point.getString("owner")).append(point.getString("rewardItem"))
                     .append(point.getString("incomeItem")).append(point.getString("buff"))
-                    .append(point.getString("command")).append(point.getBoolean("required"))
+                    .append(point.getList("commands", Tag.TAG_STRING)).append(point.getBoolean("required"))
                     .append(point.getBoolean("shownInHud")).append('\n');
         }
         return mark.toString();

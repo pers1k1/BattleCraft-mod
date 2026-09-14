@@ -156,6 +156,7 @@ public class MarkManagerScreen extends ManagerScreen {
         rows.add(labelRow());
         rows.add(action("zones.mark.menu.rename", "zones.mark.menu.action.apply", () -> applyLabel(id)));
         rows.add(kindRow(id));
+        rows.add(scaleRow(id));
         addLineRows(rows, id);
         rows.add(colorRow(id));
         rows.add(new ToggleRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
@@ -166,6 +167,16 @@ public class MarkManagerScreen extends ManagerScreen {
         rows.add(action("zones.mark.menu.move", "zones.mark.menu.action.here", () -> send("edit " + id + " here")));
         rows.add(deleteRow(id));
         return rows;
+    }
+
+    private NumberRow scaleRow(String id) {
+        NumberRow row = new NumberRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.mark.menu.scale"),
+                () -> live(id).contains("scale") ? live(id).getInt("scale") : MapMark.SCALE_FULL,
+                value -> send("edit " + id + " scale " + value),
+                MapMark.SCALE_MIN, MapMark.SCALE_MAX, 5);
+        row.hint("zones.mark.menu.scale" + HINT_SUFFIX);
+        return row;
     }
 
     private PickRow kindRow(String id) {
@@ -321,9 +332,20 @@ public class MarkManagerScreen extends ManagerScreen {
                 Component.translatable("zones.mark.menu.delete"),
                 () -> Component.translatable("zones.mark.menu.action.delete"), () -> {
             send("delete " + id);
-            markId = null;
+            markId = neighbourMark(id);
             rebuild();
         }).alerting();
+    }
+
+    // WHY: удаляют подряд, и возврат к первой метке заставляет каждый раз листать заново
+    private static String neighbourMark(String removed) {
+        String previous = null;
+        for (CompoundTag mark : marks()) {
+            String id = mark.getString("id");
+            if (id.equals(removed)) return previous;
+            previous = id;
+        }
+        return null;
     }
 
     private void addCreateRows() {

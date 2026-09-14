@@ -14,6 +14,9 @@ public final class MapMark {
     public static final int DEFAULT_COLOR = 0xFFE7E9F4;
     public static final int MAX_LINES = 6;
     public static final int LINE_LIMIT = 64;
+    public static final int SCALE_FULL = 100;
+    public static final int SCALE_MIN = 25;
+    public static final int SCALE_MAX = 400;
 
     private final String id;
     private BlockPos position;
@@ -22,6 +25,7 @@ public final class MapMark {
     private int color;
     private boolean inWorld = true;
     private MarkKind kind = MarkKind.DEFAULT;
+    private int scalePercent = SCALE_FULL;
     private final Set<String> teams = new LinkedHashSet<>();
 
     public MapMark(String id, BlockPos position, ResourceLocation dimension, String label, int color) {
@@ -38,6 +42,7 @@ public final class MapMark {
     public int color() { return color; }
     public boolean inWorld() { return inWorld; }
     public MarkKind kind() { return kind; }
+    public int scalePercent() { return scalePercent; }
     public Set<String> teams() { return teams; }
 
     // WHY: подпись это первая строка надписи: у метки-точки она одна, и весь прежний код,
@@ -55,6 +60,10 @@ public final class MapMark {
     public void setDimension(ResourceLocation value) { this.dimension = value; }
     public void setColor(int value) { this.color = value; }
     public void setInWorld(boolean value) { this.inWorld = value; }
+
+    public void setScalePercent(int value) {
+        this.scalePercent = Math.max(SCALE_MIN, Math.min(SCALE_MAX, value));
+    }
 
     // WHY: надпись на карте живёт своим текстом и по умолчанию не лезет в мир: точка над
     // WHY: местностью читалась бы как обычная метка, а её здесь нет
@@ -139,6 +148,7 @@ public final class MapMark {
         buf.writeInt(color);
         buf.writeBoolean(inWorld);
         buf.writeUtf(kind.id());
+        buf.writeVarInt(scalePercent);
         buf.writeVarInt(teams.size());
         for (String team : teams) {
             buf.writeUtf(team);
@@ -160,6 +170,7 @@ public final class MapMark {
         mark.restoreLines(lines);
         mark.setInWorld(buf.readBoolean());
         mark.setKind(MarkKind.byId(buf.readUtf()));
+        mark.setScalePercent(buf.readVarInt());
 
         int count = buf.readVarInt();
         for (int index = 0; index < count; index++) {

@@ -4,6 +4,7 @@ import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiMetrics;
+import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTheme;
 import com.persiki84.zones.client.ClientMarkData;
@@ -44,10 +45,17 @@ public final class MapLabels {
     private static final Map<String, Glow> glows = new HashMap<>();
     private static final List<MapMark> visible = new ArrayList<>();
 
+    private static final float HANDLE_SIZE = 5.0f;
+    private static final float HANDLE_RADIUS = 1.6f;
+    private static final float HANDLE_REACH = 7.0f;
+
     private static String pendingId;
     private static int pendingX;
     private static int pendingZ;
     private static long pendingSince;
+    private static String sizedId;
+    private static int sizedPercent;
+    private static float mapGrown = 1.0f;
 
     private MapLabels() {}
 
@@ -73,6 +81,22 @@ public final class MapLabels {
         pendingX = x;
         pendingZ = z;
         pendingSince = System.currentTimeMillis();
+    }
+
+    // WHY: размер держится локально до ответа сервера ровно как место: иначе взятая за угол
+    // WHY: надпись прыгает к прежнему кеглю между кадром отпускания и приходом снимка
+    public static void holdScale(String id, int percent) {
+        sizedId = id;
+        sizedPercent = percent;
+    }
+
+    public static int percentOf(MapMark mark) {
+        if (!mark.id().equals(sizedId)) return mark.scalePercent();
+        if (mark.scalePercent() == sizedPercent) {
+            sizedId = null;
+            return sizedPercent;
+        }
+        return sizedPercent;
     }
 
     public static double worldX(MapMark mark) {
@@ -131,6 +155,7 @@ public final class MapLabels {
             float screenX = (float) (centerX + (worldX - mapX) * zoom);
             float screenY = (float) (centerY + (worldZ - mapZ) * zoom) + (1.0f - shown) * SPAWN_RISE;
             paint(graphics, font, mark, screenX, screenY, glow, shown);
+            if (mark.id().equals(armed)) paintHandle(graphics, font, mark, screenX, screenY, glow);
         }
         forgetGone(visible.size());
     }
@@ -145,13 +170,42 @@ public final class MapLabels {
 
         if (glow > 0.01f) paintAura(graphics, mark.color(), screenX, screenY, width, height, glow * shown);
 
-        float scale = UiRender.crisp(graphics, SCALE);
+        float scale = UiRender.crisp(graphics, scaleOf(mark));
         float lineHeight = font.lineHeight * scale + LINE_GAP;
         float y = screenY - height / 2.0f;
         for (String line : mark.lines()) {
             if (!line.isEmpty()) UiRender.labelCentered(graphics, font, line, screenX, y, scale, color);
             y += lineHeight;
         }
+    }
+
+    // WHY: ручка размера повторяет редактор HUD: взведённый элемент показывает угол, за который
+    // WHY: его тянут, и другого способа поменять кегль мышью на карте нет
+    private static void paintHandle(GuiGraphics graphics, Font font, MapMark mark,
+                                    float screenX, float screenY, float glow) {
+        float cornerX = screenX + blockWidth(font, mark) / 2.0f + HANDLE_REACH / 2.0f;
+        float cornerY = screenY + blockHeight(font, mark) / 2.0f + HANDLE_REACH / 2.0f;
+        float span = HANDLE_SIZE * (0.7f + 0.3f * glow);
+
+        UiRender.panel(graphics, cornerX - span / 2.0f, cornerY - span / 2.0f, span, span,
+                HANDLE_RADIUS, UiTheme.withAlpha(mark.color(), 1.0f));
+        UiRender.panel(graphics, cornerX - span / 4.0f, cornerY - span / 4.0f, span / 2.0f, span / 2.0f,
+                HANDLE_RADIUS / 2.0f, UiTheme.withAlpha(UiPalette.panelDeep(), 0.9f));
+    }
+
+    public static boolean onHandle(Font font, MapMark mark, double mouseX, double mouseY,
+                                   float screenX, float screenY) {
+        float cornerX = screenX + blockWidth(font, mark) / 2.0f + HANDLE_REACH / 2.0f;
+        float cornerY = screenY + blockHeight(font, mark) / 2.0f + HANDLE_REACH / 2.0f;
+        return Math.abs(mouseX - cornerX) <= HANDLE_REACH && Math.abs(mouseY - cornerY) <= HANDLE_REACH;
+    }
+
+    public static float screenX(MapMark mark, double mapX, float zoom, int centerX) {
+        return (float) (centerX + (worldX(mark) - mapX) * zoom);
+    }
+
+    public static float screenY(MapMark mark, double mapZ, float zoom, int centerY) {
+        return (float) (centerY + (worldZ(mark) - mapZ) * zoom);
     }
 
     // WHY: подсветка это мягкий ореол цветом надписи, а не подложка: плашка под текстом сделала бы
@@ -167,17 +221,38 @@ public final class MapLabels {
         }
     }
 
+    // WHY: ширина меряется перебором глифов, а спрашивают её дважды за кадр на каждую надпись -
+    // WHY: на попадание курсора и на ауру; текст меняется правкой, а не кадром, поэтому промер кешируется
+    // WHY: размер надписи принадлежит ей самой, а не карте: она не растёт от приближения, иначе
+    // WHY: подпись области то закрывала бы половину экрана, то пропадала бы в точку
+    // WHY: надпись держит размер относительно карты, как остальные значки: при постоянном экранном
+    // WHY: кегле приближение делает её визуально мельче местности, и это читается как подстройка
+    public static void zoom(float grown) {
+        mapGrown = grown;
+    }
+
+    public static float scaleOf(MapMark mark) {
+        return SCALE * mapGrown * percentOf(mark) / (float) MapMark.SCALE_FULL;
+    }
+
     public static float blockWidth(Font font, MapMark mark) {
+        Glow state = glowOf(mark);
+        int stamp = mark.lines().hashCode() * 31 + percentOf(mark) + Math.round(mapGrown * 100.0f) * 7919;
+        if (state.measured == stamp) return state.width;
+
+        float scale = scaleOf(mark);
         float widest = 0.0f;
         for (String line : mark.lines()) {
-            widest = Math.max(widest, UiRender.widthLabel(font, line) * SCALE);
+            widest = Math.max(widest, UiRender.widthLabel(font, line) * scale);
         }
-        return Math.max(widest, UiMetrics.GAP_WIDE);
+        state.width = Math.max(widest, UiMetrics.GAP_WIDE);
+        state.measured = stamp;
+        return state.width;
     }
 
     public static float blockHeight(Font font, MapMark mark) {
         int count = Math.max(1, mark.lines().size());
-        return count * (font.lineHeight * SCALE + LINE_GAP) - LINE_GAP;
+        return count * (font.lineHeight * scaleOf(mark) + LINE_GAP) - LINE_GAP;
     }
 
     private static Glow glowOf(MapMark mark) {
@@ -203,6 +278,8 @@ public final class MapLabels {
         private final Smooth presence = new Smooth(0.0f, PRESENCE_SPEED);
         private final Smooth travelX;
         private final Smooth travelZ;
+        private float width;
+        private int measured = -1;
 
         private Glow(float worldX, float worldZ) {
             this.travelX = new Smooth(worldX, TRAVEL_SPEED);

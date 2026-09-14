@@ -75,6 +75,12 @@ public abstract class MenuRow extends AbstractWidget implements GlidingRow {
         return false;
     }
 
+    // WHY: анимация живёт в самой строке, а экран пересобирает строки от любой правки данных:
+    // WHY: без передачи состояния новой строке движение обрывалось на первом же кадре и
+    // WHY: переключение значения выглядело мгновенной подменой
+    public void adopt(MenuRow previous) {
+    }
+
     public MenuRow note(Component text) {
         note = text;
         return this;

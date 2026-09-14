@@ -11,6 +11,7 @@ import java.util.Map;
 public final class ShopCatalog {
     private static final Map<String, ShopSection> sections = new LinkedHashMap<>();
     private static ServerLevel currentLevel;
+    private static boolean dirty;
 
     private ShopCatalog() {}
 
@@ -84,7 +85,22 @@ public final class ShopCatalog {
     }
 
     public static void persist() {
+        dirty = false;
         ShopStorage.save(currentLevel, sections.values());
+    }
+
+    // WHY: покупка меняет только остаток склада, а запись shop.json это полная сериализация
+    // WHY: каталога с временным файлом и подменой: на личном складе покупок кратно больше,
+    // WHY: и писать файл на каждую значит держать диск в серверном тике
+    public static void persistSoon() {
+        dirty = true;
+    }
+
+    public static boolean flushDue() {
+        if (!dirty) return false;
+
+        persist();
+        return true;
     }
 
     public static boolean isEmpty() {

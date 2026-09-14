@@ -159,6 +159,24 @@ public final class ShopCommand {
         return report(context, "zones.shop.success.moved", entryId);
     }
 
+    // WHY: витрина переставляет плитку сразу на место, а не по шагу: посылать десяток «вниз»
+    // WHY: значит десять раз переписать каталог и десять раз разослать его игрокам
+    private static int placeEntry(CommandContext<CommandSourceStack> context) {
+        ShopSection section = requireSection(context);
+        if (section == null) return 0;
+
+        String entryId = StringArgumentType.getString(context, "entry");
+        ShopSection owner = section.ownerOf(entryId);
+        if (owner == null) return fail(context, "zones.shop.error.no_entry", entryId);
+
+        int from = owner.entryIds().indexOf(entryId);
+        int to = IntegerArgumentType.getInteger(context, "position") - 1;
+        if (!owner.moveEntry(entryId, to - from)) return fail(context, "zones.shop.error.no_move", entryId);
+
+        ShopCatalog.persist();
+        return report(context, "zones.shop.success.moved", entryId);
+    }
+
     private static int moveSubsection(CommandContext<CommandSourceStack> context) {
         ShopSection section = requireSection(context);
         if (section == null) return 0;
@@ -294,7 +312,10 @@ public final class ShopCommand {
                         .then(Commands.argument("slot", StringArgumentType.word())
                                 .suggests(SLOTS)
                                 .executes(ShopCommand::detachFromEntry)))))
-                .then(Commands.literal("order").then(sectionNode(order(entryNode(), ShopCommand::orderEntry))))
+                .then(Commands.literal("order").then(sectionNode(order(entryNode(), ShopCommand::orderEntry)
+                        .then(Commands.literal("to")
+                                .then(Commands.argument("position", IntegerArgumentType.integer(1))
+                                        .executes(ShopCommand::placeEntry))))))
                 .then(moveItemBranch())
                 .then(stockBranch())
                 .then(restockBranch())

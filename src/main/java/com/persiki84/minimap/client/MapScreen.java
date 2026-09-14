@@ -46,6 +46,9 @@ public class MapScreen extends Screen {
     private static final double MARKER_GRAB_PIXELS = 20.0;
     private static final float BASE_RADIUS = 5.0f;
     private static final float MARKER_DOT = 2.0f;
+    private static final float PLAYER_ARROW = 6.0f;
+    private static final float MARKER_SCALE_MIN = 0.85f;
+    private static final float MARKER_SCALE_MAX = 2.2f;
     private static final Component BASE_LABEL = Component.translatable("zones.marker.base");
     private static final long DOUBLE_CLICK_MS = 400L;
 
@@ -56,6 +59,9 @@ public class MapScreen extends Screen {
     private String clickedLabel;
     private long clickedAt;
     private boolean movedLabel;
+    private boolean sizingLabel;
+    private double sizingFrom;
+    private int sizingPercent;
     private double mapX = 0;
     private double mapZ = 0;
     private float zoom = 1.0f;
@@ -123,6 +129,14 @@ public class MapScreen extends Screen {
         mapZ = anchorZ - (anchorMouseY - centerY) / this.zoom;
     }
 
+    // WHY: значок постоянного экранного размера при приближении мельчает на фоне разросшейся
+    // WHY: местности и раздувается при отдалении - глаз читает это как подстройку под зум.
+    // WHY: Размер идёт за зумом корнем, а не прямо: прямая пропорция на отдалении съедает значок
+    // WHY: в точку, а зажим по краям держит его читаемым и на минимальном, и на максимальном
+    private float markerScale() {
+        return Math.max(MARKER_SCALE_MIN, Math.min(MARKER_SCALE_MAX, (float) Math.sqrt(zoom)));
+    }
+
     private void renderGrid(GuiGraphics guiGraphics, int centerX, int centerY) {
         double maxWorldX = mapX + (this.width - centerX) / zoom;
         long firstGridX = (long) Math.ceil((mapX - centerX / zoom) / 100.0) * 100;
@@ -152,11 +166,13 @@ public class MapScreen extends Screen {
         float screenX = (float) (cx + (bx - mapX) * zoom);
         float screenY = (float) (cy + (bz - mapZ) * zoom);
         int shown = UiTheme.muted(color, 0.2f);
+        float grown = markerScale();
 
-        UiRender.ring(guiGraphics, screenX, screenY, BASE_RADIUS, 3.4f, 1.0f, UiPalette.panelDeep());
-        UiRender.ring(guiGraphics, screenX, screenY, BASE_RADIUS, 2.0f, 1.0f, shown);
-        UiRender.dot(guiGraphics, screenX, screenY, 1.4f, shown);
-        labelAbove(guiGraphics, BASE_LABEL.getString(), screenX, screenY, BASE_RADIUS + 1.7f, UiAccent.text());
+        UiRender.ring(guiGraphics, screenX, screenY, BASE_RADIUS * grown, 3.4f * grown, 1.0f, UiPalette.panelDeep());
+        UiRender.ring(guiGraphics, screenX, screenY, BASE_RADIUS * grown, 2.0f * grown, 1.0f, shown);
+        UiRender.dot(guiGraphics, screenX, screenY, 1.4f * grown, shown);
+        labelAbove(guiGraphics, BASE_LABEL.getString(), screenX, screenY,
+                (BASE_RADIUS + 1.7f) * grown, UiAccent.text());
     }
 
     private void renderMarkers(GuiGraphics guiGraphics, int centerX, int centerY) {
@@ -227,13 +243,13 @@ public class MapScreen extends Screen {
 
     private void labelAbove(GuiGraphics guiGraphics, String value, float centerX,
                             float markerY, float markerRadius, int color) {
-        float scale = UiRender.crisp(guiGraphics, LABEL_SCALE);
+        float scale = UiRender.crisp(guiGraphics, LABEL_SCALE * markerScale());
         float height = this.font.lineHeight * scale + UiMetrics.GAP;
-        label(guiGraphics, value, centerX, markerY - markerRadius - MARKER_CLEARANCE - height, color);
+        label(guiGraphics, value, centerX, markerY - markerRadius - MARKER_CLEARANCE * markerScale() - height, color);
     }
 
     private void label(GuiGraphics guiGraphics, String value, float centerX, float y, int color) {
-        float scale = UiRender.crisp(guiGraphics, LABEL_SCALE);
+        float scale = UiRender.crisp(guiGraphics, LABEL_SCALE * markerScale());
         float width = UiRender.widthLabel(this.font, value) * scale + UiMetrics.GAP_WIDE * 2.0f;
         float height = this.font.lineHeight * scale + UiMetrics.GAP;
         float plateY = y - UiMetrics.GAP_TIGHT;
@@ -265,8 +281,10 @@ public class MapScreen extends Screen {
         float screenX = (float) (cx + (px - mapX) * zoom);
         float screenY = (float) (cy + (pz - mapZ) * zoom);
 
-        UiRender.arrow(guiGraphics, screenX, screenY, yRot, 6.0f, UiTheme.muted(color, 0.2f), UiPalette.panelDeep());
-        labelAbove(guiGraphics, name, screenX, screenY, 6.0f, UiAccent.text());
+        float grown = markerScale();
+        UiRender.arrow(guiGraphics, screenX, screenY, yRot, PLAYER_ARROW * grown,
+                UiTheme.muted(color, 0.2f), UiPalette.panelDeep());
+        labelAbove(guiGraphics, name, screenX, screenY, PLAYER_ARROW * grown, UiAccent.text());
     }
 
     private void renderMarker(GuiGraphics guiGraphics, double mx, double mz, int cx, int cy, int color,
@@ -274,40 +292,47 @@ public class MapScreen extends Screen {
         float screenX = (float) (cx + (mx - mapX) * zoom);
         float screenY = (float) (cy + (mz - mapZ) * zoom);
         int shown = UiTheme.muted(color, 0.2f);
-        float pop = MarkerPings.pop(age);
+        float pop = MarkerPings.pop(age) * markerScale();
 
-        MarkerPings.ripple(guiGraphics, screenX, screenY, MARKER_DOT, shown, age);
+        MarkerPings.ripple(guiGraphics, screenX, screenY, MARKER_DOT * markerScale(), shown, age);
         UiRender.dot(guiGraphics, screenX, screenY, MARKER_DOT * pop + 0.6f, UiPalette.panelDeep());
         UiRender.dot(guiGraphics, screenX, screenY, MARKER_DOT * pop, shown);
-        labelAbove(guiGraphics, name, screenX, screenY, 2.6f, UiAccent.text());
+        labelAbove(guiGraphics, name, screenX, screenY, 2.6f * markerScale(), UiAccent.text());
     }
 
     private void renderWorldMarker(GuiGraphics guiGraphics, double mx, double mz, int cx, int cy, String name) {
         float screenX = (float) (cx + (mx - mapX) * zoom);
         float screenY = (float) (cy + (mz - mapZ) * zoom);
 
-        UiRender.panel(guiGraphics, screenX - 3.6f, screenY - 3.6f, 7.2f, 7.2f, 2.2f, UiPalette.panelDeep());
-        UiRender.panel(guiGraphics, screenX - 3.0f, screenY - 3.0f, 6.0f, 6.0f, 2.0f, UiAccent.color());
-        labelAbove(guiGraphics, name, screenX, screenY, 3.6f, UiAccent.text());
+        float grown = markerScale();
+        UiRender.panel(guiGraphics, screenX - 3.6f * grown, screenY - 3.6f * grown,
+                7.2f * grown, 7.2f * grown, 2.2f * grown, UiPalette.panelDeep());
+        UiRender.panel(guiGraphics, screenX - 3.0f * grown, screenY - 3.0f * grown,
+                6.0f * grown, 6.0f * grown, 2.0f * grown, UiAccent.color());
+        labelAbove(guiGraphics, name, screenX, screenY, 3.6f * grown, UiAccent.text());
     }
 
     private void renderPointMarker(GuiGraphics guiGraphics, double px, double pz, int cx, int cy, int color, String name) {
         float screenX = (float) (cx + (px - mapX) * zoom);
         float screenY = (float) (cy + (pz - mapZ) * zoom);
 
-        UiRender.panel(guiGraphics, screenX - 4.1f, screenY - 4.1f, 8.2f, 8.2f, 2.7f, UiPalette.panelDeep());
-        UiRender.panel(guiGraphics, screenX - 3.5f, screenY - 3.5f, 7.0f, 7.0f, 2.5f, UiTheme.muted(color, 0.25f));
-        labelAbove(guiGraphics, name, screenX, screenY, 4.1f, UiAccent.text());
+        float grown = markerScale();
+        UiRender.panel(guiGraphics, screenX - 4.1f * grown, screenY - 4.1f * grown,
+                8.2f * grown, 8.2f * grown, 2.7f * grown, UiPalette.panelDeep());
+        UiRender.panel(guiGraphics, screenX - 3.5f * grown, screenY - 3.5f * grown,
+                7.0f * grown, 7.0f * grown, 2.5f * grown, UiTheme.muted(color, 0.25f));
+        labelAbove(guiGraphics, name, screenX, screenY, 4.1f * grown, UiAccent.text());
     }
 
 
     private String hintKey() {
         if (!canEdit()) return "minimap.screen.hint";
-        if (armedLabel != null) return "minimap.screen.hint.dragging";
+        if (armedLabel != null) return "minimap.screen.hint.armed";
         return hoveredLabel == null ? "minimap.screen.hint.operator" : "minimap.screen.hint.label";
     }
 
     private void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY, int centerX, int centerY) {
+        MapLabels.zoom(markerScale());
         hoveredLabel = canEdit() && !actions.open() && !prompt.open()
                 ? MapLabels.under(this.font, mouseX, mouseY, mapX, mapZ, zoom, centerX, centerY)
                 : null;
@@ -357,6 +382,7 @@ public class MapScreen extends Screen {
                             mark.lines().size() - 1, 0, "")));
         }
         items.add(MapActionMenu.Item.of("minimap.map.action.color", () -> openColors(id, mouseX, mouseY)));
+        items.add(MapActionMenu.Item.of("minimap.map.action.teams", () -> openTeams(id, mouseX, mouseY)));
         items.add(MapActionMenu.Item.of("minimap.map.action.delete",
                 () -> send(MarkEditPacket.Action.DELETE, id, 0, 0, 0, 0, "")));
     }
@@ -369,6 +395,32 @@ public class MapScreen extends Screen {
                     () -> send(MarkEditPacket.Action.COLOR, id, 0, 0, 0, color, "")));
         }
         actions.show(this.font, mouseX, mouseY, this.width, this.height, items);
+    }
+
+    // WHY: набор команд читается из самой метки, а оператору её отдают целиком даже скрытую,
+    // WHY: поэтому строка честно показывает, кому надпись видна сейчас
+    private void openTeams(String id, double mouseX, double mouseY) {
+        MapMark mark = ClientMarkData.byId(id);
+        if (mark == null) return;
+
+        List<MapActionMenu.Item> items = new ArrayList<>();
+        items.add(new MapActionMenu.Item(Component.translatable("minimap.map.action.everyone"),
+                mark.everyone() ? UiAccent.color() : 0,
+                () -> send(MarkEditPacket.Action.EVERYONE, id, 0, 0, 0, 0, "")));
+
+        for (String team : teamNames()) {
+            boolean shown = mark.teams().contains(team);
+            items.add(new MapActionMenu.Item(Component.literal(team),
+                    shown ? MapRenderUtil.getTeamColor(team) : 0,
+                    () -> send(MarkEditPacket.Action.TEAM, id, 0, 0, shown ? 0 : 1, 0, team)));
+        }
+        actions.show(this.font, mouseX, mouseY, this.width, this.height, items);
+    }
+
+    private static List<String> teamNames() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return List.of();
+        return new ArrayList<>(mc.level.getScoreboard().getTeamNames());
     }
 
     private void askNewLabel(double worldX, double worldZ) {
@@ -436,6 +488,10 @@ public class MapScreen extends Screen {
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            if (sizingLabel) {
+                sizeLabel(mouseX, mouseY);
+                return true;
+            }
             if (armedLabel != null) {
                 dragLabel(mouseX, mouseY);
                 return true;
@@ -477,6 +533,7 @@ public class MapScreen extends Screen {
 
     private boolean grabLabel(double mouseX, double mouseY) {
         if (!canEdit()) return false;
+        if (grabHandle(mouseX, mouseY)) return true;
 
         String id = MapLabels.under(this.font, mouseX, mouseY, mapX, mapZ, zoom,
                 this.width / 2, this.height / 2);
@@ -489,10 +546,58 @@ public class MapScreen extends Screen {
         return true;
     }
 
+    // WHY: угол берётся только у взведённой надписи, как в редакторе HUD: иначе ручка ловила бы
+    // WHY: щелчки рядом с любой надписью и мешала ставить личные метки
+    private boolean grabHandle(double mouseX, double mouseY) {
+        MapMark mark = armedLabel == null ? null : ClientMarkData.byId(armedLabel);
+        if (mark == null) return false;
+
+        float screenX = MapLabels.screenX(mark, mapX, zoom, this.width / 2);
+        float screenY = MapLabels.screenY(mark, mapZ, zoom, this.height / 2);
+        if (!MapLabels.onHandle(this.font, mark, mouseX, mouseY, screenX, screenY)) return false;
+
+        hasDragged = false;
+        clickedWidget = false;
+        sizingLabel = true;
+        sizingPercent = mark.scalePercent();
+        sizingFrom = Math.max(1.0, reach(mouseX, mouseY, screenX, screenY));
+        return true;
+    }
+
+    private static double reach(double mouseX, double mouseY, float screenX, float screenY) {
+        return Math.hypot(mouseX - screenX, mouseY - screenY);
+    }
+
+    private void sizeLabel(double mouseX, double mouseY) {
+        MapMark mark = ClientMarkData.byId(armedLabel);
+        if (mark == null) return;
+
+        float screenX = MapLabels.screenX(mark, mapX, zoom, this.width / 2);
+        float screenY = MapLabels.screenY(mark, mapZ, zoom, this.height / 2);
+        double grown = reach(mouseX, mouseY, screenX, screenY) / sizingFrom;
+        MapLabels.holdScale(armedLabel, clamped((int) Math.round(sizingPercent * grown)));
+    }
+
+    private static int clamped(int percent) {
+        return Math.max(MapMark.SCALE_MIN, Math.min(MapMark.SCALE_MAX, percent));
+    }
+
+    private void dropSize() {
+        MapMark mark = ClientMarkData.byId(armedLabel);
+        sizingLabel = false;
+        if (mark == null) return;
+
+        send(MarkEditPacket.Action.SCALE, armedLabel, 0, 0, MapLabels.percentOf(mark), 0, "");
+    }
+
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (prompt.open() || actions.open()) return true;
 
+        if (sizingLabel && button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            dropSize();
+            return true;
+        }
         if (armedLabel != null && button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             dropLabel(mouseX, mouseY);
             return true;

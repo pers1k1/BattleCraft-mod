@@ -2,6 +2,7 @@ package com.persiki84.zones.client.menu;
 
 import com.persiki84.sellmod.client.ClientSellData;
 import com.persiki84.shared.client.menu.GlassScreen;
+import com.persiki84.shared.client.menu.MenuCommands;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.Smooth;
@@ -84,6 +85,8 @@ public class ShopScreen extends GlassScreen {
     private int shownBalance = -1;
     private int shownAvailable = Integer.MIN_VALUE;
     private boolean refreshed;
+    private boolean editing;
+    private boolean carrying;
 
     public ShopScreen() {
         super(Component.translatable("zones.shop.title"));
@@ -163,6 +166,11 @@ public class ShopScreen extends GlassScreen {
     }
 
     private void addSellButton() {
+        if (editing) {
+            addViewerButton();
+            return;
+        }
+
         shownPending = pendingValue();
         shownBalance = balanceValue();
         shownAvailable = availableValue();
@@ -172,6 +180,41 @@ public class ShopScreen extends GlassScreen {
         sell.hint("zones.shop.sell.hint");
         sell.active = shownPending > 0;
         addRenderableWidget(sell);
+    }
+
+    // WHY: кнопка стоит на месте продажи: в редакторе продавать нечего, а смотреть витрину
+    // WHY: глазами команды нужно там же, где она показана
+    private void addViewerButton() {
+        UiButton viewer = new UiButton(sellLeft(), headerRowTop(), SELL_WIDTH, HEADER_ROW_HEIGHT,
+                viewerLabel(), pressed -> nextViewer());
+        viewer.hint("zones.shop.edit.viewer.hint");
+        addRenderableWidget(viewer);
+    }
+
+    private Component viewerLabel() {
+        String team = view.viewedTeam();
+        return team == null
+                ? Component.translatable("zones.shop.edit.viewer.all")
+                : Component.translatable("zones.shop.edit.viewer", team);
+    }
+
+    private void nextViewer() {
+        List<String> teams = teamNames();
+        String team = view.viewedTeam();
+        int index = team == null ? 0 : teams.indexOf(team) + 1;
+
+        view.asTeam(index >= teams.size() ? null : teams.get(index));
+        sectionId = null;
+        childId = null;
+        entryId = null;
+        grid.reset();
+        rebuild();
+    }
+
+    private static List<String> teamNames() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null) return List.of();
+        return new ArrayList<>(minecraft.level.getScoreboard().getTeamNames());
     }
 
     private int headerRowWidth() {
@@ -340,6 +383,10 @@ public class ShopScreen extends GlassScreen {
     private void addBuyButton(int previewLeft, int top) {
         ShopEntry entry = currentEntry();
         if (entry == null) return;
+        if (editing) {
+            addEditButton(entry, previewLeft, top);
+            return;
+        }
 
         int affordable = maxAffordable(entry);
         quantity = Math.max(1, Math.min(quantity, Math.max(1, affordable)));
@@ -356,6 +403,38 @@ public class ShopScreen extends GlassScreen {
         buyButton = new UiButton(x, buttonY, width, BUY_HEIGHT, buyLabel(entry), button -> purchase(entry));
         buyButton.active = !entry.soldOut() && affordable > 0;
         addRenderableWidget(buyButton);
+    }
+
+    // WHY: в редакторе на месте покупки стоит удаление: витрина показывает товар так, как его
+    // WHY: увидит игрок, и правится там же, где смотрится, а не в отдельной таблице
+    private void addEditButton(ShopEntry entry, int previewLeft, int top) {
+        int width = PREVIEW_WIDTH - (int) UiMetrics.PAD_WIDE * 2;
+        int x = previewLeft + (int) UiMetrics.PAD_WIDE;
+        int buttonY = top + panelHeight() - BUY_HEIGHT - (int) UiMetrics.PAD_WIDE;
+
+        ShopView.Found found = view.find(entry.id());
+        if (found == null) return;
+
+        addRenderableWidget(new UiButton(x, buttonY, width, BUY_HEIGHT,
+                Component.translatable("zones.shop.edit.drop"), button -> dropEntry(found)));
+    }
+
+    private void dropEntry(ShopView.Found found) {
+        MenuCommands.run("battlecraft shop item remove " + found.sectionId() + " " + found.entry().id(),
+                ShopAdminScreen.MENU_ID);
+        entryId = neighbourEntry(found.entry().id());
+        rebuild();
+    }
+
+    // WHY: удаляют подряд, поэтому выбор встаёт на соседа: возврат к первому товару заставляет
+    // WHY: каждый раз искать место заново
+    private String neighbourEntry(String removed) {
+        String previous = null;
+        for (ShopView.Found found : view.shown()) {
+            if (found.entry().id().equals(removed)) return previous;
+            previous = found.entry().id();
+        }
+        return null;
     }
 
     private boolean sliderShown(ShopEntry entry) {
@@ -450,8 +529,10 @@ public class ShopScreen extends GlassScreen {
         int previewLeft = gridLeft + GRID_WIDTH + PANEL_GAP;
         int height = panelHeight();
 
-        UiTitle.render(graphics, this.font, getTitle(), this.width / 2.0f, TITLE_TOP,
-                TITLE_SCALE, 0.0f, UiAccent.text());
+        UiTitle.render(graphics, this.font, editing
+                        ? Component.translatable("zones.shop.edit.title")
+                        : getTitle(),
+                this.width / 2.0f, TITLE_TOP, TITLE_SCALE, 0.0f, UiAccent.text());
         renderHeaderPlates(graphics);
 
         UiGlass.window(graphics, left, top, SIDEBAR_WIDTH, height, PANEL_RADIUS, 1.0f);
@@ -580,7 +661,10 @@ public class ShopScreen extends GlassScreen {
             return true;
         }
         if (button == 0 && grid.grabScrollbar(localX, localY, view.shown().size())) return true;
-        if (pickTile(localX, localY)) return true;
+        if (pickTile(localX, localY)) {
+            if (editing && button == 0) beginCarry(localX, localY);
+            return true;
+        }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -589,6 +673,10 @@ public class ShopScreen extends GlassScreen {
         if (leaving()) return true;
         if (grid.dragging()) {
             grid.dragScrollbar(localY(mouseY), view.shown().size());
+            return true;
+        }
+        if (carrying) {
+            grid.carryTo(localX(mouseX), localY(mouseY), view.shown().size());
             return true;
         }
         if (!preview.dragging()) return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
@@ -601,7 +689,35 @@ public class ShopScreen extends GlassScreen {
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         grid.endDrag();
         preview.endDrag();
+        if (carrying) {
+            dropCarried();
+            return true;
+        }
         return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    private void beginCarry(double mouseX, double mouseY) {
+        ShopView.Found found = view.find(entryId);
+        if (found == null || view.searching()) return;
+
+        int index = view.shown().indexOf(found);
+        if (index < 0) return;
+
+        carrying = true;
+        grid.carry(found, index, mouseX, mouseY);
+    }
+
+    // WHY: место товара считается по его номеру в показанном списке: витрина без поиска
+    // WHY: показывает ровно один раздел или отдел, и номер плитки равен месту в каталоге
+    private void dropCarried() {
+        carrying = false;
+        ShopView.Found found = view.find(entryId);
+        int delta = grid.dropDelta();
+        if (found == null || delta == 0) return;
+
+        int index = view.shown().indexOf(found);
+        MenuCommands.run("battlecraft shop item order " + found.sectionId() + " "
+                + found.entry().id() + " to " + (index + delta + 1), ShopAdminScreen.MENU_ID);
     }
 
     private boolean pickTile(double mouseX, double mouseY) {
@@ -662,7 +778,18 @@ public class ShopScreen extends GlassScreen {
         return Math.max(0, Math.min(scroll, Math.max(0, total - capacity)));
     }
 
+    public boolean editing() {
+        return editing;
+    }
+
     public static void open() {
         Minecraft.getInstance().setScreen(new ShopScreen());
+    }
+
+    public static void openEditor() {
+        ShopScreen screen = new ShopScreen();
+        screen.editing = true;
+        screen.view.edit(true);
+        Minecraft.getInstance().setScreen(screen);
     }
 }

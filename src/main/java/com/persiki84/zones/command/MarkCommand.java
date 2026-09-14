@@ -94,6 +94,7 @@ public final class MarkCommand {
                         .suggests(MARK_IDS)
                         .then(labelEdit())
                         .then(kindEdit())
+                        .then(scaleEdit())
                         .then(lineEdit())
                         .then(colorEdit())
                         .then(Commands.literal("here").executes(MarkCommand::moveHere))
@@ -115,6 +116,21 @@ public final class MarkCommand {
             branch.then(Commands.literal(kind.id()).executes(context -> editKind(context, kind)));
         }
         return branch;
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> scaleEdit() {
+        return Commands.literal("scale")
+                .then(Commands.argument("percent",
+                                IntegerArgumentType.integer(MapMark.SCALE_MIN, MapMark.SCALE_MAX))
+                        .executes(MarkCommand::editScale));
+    }
+
+    private static int editScale(CommandContext<CommandSourceStack> context) {
+        MapMark mark = require(context);
+        if (mark == null) return 0;
+
+        mark.setScalePercent(IntegerArgumentType.getInteger(context, "percent"));
+        return apply(context, mark);
     }
 
     // WHY: строки надписи правятся по номеру, а первая это та же подпись метки: отдельной ветки

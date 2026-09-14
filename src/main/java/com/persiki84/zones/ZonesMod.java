@@ -100,7 +100,10 @@ public class ZonesMod {
         if (restockTicks < RESTOCK_INTERVAL_TICKS) return;
         restockTicks = 0;
 
-        if (!ShopCatalog.restockDue(System.currentTimeMillis())) return;
+        if (!ShopCatalog.restockDue(System.currentTimeMillis())) {
+            ShopCatalog.flushDue();
+            return;
+        }
         ShopCatalog.persist();
         syncShopToEveryone(ServerLifecycleHooks.getCurrentServer());
     }
@@ -130,10 +133,13 @@ public class ZonesMod {
         syncMarksTo(player);
     }
 
+    // WHY: оператору уходят все метки, включая скрытые от его команды: иначе спрятанную надпись
+    // WHY: он не увидит на карте и не сможет ни подвинуть, ни вернуть - как полный каталог магазина
     public static void syncMarksTo(ServerPlayer player) {
+        boolean full = player.hasPermissions(2);
         List<MapMark> visible = new ArrayList<>();
         for (MapMark mark : MarkRegistry.all()) {
-            if (mark.visibleTo(player.getTeam())) visible.add(mark);
+            if (full || mark.visibleTo(player.getTeam())) visible.add(mark);
         }
         PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), new MarkSyncAllPacket(visible));
     }

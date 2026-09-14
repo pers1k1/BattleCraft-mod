@@ -398,10 +398,13 @@ public class CapturePointManager {
     // WHY: без этого правила команда, собравшая все обязательные точки, открывала финальную
     // WHY: сопернику: тот приходил на готовое и забирал матч, не взяв ни одной точки
     public static boolean mayTakeFinal(String team) {
-        if (!finalForOpenerOnly) return true;
-
-        String opener = getTeamWithAllPoints();
+        String opener = finalOpener();
         return opener == null || opener.equals(team);
+    }
+
+    // WHY: пусто значит «ограничения нет»: либо выключатель снят, либо обязательных точек нет
+    public static String finalOpener() {
+        return finalForOpenerOnly ? getTeamWithAllPoints() : null;
     }
 
     public static boolean isFinalForOpenerOnly() { return finalForOpenerOnly; }

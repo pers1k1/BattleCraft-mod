@@ -366,13 +366,16 @@ public final class CaptureSessions {
         sessions.put(point.getName(), session);
     }
 
+    // WHY: команду, открывшую финальную, ищет обход всех точек, а стартующего ищет обход всех
+    // WHY: игроков: спрашивать первое внутри второго значит умножать тик на число игроков
     private static ServerPlayer findStarter(CapturePoint point, ServerLevel level) {
+        String opener = point instanceof FinalCapturePoint ? CapturePointManager.finalOpener() : null;
         for (ServerPlayer player : level.players()) {
             if (player.isSpectator() || !player.isAlive() || downed(player)) continue;
 
             String team = CapturePointManager.teamOf(player);
             if (team == null || team.equals(point.getOwnerTeam())) continue;
-            if (point instanceof FinalCapturePoint && !CapturePointManager.mayTakeFinal(team)) continue;
+            if (opener != null && !opener.equals(team)) continue;
             if (TeamCooldowns.blocked(team, point.getName())) continue;
             if (isCapturing(player.getUUID())) continue;
             if (point.getArea().contains(player.getX(), player.getY(), player.getZ(), EDGE_TOLERANCE)) return player;

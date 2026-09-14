@@ -82,6 +82,7 @@ public final class MarkStorage {
         private String label;
         private List<String> lines;
         private String kind;
+        private Integer scale;
         private int color;
         private Boolean inWorld;
         private List<String> teams;
@@ -96,6 +97,7 @@ public final class MarkStorage {
             stored.label = mark.label();
             stored.lines = new ArrayList<>(mark.lines());
             stored.kind = mark.kind().id();
+            stored.scale = mark.scalePercent();
             stored.color = mark.color();
             stored.inWorld = mark.inWorld();
             stored.teams = new ArrayList<>(mark.teams());
@@ -114,6 +116,7 @@ public final class MarkStorage {
             // WHY: строкой надписи: пустой список стёр бы подписи всех существующих меток
             if (lines != null && !lines.isEmpty()) mark.restoreLines(lines);
             mark.setKind(MarkKind.byId(kind == null ? MarkKind.DEFAULT.id() : kind));
+            mark.setScalePercent(scale == null ? MapMark.SCALE_FULL : scale);
             mark.setInWorld(inWorld == null || inWorld);
             if (teams != null) {
                 for (String team : teams) {

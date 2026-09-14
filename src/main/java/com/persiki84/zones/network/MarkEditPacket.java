@@ -22,6 +22,9 @@ public class MarkEditPacket {
         ADD_LINE,
         REMOVE_LINE,
         COLOR,
+        EVERYONE,
+        TEAM,
+        SCALE,
         DELETE
     }
 
@@ -100,6 +103,20 @@ public class MarkEditPacket {
         return "text" + player.getUUID();
     }
 
+    // WHY: имя команды приходит от клиента, поэтому существование сверяется здесь: иначе в набор
+    // WHY: ляжет мусор, и метка окажется скрытой от всех навсегда
+    private static boolean allowTeam(MarkEditPacket packet, ServerPlayer player, MapMark mark) {
+        if (player.getServer() == null) return false;
+        if (player.getServer().getScoreboard().getPlayerTeam(packet.text) == null) return false;
+
+        if (packet.line != 0) {
+            mark.allow(packet.text);
+        } else {
+            mark.forbid(packet.text);
+        }
+        return true;
+    }
+
     private static void apply(MarkEditPacket packet, ServerPlayer player) {
         MapMark mark = MarkRegistry.byId(packet.id);
         if (mark == null) return;
@@ -116,6 +133,11 @@ public class MarkEditPacket {
                 if (!mark.removeLine(packet.line)) return;
             }
             case COLOR -> mark.setColor(packet.color);
+            case SCALE -> mark.setScalePercent(packet.line);
+            case EVERYONE -> mark.showEveryone();
+            case TEAM -> {
+                if (!allowTeam(packet, player, mark)) return;
+            }
             case DELETE -> {
                 MarkRegistry.remove(packet.id);
                 ZonesMod.syncMarksToEveryone(player.getServer());

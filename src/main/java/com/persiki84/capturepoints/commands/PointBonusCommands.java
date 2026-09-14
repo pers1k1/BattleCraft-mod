@@ -43,6 +43,8 @@ public final class PointBonusCommands {
                 .then(buffBranch(points, lookup))
                 .then(plain("clearbuff", "buff_cleared", points, lookup, PointBonusCommands::clearBuff))
                 .then(commandBranch(points, lookup))
+                .then(addCommandBranch(points, lookup))
+                .then(removeCommandBranch(points, lookup))
                 .then(plain("clearcommand", "command_cleared", points, lookup, PointBonusCommands::clearCommand));
     }
 
@@ -82,6 +84,22 @@ public final class PointBonusCommands {
                                 .suggests(EFFECT_SUGGESTIONS)
                                 .then(Commands.argument("amplifier", IntegerArgumentType.integer(0, MAX_AMPLIFIER))
                                         .executes(context -> setBuff(context, lookup)))));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> addCommandBranch(
+            SuggestionProvider<CommandSourceStack> points, Function<String, CapturePoint> lookup) {
+        return Commands.literal("addcommand")
+                .then(named(points)
+                        .then(Commands.argument("command", StringArgumentType.greedyString())
+                                .executes(context -> addCommand(context, lookup))));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> removeCommandBranch(
+            SuggestionProvider<CommandSourceStack> points, Function<String, CapturePoint> lookup) {
+        return Commands.literal("removecommand")
+                .then(named(points)
+                        .then(Commands.argument("index", IntegerArgumentType.integer(1, CapturePoint.MAX_COMMANDS))
+                                .executes(context -> removeCommand(context, lookup))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> commandBranch(
@@ -160,22 +178,55 @@ public final class PointBonusCommands {
     }
 
     private static int setCommand(CommandContext<CommandSourceStack> context, Function<String, CapturePoint> lookup) {
-        CapturePoint point = resolve(context, lookup);
+        CapturePoint point = accepted(context, lookup);
         if (point == null) return 0;
 
-        String command = StringArgumentType.getString(context, "command").trim();
-        if (command.length() > CaptureCommandRunner.MAX_LENGTH) {
-            context.getSource().sendFailure(Component.translatable("capturepoints.error.command_too_long",
-                    CaptureCommandRunner.MAX_LENGTH).withStyle(ChatFormatting.RED));
-            return 0;
-        }
-
-        point.setCaptureCommand(command);
+        point.setCaptureCommand(StringArgumentType.getString(context, "command").trim());
         return confirm(context, "capturepoints.success.command_set", point);
     }
 
+    private static int addCommand(CommandContext<CommandSourceStack> context, Function<String, CapturePoint> lookup) {
+        CapturePoint point = accepted(context, lookup);
+        if (point == null) return 0;
+
+        if (!point.addCaptureCommand(StringArgumentType.getString(context, "command").trim())) {
+            context.getSource().sendFailure(Component.translatable("capturepoints.error.too_many_commands",
+                    CapturePoint.MAX_COMMANDS).withStyle(ChatFormatting.RED));
+            return 0;
+        }
+        return confirm(context, "capturepoints.success.command_added", point);
+    }
+
+    // WHY: в списке команды нумеруются с единицы, как их видит оператор в меню и в чате
+    private static int removeCommand(CommandContext<CommandSourceStack> context,
+                                     Function<String, CapturePoint> lookup) {
+        CapturePoint point = resolve(context, lookup);
+        if (point == null) return 0;
+
+        int index = IntegerArgumentType.getInteger(context, "index") - 1;
+        if (!point.removeCaptureCommand(index)) {
+            context.getSource().sendFailure(Component.translatable("capturepoints.error.no_command",
+                    index + 1).withStyle(ChatFormatting.RED));
+            return 0;
+        }
+        return confirm(context, "capturepoints.success.command_removed", point);
+    }
+
+    private static CapturePoint accepted(CommandContext<CommandSourceStack> context,
+                                         Function<String, CapturePoint> lookup) {
+        CapturePoint point = resolve(context, lookup);
+        if (point == null) return null;
+
+        if (StringArgumentType.getString(context, "command").trim().length() <= CaptureCommandRunner.MAX_LENGTH) {
+            return point;
+        }
+        context.getSource().sendFailure(Component.translatable("capturepoints.error.command_too_long",
+                CaptureCommandRunner.MAX_LENGTH).withStyle(ChatFormatting.RED));
+        return null;
+    }
+
     private static void clearCommand(CapturePoint point) {
-        point.setCaptureCommand(null);
+        point.clearCaptureCommands();
     }
 
     private static CapturePoint resolve(CommandContext<CommandSourceStack> context,

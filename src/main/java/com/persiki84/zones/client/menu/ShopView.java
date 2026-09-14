@@ -20,6 +20,60 @@ public final class ShopView {
     private String childId;
     private int catalogVersion = -1;
     private boolean stale = true;
+    private boolean editing;
+    private String asTeam;
+
+    // WHY: редактору нужен весь каталог, а не отобранный по команде: оператор правит и то,
+    // WHY: что его команде не показывают, иначе половину товаров с витрины не достать
+    public void edit(boolean value) {
+        if (editing == value) return;
+
+        editing = value;
+        stale = true;
+    }
+
+    // WHY: у команд разный ассортимент, и правя витрину, оператор обязан уметь посмотреть её
+    // WHY: глазами каждой из них: иначе скрытый от команды раздел правится вслепую
+    public void asTeam(String team) {
+        if (equal(team, asTeam)) return;
+
+        asTeam = team;
+        stale = true;
+    }
+
+    public String viewedTeam() {
+        return asTeam;
+    }
+
+    private boolean full() {
+        return editing && asTeam == null;
+    }
+
+    private String team() {
+        return editing ? asTeam : ClientShopData.team();
+    }
+
+    private List<ShopSection> sections() {
+        if (!editing) return ClientShopData.offered();
+
+        List<ShopSection> shownSections = new ArrayList<>();
+        for (ShopSection section : ClientShopData.sections()) {
+            if (full() || section.access().visibleTo(asTeam)) shownSections.add(section);
+        }
+        return shownSections;
+    }
+
+    private ShopSection sectionOf(String id) {
+        if (!editing) return ClientShopData.offeredSection(id);
+
+        ShopSection section = ClientShopData.section(id);
+        if (section == null || full() || section.access().visibleTo(asTeam)) return section;
+        return null;
+    }
+
+    private List<ShopEntry> entriesOf(ShopSection source) {
+        return source.visibleEntries(team(), full());
+    }
 
     public boolean searching() {
         return !query.isEmpty();
@@ -59,7 +113,7 @@ public final class ShopView {
         shown.clear();
 
         if (searching()) {
-            for (ShopSection section : ClientShopData.offered()) {
+            for (ShopSection section : sections()) {
                 collectMatches(section);
             }
             return;
@@ -68,7 +122,7 @@ public final class ShopView {
     }
 
     private void collectBrowsed() {
-        ShopSection section = sectionId == null ? null : ClientShopData.offeredSection(sectionId);
+        ShopSection section = sectionId == null ? null : sectionOf(sectionId);
         if (section == null) return;
 
         if (childId == null) {
@@ -77,26 +131,25 @@ public final class ShopView {
         }
 
         ShopSection child = section.child(childId);
-        if (child != null && child.access().visibleTo(ClientShopData.team())) {
+        if (child != null && (full() || child.access().visibleTo(team()))) {
             addAll(child, childId, child.title());
         }
     }
 
     private void collectMatches(ShopSection section) {
-        String team = ClientShopData.team();
-        for (ShopEntry entry : section.visibleEntries(team, false)) {
+        for (ShopEntry entry : entriesOf(section)) {
             if (matches(entry)) shown.add(new Found(section.id(), null, section.title(), entry));
         }
 
-        for (ShopSection child : section.visibleChildren(team, false)) {
-            for (ShopEntry entry : child.visibleEntries(team, false)) {
+        for (ShopSection child : section.visibleChildren(team(), full())) {
+            for (ShopEntry entry : entriesOf(child)) {
                 if (matches(entry)) shown.add(new Found(section.id(), child.id(), child.title(), entry));
             }
         }
     }
 
     private void addAll(ShopSection source, String child, String title) {
-        for (ShopEntry entry : source.visibleEntries(ClientShopData.team(), false)) {
+        for (ShopEntry entry : entriesOf(source)) {
             shown.add(new Found(sectionId, child, title, entry));
         }
     }

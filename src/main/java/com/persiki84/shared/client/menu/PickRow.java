@@ -74,6 +74,16 @@ public class PickRow extends MenuRow {
         hint(this::describe);
     }
 
+    @Override
+    public void adopt(MenuRow previous) {
+        if (!(previous instanceof PickRow older)) return;
+
+        swap.snap(older.swap.get());
+        swapDirection = older.swapDirection;
+        leaving = older.leaving;
+        pending.take(older.pending);
+    }
+
     // WHY: описание принадлежит выбранному значению, а не строке: у способа захвата каждый режим
     // WHY: объясняется своими словами, и общая подсказка на строке ничего из этого не говорит
     @Override

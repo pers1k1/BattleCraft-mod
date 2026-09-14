@@ -17,6 +17,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Objects;
 
@@ -61,6 +63,11 @@ public final class ShopGrid {
     private static final float SWITCH_SPEED = 11.0f;
     private static final float SWITCH_SHIFT = 34.0f;
 
+    private static final float SLIDE_SPEED = 17.0f;
+    private static final float CARRY_LIFT = 1.12f;
+    private static final float CARRY_ALPHA = 0.92f;
+
+    private final Map<String, Slide> slides = new HashMap<>();
     private final List<Smooth> hover = new ArrayList<>();
     private final Smooth glide = new Smooth(0.0f, GLIDE_SPEED);
     private final Smooth thumb = new Smooth(0.0f, THUMB_SPEED);
@@ -80,6 +87,11 @@ public final class ShopGrid {
     private int scroll;
     private boolean scrolling;
     private boolean dragging;
+    private String carried;
+    private int carriedFrom = -1;
+    private int carriedTo = -1;
+    private float carryX;
+    private float carryY;
 
     public void place(float gridLeft, float gridTop, float gridWidth, float gridHeight) {
         left = gridLeft;
@@ -119,6 +131,25 @@ public final class ShopGrid {
 
         glide.snap(capped(glide.get() + (next - scroll) / (float) columns() * (TILE_SIZE + TILE_GAP)));
         scroll = next;
+    }
+
+    private Slide slideOf(String id, float x, float y) {
+        Slide known = slides.get(id);
+        if (known != null) return known;
+
+        Slide fresh = new Slide(x, y);
+        slides.put(id, fresh);
+        return fresh;
+    }
+
+    private static final class Slide {
+        private final Smooth x;
+        private final Smooth y;
+
+        private Slide(float atX, float atY) {
+            this.x = new Smooth(atX, SLIDE_SPEED);
+            this.y = new Smooth(atY, SLIDE_SPEED);
+        }
     }
 
     public void reset() {
@@ -189,6 +220,46 @@ public final class ShopGrid {
         return dragging;
     }
 
+    // WHY: порядок правится тем же жестом, каким его читают - плитку берут и кладут, а соседи
+    // WHY: расступаются на глазах: список со стрелками показывает не витрину, а таблицу
+    public void carry(ShopView.Found found, int index, double mouseX, double mouseY) {
+        carried = found.entry().id();
+        carriedFrom = index;
+        carriedTo = index;
+        carryX = (float) mouseX;
+        carryY = (float) mouseY;
+    }
+
+    public void carryTo(double mouseX, double mouseY, int total) {
+        carryX = (float) mouseX;
+        carryY = (float) mouseY;
+        carriedTo = slotAt(mouseX, mouseY, total);
+    }
+
+    public int dropDelta() {
+        int delta = carriedTo - carriedFrom;
+        carried = null;
+        carriedFrom = -1;
+        carriedTo = -1;
+        return delta;
+    }
+
+    private int slotAt(double mouseX, double mouseY, int total) {
+        int column = (int) Math.floor((mouseX - tileX(0) + TILE_GAP / 2.0f) / (TILE_SIZE + TILE_GAP));
+        int row = (int) Math.floor((mouseY - tileY(0) + TILE_GAP / 2.0f) / (TILE_SIZE + TILE_GAP));
+        int slot = Math.max(0, Math.min(columns() - 1, column)) + Math.max(0, row) * columns() + scroll;
+        return Math.max(0, Math.min(total - 1, slot));
+    }
+
+    // WHY: место плитки при переносе считается по её положению в переставленном списке, а не по
+    // WHY: индексу в данных: данные меняет только сервер, и до его ответа сетка обязана жить сама
+    private int slotOf(int index) {
+        if (carried == null || carriedFrom < 0 || carriedTo == carriedFrom) return index;
+        if (index == carriedFrom) return carriedTo;
+        if (carriedFrom < carriedTo) return index > carriedFrom && index <= carriedTo ? index - 1 : index;
+        return index >= carriedTo && index < carriedFrom ? index + 1 : index;
+    }
+
     public void endDrag() {
         dragging = false;
     }
@@ -206,6 +277,7 @@ public final class ShopGrid {
         UiRender.clip(graphics, left, bandTop(), width, bandBottom() - bandTop());
         try {
             paintTiles(graphics, entries, shown, showSection, mouseX, mouseY, offset);
+            renderCarried(graphics, entries, showSection);
             graphics.flush();
         } finally {
             graphics.disableScissor();
@@ -262,9 +334,12 @@ public final class ShopGrid {
 
     private void renderTile(GuiGraphics graphics, ShopView.Found found, int index,
                             boolean showSection, int mouseX, int mouseY, float offset) {
+        if (found.entry().id().equals(carried)) return;
+
         float appear = appear(index);
-        float x = tileX(index) + switchShift();
-        float rawY = tileY(index) + offset + (1.0f - appear) * APPEAR_LIFT;
+        Slide slide = settled(found, slotOf(index + scroll) - scroll, offset);
+        float x = slide.x.get() + switchShift();
+        float rawY = slide.y.get() + (1.0f - appear) * APPEAR_LIFT;
         boolean hovered = mouseX >= x && mouseX < x + TILE_SIZE && mouseY >= rawY && mouseY < rawY + TILE_SIZE
                 && mouseY >= bandTop() && mouseY < bandBottom();
         float focus = hover.get(index + columns()).to(hovered ? 1.0f : 0.0f, UiFrame.delta());
@@ -276,8 +351,39 @@ public final class ShopGrid {
         graphics.pose().popPose();
     }
 
+    // WHY: место плитки едет сглаживанием, а не прыгает: соседи расступаются перед переносимой,
+    // WHY: и без хода это читается как мигание сетки
+    private Slide settled(ShopView.Found found, int slot, float offset) {
+        Slide slide = slideOf(found.entry().id(), tileX(slot), tileY(slot) + offset);
+        float delta = UiFrame.delta();
+        slide.x.to(tileX(slot), delta);
+        slide.y.to(tileY(slot) + offset, delta);
+        return slide;
+    }
+
+    private void renderCarried(GuiGraphics graphics, List<ShopView.Found> entries, boolean showSection) {
+        if (carried == null) return;
+
+        for (ShopView.Found found : entries) {
+            if (!found.entry().id().equals(carried)) continue;
+
+            float x = carryX - TILE_SIZE / 2.0f;
+            float y = carryY - TILE_SIZE / 2.0f;
+            graphics.pose().pushPose();
+            graphics.pose().translate(x + TILE_SIZE / 2.0f, y + TILE_SIZE / 2.0f, 0.0f);
+            graphics.pose().scale(CARRY_LIFT, CARRY_LIFT, 1.0f);
+            graphics.pose().translate(-x - TILE_SIZE / 2.0f, -y - TILE_SIZE / 2.0f, 0.0f);
+            try {
+                paintTile(graphics, found, x, y, CARRY_ALPHA, 1.0f, showSection);
+            } finally {
+                graphics.pose().popPose();
+            }
+            return;
+        }
+    }
+
     private void squash(GuiGraphics graphics, int index, float x, float y) {
-        if (index != pressedIndex) return;
+        if (index != pressedIndex || carried != null) return;
 
         float age = (System.currentTimeMillis() - pressedAt) / PRESS_MS;
         if (age >= 1.0f) {

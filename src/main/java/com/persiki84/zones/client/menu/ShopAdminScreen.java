@@ -675,6 +675,15 @@ public class ShopAdminScreen extends ManagerScreen {
         }
     }
 
+    // WHY: порядок и удаление удобнее править на самой витрине, где видно, как товар выглядит
+    // WHY: игроку: список со стрелками остаётся для точных правок
+    private AbstractWidget showcaseRow() {
+        return new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.shopadmin.showcase"),
+                () -> Component.translatable("zones.shopadmin.action.open"),
+                ShopScreen::openEditor);
+    }
+
     private List<AbstractWidget> layoutRows() {
         ShopSection section = current();
         if (section == null) return List.of(emptyRow());
@@ -689,6 +698,7 @@ public class ShopAdminScreen extends ManagerScreen {
         picker.hint("zones.shopadmin.layout.target" + HINT_SUFFIX);
 
         List<AbstractWidget> rows = new ArrayList<>();
+        rows.add(showcaseRow());
         rows.add(picker.icon(target::icon));
         rows.add(shiftRow("zones.shopadmin.layout.up", target, " up"));
         rows.add(shiftRow("zones.shopadmin.layout.down", target, " down"));
@@ -696,6 +706,18 @@ public class ShopAdminScreen extends ManagerScreen {
         if (target.entryId() != null) rows.add(homeRow(section, target.entryId()));
         rows.add(dropRow(target));
         return rows;
+    }
+
+    // WHY: удаляют обычно подряд, поэтому выбор встаёт на соседа, а не в начало списка: иначе
+    // WHY: после каждого удаления приходится листать к тому же месту заново
+    private String neighbourSection() {
+        List<ShopSection> sections = ClientShopData.sections();
+        String previous = null;
+        for (ShopSection section : sections) {
+            if (section.id().equals(sectionId)) return previous;
+            previous = section.id();
+        }
+        return null;
     }
 
     private AbstractWidget shiftRow(String label, LayoutTarget target, String direction) {
@@ -709,8 +731,8 @@ public class ShopAdminScreen extends ManagerScreen {
                 Component.translatable(target.removeLabel()),
                 () -> Component.translatable("zones.shopadmin.action.delete"), () -> {
             send(target.removeCommand());
-            if (target.whole()) sectionId = null;
-            layoutTarget = 0;
+            if (target.whole()) sectionId = neighbourSection();
+            layoutTarget = Math.max(0, layoutTarget - 1);
             rebuild();
         }).alerting();
     }
@@ -836,7 +858,7 @@ public class ShopAdminScreen extends ManagerScreen {
                 Component.translatable("zones.shopadmin.remove_section"),
                 () -> Component.translatable("zones.shopadmin.action.delete"), () -> {
             send("section remove " + sectionId);
-            sectionId = null;
+            sectionId = neighbourSection();
             rebuild();
         }).alerting());
         return rows;

@@ -14,6 +14,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Renderable;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
@@ -34,6 +36,7 @@ public abstract class ManagerScreen extends GlassScreen {
 
     protected int rowScroll;
     protected int listScroll;
+    private final java.util.Map<String, MenuRow> carried = new java.util.HashMap<>();
     protected int shownRows = -1;
     protected int sourceRows = -1;
     private String shownSignature = "";
@@ -122,6 +125,7 @@ public abstract class ManagerScreen extends GlassScreen {
         for (int pass = 0; pass < LAYOUT_PASSES; pass++) {
             int height = contentHeight();
             placed = false;
+            remember();
             clearWidgets();
             buildBody();
             addBackButton();
@@ -129,6 +133,24 @@ public abstract class ManagerScreen extends GlassScreen {
             addSearch();
             if (contentHeight() == height) return;
         }
+    }
+
+    // WHY: строка узнаётся по своей подписи, а не по номеру: список строк меняет состав, и по
+    // WHY: номеру движение перескакивало бы с одного переключателя на другой
+    private void remember() {
+        carried.clear();
+        for (GuiEventListener child : children()) {
+            if (child instanceof MenuRow row) carried.put(row.getMessage().getString(), row);
+        }
+    }
+
+    @Override
+    protected <T extends GuiEventListener & Renderable & NarratableEntry> T addRenderableWidget(T widget) {
+        if (widget instanceof MenuRow row) {
+            MenuRow older = carried.get(row.getMessage().getString());
+            if (older != null && older != row) row.adopt(older);
+        }
+        return super.addRenderableWidget(widget);
     }
 
     protected boolean searchable() {

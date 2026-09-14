@@ -168,7 +168,7 @@ Announcements carry their own duration, from two to sixty seconds, set in the pa
 
 Every row of the `/bc` hub now has an explanation - match actions, the status lines, all twenty lobby and stamina settings, and each entry of the manage tab. Until now only the module switches had them, which is why hovering the other tabs looked as though hints were broken.
 
-Version 2026.9.14-prealpha - built but never played through, so report anything that looks wrong.
+Version 2026.9.14hotfix-prealpha - built but never played through, so report anything that looks wrong.
 
 ## Shop, modifiers and map, 12 September 2026 (second pass)
 
@@ -340,6 +340,46 @@ and nothing is issued.
 The vanilla `/clear` walks the inventory and the crafting grid only, so anything worn in a Curios slot
 survived it. It now clears those slots too, with the same count and the same `maxCount` limit, and
 with a count-only run when the limit is zero.
+
+A capture point holds a list of commands, not one. Every command is a row of the Bonuses tab showing
+its full text with a Remove button of its own, the field below only adds a new one, and a point takes
+up to eight. `addcommand` and `removecommand <n>` join `setcommand`, which still replaces the whole
+list the way it always did, and a point saved with the old single command keeps it as the first line.
+
+Map labels carry their own size. It does not follow the map zoom - a label reads the same at any
+scale - and it is changed either by the Size row of the mark panel, by `mark edit <id> scale <percent>`,
+or with the mouse the way the HUD editor works: arm the label with a double click and drag the corner
+handle that appears. The action menu on a label also sets who sees it - everyone, or a chosen set of
+teams - and the palette gained black.
+
+An operator now receives every mark, including those hidden from their own team. Without that a label
+hidden from the operator's team vanished from their own map and could no longer be moved or restored.
+
+The shop has a showcase editor. The Layout tab opens the shop the way a player sees it, on the whole
+catalogue rather than the part one team is offered: tiles are dragged to reorder and the neighbours
+glide out of the way, the buy button becomes a remove button, and the item model spins and zooms as
+usual. A drop sends one command for the final position instead of a run of single steps.
+
+Switching a value with the arrows animates again. The animation was always there, but every edit
+rebuilt the screen and replaced the row with a fresh one whose animation had already finished - the
+better the panel updater got, the more it looked like nothing moved. A row now hands its animation to
+its replacement. Deleting no longer throws the selection back to the top of the list either: it steps
+to the neighbour, so removing several things in a row does not mean scrolling back every time.
+
+Everything on the full map keeps its size relative to the map rather than to the screen. A marker of a
+fixed screen size looks smaller against terrain that grew under a zoom and bloated over terrain that
+shrank, which reads as the marker adjusting itself. Bases, shops, player and team markers, capture
+points, the player arrow, every caption and the labels now follow the zoom, clamped at both ends so
+nothing disappears at the lowest zoom or floods the screen at the highest. The minimap is untouched:
+its zoom is a setting rather than a gesture.
+
+The showcase editor can look through any team's eyes. Sections, subsections and items are restricted
+per team, so the header carries a button that switches the whole showcase between the full catalogue
+and what one chosen team is actually offered. The editor also stays open outside a shop zone - it is
+opened from the panel, and leaving the zone used to close it in the same tick.
+
+Markers follow the zoom along a square root rather than in direct proportion, with a floor: direct
+proportion ate a marker down to a dot once the map was zoomed out.
 
 ## Releases
 
