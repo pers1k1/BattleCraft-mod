@@ -24,6 +24,7 @@ import com.persiki84.shared.client.ui.UiVital;
 import com.persiki84.battlecraft.client.ClientModules;
 import com.persiki84.battlecraft.client.hud.HudConfig;
 import com.persiki84.battlecraft.client.hud.HudInk;
+import com.persiki84.battlecraft.client.hud.PointsView;
 import com.persiki84.battlecraft.modules.ModuleId;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -71,6 +72,7 @@ public class CaptureHudOverlay {
     private static final String STATE_FINAL = "capturepoints.hud.state.final";
 
     private static final Smooth dotPresence = new Smooth(0.0f, PRESENCE_SPEED);
+    private static final Smooth bannerPresence = new Smooth(0.0f, PRESENCE_SPEED);
     private static final Map<String, Pill> pills = new LinkedHashMap<>();
     private static final Toggle centralToggle = new Toggle(11.0f, 120L);
     private static final Smooth centralProgress = new Smooth(14.0f);
@@ -86,6 +88,9 @@ public class CaptureHudOverlay {
 
     // WHY: под открытым списком игроков метки точек уходят присутствием, как метки зон и баз:
     // WHY: ранний выход снимал их кадром, и на фоне уезжающих чужих меток это читалось как дефект
+    // WHY: клавиша точек убирает только сами точки - счёт, пилюли и метки. Возврат на точку, свой
+    // WHY: прогресс захвата и баннер победы говорят о том, что происходит с игроком прямо сейчас,
+    // WHY: и спрятанные насовсем стоили бы ему матча
     public static final IGuiOverlay HUD_CAPTURE = (gui, guiGraphics, partialTick, screenWidth, screenHeight) -> {
         if (com.persiki84.battlecraft.client.ClientGameData.isSoftDisabled()) return;
         if (!ClientModules.allows(ModuleId.CAPTURE_POINTS)) return;
@@ -93,8 +98,10 @@ public class CaptureHudOverlay {
         if (mc.player == null || mc.options == null || mc.options.hideGui) return;
 
         boolean wanted = !UiHud.rosterOpen();
-        renderProjectedMarkers(guiGraphics, mc, screenWidth / 2.0f, screenHeight / 2.0f, wanted);
-        ObjectiveHud.renderBanner(guiGraphics, mc, screenWidth, screenHeight, UiAnim.easeOut(dotPresence.get()));
+        boolean points = wanted && PointsView.shown();
+        renderProjectedMarkers(guiGraphics, mc, screenWidth / 2.0f, screenHeight / 2.0f, points);
+        ObjectiveHud.renderBanner(guiGraphics, mc, screenWidth, screenHeight,
+                UiAnim.easeOut(bannerPresence.to(wanted ? 1.0f : 0.0f, UiFrame.delta())));
 
         boolean matchRunning = com.persiki84.battlecraft.client.ClientGameData.getCurrentPhase()
                 == com.persiki84.battlecraft.BattleCraftManager.GamePhase.ACTIVE && mc.player.getTeam() != null;
@@ -104,7 +111,8 @@ public class CaptureHudOverlay {
             float delta = UiFrame.delta();
             float logicalWidth = screenWidth / scale;
             if (matchRunning) {
-                renderTopStack(guiGraphics, mc, logicalWidth, screenHeight / scale, scale, delta, wanted);
+                renderTopStack(guiGraphics, mc, logicalWidth, screenHeight / scale, scale, delta,
+                        wanted, points);
             }
             renderCentral(guiGraphics, mc, logicalWidth, screenHeight / scale, delta, wanted);
         } finally {
@@ -113,31 +121,32 @@ public class CaptureHudOverlay {
     };
 
     private static void renderTopStack(GuiGraphics graphics, Minecraft mc, float screenWidth,
-                                       float screenHeight, float scale, float delta, boolean wanted) {
+                                       float screenHeight, float scale, float delta, boolean wanted,
+                                       boolean points) {
         if (!HudLayout.visible(HudSlot.OBJECTIVE)) return;
 
         HudBox box = HudLayout.place(HudSlot.OBJECTIVE, OBJECTIVE_WIDTH, OBJECTIVE_HEIGHT, screenWidth, screenHeight);
         HudLayout.push(graphics, box);
         try {
-            paintTopStack(graphics, mc, box, scale, delta, wanted);
+            paintTopStack(graphics, mc, box, scale, delta, wanted, points);
         } finally {
             HudLayout.pop(graphics, box);
         }
     }
 
     private static void paintTopStack(GuiGraphics graphics, Minecraft mc, HudBox box, float scale, float delta,
-                                      boolean wanted) {
+                                      boolean wanted, boolean points) {
         float centerX = box.centerX();
         float top = TopStack.at("capture_top", objectiveBase(box, scale), delta);
         float returnBottom = CaptureReturnHud.render(graphics, mc, centerX, top, delta, wanted);
 
         float objectiveTop = TopStack.at("capture_objective",
                 returnBottom > 0.0f ? returnBottom + STACK_GAP : top, delta);
-        float barBottom = ObjectiveHud.render(graphics, mc, centerX, objectiveTop, delta, wanted);
+        float barBottom = ObjectiveHud.render(graphics, mc, centerX, objectiveTop, delta, points);
 
         float pillsTop = TopStack.at("capture_pills",
                 barBottom > 0.0f ? barBottom + STACK_GAP : objectiveTop, delta);
-        renderPills(graphics, mc, centerX, pillsTop, delta, wanted);
+        renderPills(graphics, mc, centerX, pillsTop, delta, points);
     }
 
     private static float objectiveBase(HudBox box, float scale) {
@@ -147,7 +156,7 @@ public class CaptureHudOverlay {
     }
 
     private static void renderPills(GuiGraphics graphics, Minecraft mc, float centerX, float top, float delta,
-                                    boolean wanted) {
+                                    boolean points) {
         long now = System.currentTimeMillis();
         boolean finalsOpen = ClientCaptureData.areAllPointsCapturedBySameTeam();
 
@@ -155,7 +164,7 @@ public class CaptureHudOverlay {
         if (finalsOpen) {
             claimRow(ClientCaptureData.getAllFinalPointOwners(), true, now);
         }
-        retire(mc, finalsOpen, now, delta, wanted);
+        retire(mc, finalsOpen, now, delta, points);
 
         float rowTop = renderRow(graphics, mc, centerX, top, false);
         renderRow(graphics, mc, centerX, rowTop > 0.0f ? rowTop + ROW_GAP : top, true);
@@ -170,16 +179,16 @@ public class CaptureHudOverlay {
 
     // WHY: под открытым списком игроков пилюли гаснут присутствием, но из набора не выбывают:
     // WHY: снятая пилюля вернулась бы новой и без своей истории смены владельца
-    private static void retire(Minecraft mc, boolean finalsOpen, long now, float delta, boolean wanted) {
+    private static void retire(Minecraft mc, boolean finalsOpen, long now, float delta, boolean points) {
         boolean anyGone = false;
         for (Map.Entry<String, Pill> entry : pills.entrySet()) {
             Pill pill = entry.getValue();
             pill.listed = listed(entry.getKey(), pill.isFinal, finalsOpen);
-            pill.alive = pill.listed && wanted;
+            pill.alive = pill.listed && points;
             animatePill(mc, entry.getKey(), pill, now, delta);
             anyGone |= !pill.listed && pill.toggle.hidden();
         }
-        if (anyGone && wanted) {
+        if (anyGone && points) {
             pills.values().removeIf(pill -> !pill.listed && pill.toggle.hidden());
         }
     }
@@ -444,10 +453,10 @@ public class CaptureHudOverlay {
     }
 
     private static void renderProjectedMarkers(GuiGraphics graphics, Minecraft mc, float aimX, float aimY,
-                                               boolean wanted) {
+                                               boolean points) {
         float scale = UiScale.factor();
         float delta = UiFrame.delta();
-        float dots = UiAnim.easeOut(dotPresence.to(wanted ? 1.0f : 0.0f, delta));
+        float dots = UiAnim.easeOut(dotPresence.to(points ? 1.0f : 0.0f, delta));
 
         graphics.pose().pushPose();
         graphics.pose().scale(scale, scale, 1.0f);
@@ -459,7 +468,7 @@ public class CaptureHudOverlay {
                 float focus = 1.0f - UiAnim.clamp01((aimDistance - HOVER_NEAR) / (HOVER_FAR - HOVER_NEAR));
 
                 renderMarker(graphics, mc, marker, marker.screenX() / scale, marker.screenY() / scale,
-                        focus, delta, wanted, dots);
+                        focus, delta, points, dots);
             }
         } finally {
             graphics.pose().popPose();
@@ -468,7 +477,7 @@ public class CaptureHudOverlay {
     }
 
     private static void renderMarker(GuiGraphics graphics, Minecraft mc, ProjectedMarker marker,
-                                     float x, float y, float focus, float delta, boolean wanted, float dots) {
+                                     float x, float y, float focus, float delta, boolean points, float dots) {
         if (marker.name() == null) {
             UiRender.dot(graphics, x, y, MARKER_DOT * HudConfig.markerScale(),
                     UiTheme.alpha(markerColor(marker), (0.45f + 0.55f * focus) * dots));
@@ -476,7 +485,7 @@ public class CaptureHudOverlay {
         }
 
         MarkerState state = stateOf(marker);
-        float presence = state.presence(wanted, delta);
+        float presence = state.presence(points, delta);
         if (presence <= MARKER_GONE) return;
 
         float scale = MARKER_LABEL_SCALE * HudConfig.markerScale();

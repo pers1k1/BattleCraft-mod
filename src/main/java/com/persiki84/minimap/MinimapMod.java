@@ -123,7 +123,7 @@ public class MinimapMod {
 
     @Mod.EventBusSubscriber(modid = MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     public static class ClientModEvents {
-        public static final KeyMapping OPEN_MAP_KEY = new KeyMapping("key.minimap.open_map", GLFW.GLFW_KEY_J, "category.minimap");
+        public static final KeyMapping OPEN_MAP_KEY = new KeyMapping("key.minimap.open_map", GLFW.GLFW_KEY_M, "category.minimap");
 
         @SubscribeEvent
         public static void onKeyRegister(RegisterKeyMappingsEvent event) {

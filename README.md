@@ -105,7 +105,7 @@ Everything the customization screen touches is stored in `battlecraft/customizat
 
     The shop editor takes attachments too (`shop item attach <section> <entry> <attachment>`), against the same compatibility check, and the airdrop and shop screens both carry the picker for it.
 
-14. **Vision Goggles compatibility**: the goggles mod registers its key bindings during client setup, after Forge has already fired `RegisterKeyMappingsEvent`, so its three keys never reach `options.txt` in a form the game reads back - every launch resets them to N, M and V, and the launcher cannot move them off the keys the voice chat and the SecurityCraft cameras already sit on. The pack registers its own three bindings at the proper time (`goggles_toggle` on N, `goggles_mode` on M, `goggles_zoom` on Y), silences the mod's own ones, and sends the mod's own toggle packet when they are pressed, so the server side of the goggles stays untouched.
+14. **Vision Goggles compatibility**: the goggles mod registers its key bindings during client setup, after Forge has already fired `RegisterKeyMappingsEvent`, so its three keys never reach `options.txt` in a form the game reads back - every launch resets them to N, M and V, and the launcher cannot move them off the keys the voice chat and the SecurityCraft cameras already sit on. The pack registers its own three bindings at the proper time (`goggles_toggle` on N, `goggles_mode` on J, `goggles_zoom` on Y), silences the mod's own ones, and sends the mod's own toggle packet when they are pressed, so the server side of the goggles stays untouched.
 
     The filter itself was being wiped by another mod. SuperbWarfare's client tick calls `turnOffThermalImaging` on every tick the thermal imager is off, and that method shuts the whole vanilla post-processing chain down without asking whose it was, so the goggles' shader lived for exactly one tick and never reached the screen while the HUD and the night vision effect stayed. That call is redirected: a chain belonging to the goggles is left alone, and only a foreign one is shut down. The check is by chain name rather than by reference, so the order the two mods' tick handlers run in stops mattering, and while SuperbWarfare's own thermal imaging is running the pack does not touch the post effect at all.
 
@@ -168,7 +168,7 @@ Announcements carry their own duration, from two to sixty seconds, set in the pa
 
 Every row of the `/bc` hub now has an explanation - match actions, the status lines, all twenty lobby and stamina settings, and each entry of the manage tab. Until now only the module switches had them, which is why hovering the other tabs looked as though hints were broken.
 
-Version 2026.9.14v4-prealpha - built but never played through, so report anything that looks wrong.
+Version 2026.9.14v5-prealpha - built but never played through, so report anything that looks wrong.
 
 ## Shop, modifiers and map, 12 September 2026 (second pass)
 
@@ -391,6 +391,28 @@ the name inside them stayed at full size and only faded, which read as a caption
 button; the name and its dot are scaled by the same factor, anchored where the plate itself grows
 from. The range chip of a world tag grows the same way instead of appearing at full size in a
 half-opened slot.
+
+## Points key and the keyboard shuffle, 14 September 2026 (second pass)
+
+The capture HUD has a key of its own. A tap on it hides the points and a second tap brings them back;
+holding it inverts whatever the tap left behind for as long as it is held, so a player who keeps the
+points on can clear them for a glance and a player who keeps them off can check them without losing
+the clean screen. Two hundred milliseconds separate a tap from a hold. The state survives a restart,
+it lives in the interface config next to the world tag size, and the binding is a row on the interface
+tab of the customization screen as well as a line in the launcher's control list.
+
+Nothing new was needed for the animation: the key feeds the same flag the player list already drives,
+so the point tags, the objective bar and the pills fade out and come back exactly as they do under the
+list, in both directions. The key stops short of what the player needs while it is happening: the
+return card, his own capture progress and the victory banner still leave only with the player list,
+because a screen cleaned up for good would otherwise cost him the round.
+
+The keyboard was shuffled to free a letter for the fire selector. The map moved off `J` onto `M` and
+the goggles mode switch took `J` in its place; the TACZ fire selector and the SuperbWarfare fire mode
+both sit on `H`, which also ends the collision between the SuperbWarfare fire mode and the goggles
+toggle on `N`; weapon inspection moved onto the freed `G`, and the new points key defaults to `I`.
+The pack's own defaults were moved with them, so a fresh install and the launcher's recommended
+layout agree.
 
 ## Releases
 

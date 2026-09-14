@@ -11,6 +11,7 @@ import com.persiki84.battlecraft.client.custom.PaletteKey;
 import com.persiki84.battlecraft.client.custom.PresetLibrary;
 import com.persiki84.battlecraft.client.custom.UserPreset;
 import com.persiki84.battlecraft.client.hud.HudConfig;
+import com.persiki84.battlecraft.client.hud.PointsView;
 import com.persiki84.battlecraft.client.voice.VoiceOptions;
 import com.persiki84.battlecraft.client.voice.VoiceRows;
 import com.persiki84.battlecraft.client.DiscordRpcManager;
@@ -74,6 +75,7 @@ public final class CustomizeScreen extends ManagerScreen {
     private final Map<MenuRow, GlassKey> glassRowKeys = new HashMap<>();
     private final Set<ConfigSection> chosen = EnumSet.allOf(ConfigSection.class);
 
+    private final List<KeyRow> bindingRows = new ArrayList<>();
     private KeyRow talkKey;
     private ToggleRow hudAccentRow;
     private MenuField nameField;
@@ -140,6 +142,7 @@ public final class CustomizeScreen extends ManagerScreen {
     protected void init() {
         cached.clear();
         glassRowKeys.clear();
+        bindingRows.clear();
         hudAccentRow = null;
         super.init();
     }
@@ -318,6 +321,7 @@ public final class CustomizeScreen extends ManagerScreen {
     }
 
     private List<AbstractWidget> interfaceRows() {
+        bindingRows.clear();
         List<AbstractWidget> built = new ArrayList<>();
         built.add(fontRow());
         built.addAll(groupSliders(GlassKey.Group.TEXT));
@@ -333,6 +337,7 @@ public final class CustomizeScreen extends ManagerScreen {
             Customization.save();
         }));
         built.add(markerRow());
+        built.add(pointsKeyRow());
         addIslandRows(built);
         addVoiceRows(built);
         built.add(heading("battlecraft.custom.group.elements"));
@@ -356,7 +361,10 @@ public final class CustomizeScreen extends ManagerScreen {
         built.add(heading("battlecraft.custom.group.voice"));
         for (AbstractWidget row : VoiceRows.build(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, 0)) {
             built.add(row);
-            if (row instanceof KeyRow key) talkKey = key;
+            if (row instanceof KeyRow key) {
+                talkKey = key;
+                bindingRows.add(key);
+            }
         }
     }
 
@@ -364,6 +372,20 @@ public final class CustomizeScreen extends ManagerScreen {
     // WHY: и ловила бы там нажатия, которых не видно
     private KeyRow voiceKey() {
         return tab == TAB_INTERFACE ? talkKey : null;
+    }
+
+    private List<KeyRow> listeningRows() {
+        return tab == TAB_INTERFACE ? bindingRows : List.of();
+    }
+
+    private KeyRow pointsKeyRow() {
+        KeyRow row = new KeyRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("battlecraft.custom.points_key"),
+                () -> PointsView.keyName(Component.translatable("battlecraft.key.unbound")),
+                PointsView::key);
+        row.hint("battlecraft.custom.points_key" + HINT_SUFFIX);
+        bindingRows.add(row);
+        return row;
     }
 
     private void addIslandRows(List<AbstractWidget> built) {
@@ -696,7 +718,9 @@ public final class CustomizeScreen extends ManagerScreen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (windows.mouseClicked(mouseX, mouseY)) return true;
-        if (voiceKey() != null && talkKey.takeButton(button)) return true;
+        for (KeyRow row : listeningRows()) {
+            if (row.takeButton(button)) return true;
+        }
 
         boolean handled = super.mouseClicked(mouseX, mouseY, button);
         if (windows.any()) setFocused(null);
@@ -717,7 +741,9 @@ public final class CustomizeScreen extends ManagerScreen {
 
     @Override
     public boolean keyPressed(int key, int scanCode, int modifiers) {
-        if (voiceKey() != null && talkKey.take(key, scanCode)) return true;
+        for (KeyRow row : listeningRows()) {
+            if (row.take(key, scanCode)) return true;
+        }
         if (windows.keyPressed(key)) return true;
         return super.keyPressed(key, scanCode, modifiers);
     }

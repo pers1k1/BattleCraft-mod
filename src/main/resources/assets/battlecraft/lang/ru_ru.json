@@ -30,6 +30,7 @@
   "key.battlecraft.goggles_toggle": "Очки: ночное зрение",
   "key.battlecraft.goggles_mode": "Очки: смена режима",
   "key.battlecraft.goggles_zoom": "Очки: приближение",
+  "key.battlecraft.points_hud": "Точки в интерфейсе",
   "battlecraft.warning.select_team": "ВЫБЕРИТЕ КОМАНДУ ЧТОБЫ НАЧАТЬ ИГРАТЬ!",
   "battlecraft.status.enabled_msg": "BattleCraft включен.",
   "battlecraft.status.disabled_msg": "BattleCraft выключен.",
@@ -80,7 +81,7 @@
   "battlecraft.visuals.plain.note": "Без размытия, самый быстрый режим",
   "battlecraft.menu.title": "BATTLECRAFT",
   "battlecraft.menu.subtitle": "СЕРВЕРНАЯ СБОРКА",
-  "battlecraft.menu.version": "BattleCraft 14.09.26v4 PRE-ALPHA",
+  "battlecraft.menu.version": "BattleCraft 14.09.26v5 PRE-ALPHA",
   "battlecraft.lobby.waiting_for": "Ждём игрока %s",
   "battlecraft.lobby.auto_assigned": "Вас определили в команду %s",
   "battlecraft.error.team_full": "В команде %s нет места, выберите другую",
@@ -603,6 +604,7 @@
   "battlecraft.voice.key.unbound": "не задана",
   "battlecraft.voice.device.default": "По умолчанию",
   "battlecraft.key.awaiting": "нажмите клавишу",
+  "battlecraft.key.unbound": "не задана",
   "battlecraft.setup.back": "Назад",
   "battlecraft.setup.discord.title": "Статус в Discord",
   "battlecraft.setup.discord.note": "Друзья видят, что вы в игре, и на каком этапе матча",
@@ -914,6 +916,8 @@
   "battlecraft.configs.wipe": "Очистить",
   "battlecraft.configs.forget": "забыть",
   "battlecraft.configs.no_files": "Эталон пуст",
+  "battlecraft.custom.points_key": "Клавиша точек",
+  "battlecraft.custom.points_key.hint": "Короткое нажатие убирает и возвращает точки, удержание выворачивает их на время удержания. Escape отменяет назначение",
   "battlecraft.custom.marker_scale": "Размер меток в мире",
   "battlecraft.custom.marker_scale.hint": "Подписи баз, магазинов, точек захвата и админских меток. 100 процентов это заводской размер"
 }

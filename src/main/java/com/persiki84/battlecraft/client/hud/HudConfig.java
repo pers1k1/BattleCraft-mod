@@ -16,6 +16,7 @@ public final class HudConfig {
     private static ForgeConfigSpec.BooleanValue HOVER_SOUND;
     private static ForgeConfigSpec.BooleanValue HUD_ACCENT_TEXT;
     private static ForgeConfigSpec.DoubleValue MARKER_SCALE;
+    private static ForgeConfigSpec.BooleanValue POINTS_IN_HUD;
     private static ForgeConfigSpec.BooleanValue STATUS_BARS;
     private static ForgeConfigSpec.BooleanValue EFFECT_CHIPS;
     private static ForgeConfigSpec.BooleanValue BOSS_BARS;
@@ -82,6 +83,12 @@ public final class HudConfig {
         HOVER_SOUND = defineHoverSound();
         HUD_ACCENT_TEXT = defineHudAccentText();
         MARKER_SCALE = defineMarkerScale();
+        POINTS_IN_HUD = definePointsInHud();
+    }
+
+    private static ForgeConfigSpec.BooleanValue definePointsInHud() {
+        return BUILDER.comment("Точки захвата видны в интерфейсе")
+                .define("pointsInHud", true);
     }
 
     private static ForgeConfigSpec.DoubleValue defineMarkerScale() {
@@ -328,6 +335,14 @@ public final class HudConfig {
 
     public static void markerScale(float value) {
         if (SPEC.isLoaded()) MARKER_SCALE.set((double) Math.max(0.5f, Math.min(1.5f, value)));
+    }
+
+    public static boolean pointsInHud() {
+        return read(POINTS_IN_HUD, true);
+    }
+
+    public static void pointsInHud(boolean value) {
+        if (SPEC.isLoaded()) POINTS_IN_HUD.set(value);
     }
 
     public static float soundVolume() {

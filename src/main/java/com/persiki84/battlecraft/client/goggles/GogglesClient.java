@@ -30,7 +30,7 @@ public final class GogglesClient {
 
     public static final KeyMapping SWITCH_MODE = new KeyMapping(
             "key." + BattleCraftMod.MOD_ID + ".goggles_mode",
-            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_M, KeyInputHandler.CATEGORY);
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_J, KeyInputHandler.CATEGORY);
 
     public static final KeyMapping ZOOM = new KeyMapping(
             "key." + BattleCraftMod.MOD_ID + ".goggles_zoom",
