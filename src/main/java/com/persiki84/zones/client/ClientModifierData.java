@@ -1,7 +1,9 @@
 package com.persiki84.zones.client;
 
+import com.persiki84.itemmodifiers.ModifierEntries;
 import com.persiki84.shared.AmountText;
 import com.persiki84.zones.network.ModifierSyncPacket;
+import net.minecraft.client.Minecraft;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -22,14 +24,21 @@ public final class ClientModifierData {
 
     private ClientModifierData() {}
 
+    // WHY: на выделенном сервере конфиг модификаторов лежит только там, и подсказка предмета
+    // WHY: у игрока была пустой. Хозяину встроенного сервера подменять источник нельзя: у него
+    // WHY: конфиг и есть истина, а снимок отстал бы от правки файла
     public static void accept(ModifierSyncPacket packet) {
         potionEntries = packet.potionEntries();
         attributeEntries = packet.attributeEntries();
+        if (!Minecraft.getInstance().hasSingleplayerServer()) {
+            ModifierEntries.adopt(potionEntries, attributeEntries);
+        }
     }
 
     public static void clear() {
         potionEntries = List.of();
         attributeEntries = List.of();
+        ModifierEntries.forget();
     }
 
     public static List<Component> describe(ItemStack stack) {

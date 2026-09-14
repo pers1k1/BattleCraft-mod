@@ -32,6 +32,7 @@ public final class BootOverlay extends LoadingOverlay {
     private float doneAt = -1.0f;
 
     private static boolean spent;
+    private static boolean driving;
 
     private BootOverlay(Minecraft client, Overlay inner, ReloadInstance watched) {
         super(client, watched, IDLE, false);
@@ -96,12 +97,20 @@ public final class BootOverlay extends LoadingOverlay {
     private void drive(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         graphics.flush();
         RenderSystem.enableScissor(0, 0, 0, 0);
+        driving = true;
         try {
             inner.render(graphics, mouseX, mouseY, partialTick);
             graphics.flush();
         } finally {
+            driving = false;
             RenderSystem.disableScissor();
         }
+    }
+
+    // WHY: погашенный ножницами кадр загрузчика не должен поднимать события отрисовки экрана:
+    // WHY: снимок подложки взялся бы из нулевой области, а сам экран рисуется следом по-настоящему
+    public static boolean driving() {
+        return driving;
     }
 
     // WHY: экран под оверлеем рисует только сам оверлей, а его мы погасили: на затухании кадр

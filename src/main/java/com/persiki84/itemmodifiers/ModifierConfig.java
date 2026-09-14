@@ -33,8 +33,23 @@ public class ModifierConfig {
         SPEC = BUILDER.build();
     }
 
-    public static List<String> getPotionEffects() { return new ArrayList<>(POTION_EFFECTS.get()); }
-    public static List<String> getAttributes() { return new ArrayList<>(ATTRIBUTE_MODIFIERS.get()); }
+    // WHY: спек общего конфига поднимается позже регистрации предметов, а чужие моды спрашивают
+    // WHY: модификаторы уже на старте: без проверки get() бросает и роняет загрузку
+    public static boolean ready() {
+        return SPEC.isLoaded();
+    }
+
+    public static boolean enabled() {
+        return ready() && MOD_ENABLED.get();
+    }
+
+    public static List<String> getPotionEffects() {
+        return ready() ? new ArrayList<>(POTION_EFFECTS.get()) : new ArrayList<>();
+    }
+
+    public static List<String> getAttributes() {
+        return ready() ? new ArrayList<>(ATTRIBUTE_MODIFIERS.get()) : new ArrayList<>();
+    }
 
     public static void addPotionEntry(String entry) {
         String[] parts = entry.split("\\|");

@@ -2,6 +2,7 @@ package com.persiki84.itemmodifiers;
 
 import com.persiki84.battlecraft.BattleCraftCommands;
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
+import com.persiki84.zones.ZonesMod;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -19,6 +20,8 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.ai.attributes.Attribute;
@@ -84,9 +87,8 @@ public class ModifierCommand {
                                             String formattedText = rawText.replace("&", "\u00a7");
 
                                             CompoundTag tag = stack.getOrCreateTagElement("display");
-                                            ListTag lore = tag.getList("Lore", 8);
-                                            String escaped = formattedText.replace("\\", "\\\\").replace("\"", "\\\"");
-                                            lore.add(StringTag.valueOf("{\"text\":\"" + escaped + "\",\"italic\":false,\"color\":\"white\"}"));
+                                            ListTag lore = tag.getList("Lore", Tag.TAG_STRING);
+                                            lore.add(StringTag.valueOf(loreLine(formattedText)));
 
                                             tag.put("Lore", lore);
                                             ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.lore.added", formattedText).withStyle(ChatFormatting.GREEN), true);
@@ -98,8 +100,7 @@ public class ModifierCommand {
                                 .executes(ctx -> {
                                     ItemStack stack = ctx.getSource().getPlayerOrException().getMainHandItem();
                                     if(stack.isEmpty()) return 0;
-                                    CompoundTag tag = stack.getTagElement("display");
-                                    if(tag != null) tag.remove("Lore");
+                                    clearLore(stack);
                                     ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.lore.cleared").withStyle(ChatFormatting.YELLOW), true);
                                     return 1;
                                 })
@@ -112,7 +113,7 @@ public class ModifierCommand {
                             if (id == null) return 0;
 
                             ModifierConfig.clearAll(id);
-                            refresh();
+                            refresh(ctx);
                             ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.clear.all", Names.item(id)).withStyle(ChatFormatting.YELLOW), true);
                             return 1;
                         })
@@ -121,7 +122,7 @@ public class ModifierCommand {
                                     String id = getHeldItemId(ctx);
                                     if (id == null) return 0;
                                     ModifierConfig.clearPotions(id);
-                                    refresh();
+                                    refresh(ctx);
                                     ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.clear.potions", Names.item(id)).withStyle(ChatFormatting.YELLOW), true);
                                     return 1;
                                 })
@@ -131,7 +132,7 @@ public class ModifierCommand {
                                     String id = getHeldItemId(ctx);
                                     if (id == null) return 0;
                                     ModifierConfig.clearAttributes(id);
-                                    refresh();
+                                    refresh(ctx);
                                     ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.clear.attributes", Names.item(id)).withStyle(ChatFormatting.YELLOW), true);
                                     return 1;
                                 })
@@ -147,7 +148,7 @@ public class ModifierCommand {
                                             Holder.Reference<MobEffect> ref = ResourceArgument.getResource(ctx, "effect", Registries.MOB_EFFECT);
                                             String effId = ForgeRegistries.MOB_EFFECTS.getKey(ref.value()).toString();
                                             ModifierConfig.removePotion(id, effId);
-                                            refresh();
+                                            refresh(ctx);
                                             ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.remove.potion", Names.effect(effId), Names.item(id)).withStyle(ChatFormatting.YELLOW), true);
                                             return 1;
                                         })
@@ -161,7 +162,7 @@ public class ModifierCommand {
                                             Holder.Reference<Attribute> ref = ResourceArgument.getResource(ctx, "attribute", Registries.ATTRIBUTE);
                                             String attrId = ForgeRegistries.ATTRIBUTES.getKey(ref.value()).toString();
                                             ModifierConfig.removeAttribute(id, attrId);
-                                            refresh();
+                                            refresh(ctx);
                                             ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.remove.attribute", Names.attribute(attrId), Names.item(id)).withStyle(ChatFormatting.YELLOW), true);
                                             return 1;
                                         })
@@ -184,7 +185,7 @@ public class ModifierCommand {
                                                     int lvl = IntegerArgumentType.getInteger(ctx, "level");
                                                     String type = StringArgumentType.getString(ctx, "type");
                                                     ModifierConfig.addPotionEntry(id + "|" + ForgeRegistries.MOB_EFFECTS.getKey(ref.value()) + "|" + lvl + "|" + type);
-                                                    refresh();
+                                                    refresh(ctx);
                                                     ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.addpotion", Names.item(id)).withStyle(ChatFormatting.GREEN), true);
                                                     return 1;
                                                 })
@@ -210,7 +211,7 @@ public class ModifierCommand {
                                                             int op = IntegerArgumentType.getInteger(ctx, "operation");
                                                             String slot = StringArgumentType.getString(ctx, "slot");
                                                             ModifierConfig.addAttributeEntry(id + "|" + ForgeRegistries.ATTRIBUTES.getKey(ref.value()) + "|" + amt + "|" + op + "|" + slot);
-                                                            refresh();
+                                                            refresh(ctx);
                                                             ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.addattribute", Names.item(id)).withStyle(ChatFormatting.GREEN), true);
                                                             return 1;
                                                         })
@@ -225,7 +226,7 @@ public class ModifierCommand {
                                         .executes(ctx -> {
                                             String id = getArgItemId(ctx);
                                             ModifierConfig.clearAll(id);
-                                            refresh();
+                                            refresh(ctx);
                                             ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.clear.all", Names.item(id)).withStyle(ChatFormatting.YELLOW), true);
                                             return 1;
                                         })
@@ -233,7 +234,7 @@ public class ModifierCommand {
                                                 .executes(ctx -> {
                                                     String id = getArgItemId(ctx);
                                                     ModifierConfig.clearPotions(id);
-                                                    refresh();
+                                                    refresh(ctx);
                                                     ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.clear.potions", Names.item(id)).withStyle(ChatFormatting.YELLOW), true);
                                                     return 1;
                                                 })
@@ -242,7 +243,7 @@ public class ModifierCommand {
                                                 .executes(ctx -> {
                                                     String id = getArgItemId(ctx);
                                                     ModifierConfig.clearAttributes(id);
-                                                    refresh();
+                                                    refresh(ctx);
                                                     ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.clear.attributes", Names.item(id)).withStyle(ChatFormatting.YELLOW), true);
                                                     return 1;
                                                 })
@@ -256,7 +257,7 @@ public class ModifierCommand {
                                                             Holder.Reference<MobEffect> ref = ResourceArgument.getResource(ctx, "effect", Registries.MOB_EFFECT);
                                                             String effId = ForgeRegistries.MOB_EFFECTS.getKey(ref.value()).toString();
                                                             ModifierConfig.removePotion(id, effId);
-                                                            refresh();
+                                                            refresh(ctx);
                                                             ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.remove.potion", Names.effect(effId), Names.item(id)).withStyle(ChatFormatting.YELLOW), true);
                                                             return 1;
                                                         })
@@ -269,7 +270,7 @@ public class ModifierCommand {
                                                             Holder.Reference<Attribute> ref = ResourceArgument.getResource(ctx, "attribute", Registries.ATTRIBUTE);
                                                             String attrId = ForgeRegistries.ATTRIBUTES.getKey(ref.value()).toString();
                                                             ModifierConfig.removeAttribute(id, attrId);
-                                                            refresh();
+                                                            refresh(ctx);
                                                             ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.remove.attribute", Names.attribute(attrId), Names.item(id)).withStyle(ChatFormatting.YELLOW), true);
                                                             return 1;
                                                         })
@@ -290,7 +291,7 @@ public class ModifierCommand {
                                                                     int lvl = IntegerArgumentType.getInteger(ctx, "level");
                                                                     String type = StringArgumentType.getString(ctx, "type");
                                                                     ModifierConfig.addPotionEntry(id + "|" + ForgeRegistries.MOB_EFFECTS.getKey(ref.value()) + "|" + lvl + "|" + type);
-                                                                    refresh();
+                                                                    refresh(ctx);
                                                                     ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.addpotion", Names.item(id)).withStyle(ChatFormatting.GREEN), true);
                                                                     return 1;
                                                                 })
@@ -315,7 +316,7 @@ public class ModifierCommand {
                                                                             int op = IntegerArgumentType.getInteger(ctx, "operation");
                                                                             String slot = StringArgumentType.getString(ctx, "slot");
                                                                             ModifierConfig.addAttributeEntry(id + "|" + ForgeRegistries.ATTRIBUTES.getKey(ref.value()) + "|" + amt + "|" + op + "|" + slot);
-                                                                            refresh();
+                                                                            refresh(ctx);
                                                                             ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.addattribute", Names.item(id)).withStyle(ChatFormatting.GREEN), true);
                                                                             return 1;
                                                                         })
@@ -538,6 +539,26 @@ public class ModifierCommand {
         );
     }
 
+    // WHY: строка описания собиралась склейкой JSON руками: обратная косая или кавычка в тексте
+    // WHY: давали неразбираемый тег, и предмет показывал сырой JSON вместо строки
+    private static String loreLine(String text) {
+        return Component.Serializer.toJson(Component.literal(text)
+                .withStyle(style -> style.withItalic(false).withColor(ChatFormatting.WHITE)));
+    }
+
+    // WHY: снятое описание оставляло пустой display и корневой тег, и предмет переставал
+    // WHY: складываться в стак с точно таким же предметом без описания
+    private static void clearLore(ItemStack stack) {
+        CompoundTag display = stack.getTagElement("display");
+        if (display == null) return;
+
+        display.remove("Lore");
+        if (!display.isEmpty() || !stack.hasTag()) return;
+
+        stack.getTag().remove("display");
+        if (stack.getTag().isEmpty()) stack.setTag(null);
+    }
+
     private static boolean hasModifiers(ItemStack stack) {
         if (!stack.hasTag()) return false;
 
@@ -546,19 +567,28 @@ public class ModifierCommand {
                 || !tag.getList("ItemModifiersAttributes", 10).isEmpty();
     }
 
+    // WHY: пустая рука отвечала молчанием, а предмет без ключа в реестре ронял команду по NPE
     private static String getHeldItemId(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         ItemStack stack = ctx.getSource().getPlayerOrException().getMainHandItem();
-        if (stack.isEmpty()) return null;
-        return ForgeRegistries.ITEMS.getKey(stack.getItem()).toString();
+        ResourceLocation id = stack.isEmpty() ? null : ForgeRegistries.ITEMS.getKey(stack.getItem());
+        if (id == null) {
+            ctx.getSource().sendFailure(Component.translatable("itemmodifiers.error.no_held_item"));
+            return null;
+        }
+        return id.toString();
     }
 
     private static String getArgItemId(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         Holder.Reference<net.minecraft.world.item.Item> ref = ResourceArgument.getResource(ctx, "item", Registries.ITEM);
-        return ForgeRegistries.ITEMS.getKey(ref.value()).toString();
+        ResourceLocation id = ForgeRegistries.ITEMS.getKey(ref.value());
+        return id == null ? "" : id.toString();
     }
 
-    private static void refresh() {
+    // WHY: снимок для клиента уходит тем же движением, что и сброс кешей: иначе карточка товара
+    // WHY: и подсказка предмета показывают старые модификаторы до перезахода игрока
+    private static void refresh(CommandContext<CommandSourceStack> ctx) {
         AttributeHandler.markDirty();
         EffectHandler.markDirty();
+        if (ctx.getSource().getServer() != null) ZonesMod.syncModifiersToAll();
     }
 }

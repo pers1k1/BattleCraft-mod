@@ -129,8 +129,18 @@ public class ZonesMod {
         syncShopTo(player);
         PacketHandler.INSTANCE.send(
                 PacketDistributor.PLAYER.with(() -> player),
-                new ModifierSyncPacket(ModifierConfig.getPotionEffects(), ModifierConfig.getAttributes()));
+                modifiers());
         syncMarksTo(player);
+    }
+
+    // WHY: снимок модификаторов уходил только на входе и на смене измерения, и после правки
+    // WHY: командой карточка товара и подсказка предмета врали до перезахода игрока
+    public static void syncModifiersToAll() {
+        PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(), modifiers());
+    }
+
+    private static ModifierSyncPacket modifiers() {
+        return new ModifierSyncPacket(ModifierConfig.getPotionEffects(), ModifierConfig.getAttributes());
     }
 
     // WHY: оператору уходят все метки, включая скрытые от его команды: иначе спрятанную надпись

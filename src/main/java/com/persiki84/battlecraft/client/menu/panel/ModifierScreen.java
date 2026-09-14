@@ -25,14 +25,10 @@ import java.util.List;
 public class ModifierScreen extends PanelScreen {
     private static final String COMMAND = "ie hand";
     private static final int MAX_LEVEL = 255;
-    private static final int AMOUNT_SCALE = 1000;
-    private static final int DECIMALS = String.valueOf(AMOUNT_SCALE).length() - 1;
-    private static final int AMOUNT_STEP = 100;
-    private static final int MAX_AMOUNT = 1000 * AMOUNT_SCALE;
-    private static final int PERCENT_SCALE = 10;
-    private static final int PERCENT_STEP = 10;
-    private static final int MAX_PERCENT = 100 * AMOUNT_SCALE;
-    private static final int ADDITION = 0;
+    private static final int PERCENT_DECIMALS = 2;
+    private static final int WHOLE_PERCENT = 100;
+    private static final int PERCENT_STEP = 1;
+    private static final int MAX_PERCENT = 100_000;
     private static final int HAND_TARGET = 0;
     private static final int PICKED_TARGET = 2;
     private static final int LORE_LENGTH = 128;
@@ -49,7 +45,7 @@ public class ModifierScreen extends PanelScreen {
     private int level;
     private int kind;
     private int attribute;
-    private int amount = AMOUNT_SCALE;
+    private int amount = WHOLE_PERCENT;
     private int operation;
     private int slot;
     private int target;
@@ -310,15 +306,11 @@ public class ModifierScreen extends PanelScreen {
         send(base() + " remove potion " + effectIds.get(effect));
     }
 
-    // WHY: операции 1 и 2 множат базу и итог, то есть величина у них это доля: в процентах
-    // WHY: она читается сама собой, а числом 0.1 выглядит как ошибка ввода
+    // WHY: величина набирается целыми процентами, где сотня это единица: дробный ввод у обеих
+    // WHY: операций читался по-разному и ломался на запятой, а сотые доли покрывают оба случая
     private AbstractWidget amountRow() {
-        if (operation == ADDITION) {
-            return number("itemmodifiers.menu.amount", () -> amount, value -> amount = value,
-                    -MAX_AMOUNT, MAX_AMOUNT, AMOUNT_STEP).scaledBy(AMOUNT_SCALE);
-        }
         return number("itemmodifiers.menu.amount_percent", () -> amount, value -> amount = value,
-                -MAX_PERCENT, MAX_PERCENT, PERCENT_STEP).scaledBy(PERCENT_SCALE);
+                -MAX_PERCENT, MAX_PERCENT, PERCENT_STEP);
     }
 
     private List<AbstractWidget> attributeRows() {
@@ -326,10 +318,8 @@ public class ModifierScreen extends PanelScreen {
         rows.add(targetRow());
         rows.add(pick("itemmodifiers.menu.attribute", attributeNames, () -> attribute, picked -> attribute = picked));
         rows.add(amountRow());
-        rows.add(pick("itemmodifiers.menu.operation", operationOptions(), () -> operation, picked -> {
-            operation = picked;
-            rebuild();
-        }));
+        rows.add(pick("itemmodifiers.menu.operation", operationOptions(), () -> operation,
+                picked -> operation = picked));
         rows.add(pick("itemmodifiers.menu.slot", slotOptions(), () -> slot, picked -> slot = picked));
         rows.add(action("itemmodifiers.menu.add_attribute", "itemmodifiers.menu.action.add", this::addAttribute));
         rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
@@ -359,7 +349,7 @@ public class ModifierScreen extends PanelScreen {
     }
 
     private String amountText() {
-        return BigDecimal.valueOf(amount, DECIMALS).stripTrailingZeros().toPlainString();
+        return BigDecimal.valueOf(amount, PERCENT_DECIMALS).stripTrailingZeros().toPlainString();
     }
 
     // WHY: конфиг держит модификатор одной записью на предмет и атрибут, поэтому у команды вида

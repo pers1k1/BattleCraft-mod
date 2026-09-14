@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.15` in files, `15.09.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.15hotfix` in files, `15.09.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -418,6 +418,54 @@ both sit on `H`, which also ends the collision between the SuperbWarfare fire mo
 toggle on `N`; weapon inspection moved onto the freed `G`, and the new points key defaults to `I`.
 The pack's own defaults were moved with them, so a fresh install and the launcher's recommended
 layout agree.
+
+## Vanilla screens through mixins and the item modifier percent, 15 September 2026 (second pass)
+
+The pause screen, the inventory, the creative inventory and every vanilla container screen used to be
+replaced on open: the game built its own screen, the pack threw it away and built a subclass of it
+that differed by one painted background. The creative inventory paid for that twice over, because its
+constructor rebuilds every creative tab and reassigns the player's open menu, and both happened on
+every open. Those eleven subclasses are gone. A single mixin marks the vanilla classes as screens that
+take the pack's veil, and the background mixin that was already in place paints them, so nothing is
+built a second time and a modded screen that extends a vanilla container keeps being itself instead of
+being swapped for a plain chest. The title screen and the world and server browsers are still
+substituted on open, because they are different screens rather than restyled ones.
+
+Changing the language no longer drops the buttons back to their vanilla look. The resource reload
+overlay draws the screen underneath it by calling `render` directly, which skips the Forge hook the
+pack listens on, so for the fade in and the fade out the screen was painted with no dressing at all
+and snapped back once the reload finished. The call is now routed through the hook like every other
+frame.
+
+Item modifier values are typed in whole percent. One percent is `0.01` and one hundred percent is
+`1.00`, for the flat operation as well as for the two multiplying ones, so nothing in the screen takes
+a fractional number any more and the decimal separator of a Russian keyboard cannot silently turn
+`0,5` into `5`. The stored value does not change, and the list of an item's modifiers still shows a
+flat bonus in attribute units and a multiplier as a percentage.
+
+The modifier submodule had a set of problems behind the screen. Its config is a common config, which
+on a dedicated server exists only on the server, so the client read its own empty copy and an item's
+tooltip showed none of the configured attributes while the server applied them; the client now uses
+the entries the server syncs, and the host of an integrated server keeps reading the config, which is
+the truth there. That sync was only sent on login and on a dimension change, so a modifier added with
+a command did not reach a shop card or a tooltip until the player relogged; every `/ie` change now
+pushes it. The attribute cache was a plain map rebuilt in place while the render thread and the server
+thread both walked it, and it is now assembled whole and published at once. Nothing reset the caches
+when the config file was edited or reloaded from disk, and a config event does that now. Reading the
+config before it is loaded threw instead of answering, which is reachable from another mod asking for
+item attributes during start-up.
+
+A debuff left over after the item was taken off dropped to level one for the rest of its linger,
+because the linger timer kept the duration and not the level. Instantaneous effects were handed out
+every half second, which turned instant health into an endless supply and instant damage into a death
+that could not be lifted; they are skipped. The warm-up counter grew without a ceiling for as long as
+the item was worn. A lore line was assembled as JSON by hand, so a backslash or a quote in the text
+produced a tag the game could not read, and clearing the lore left an empty `display` tag that stopped
+the item from stacking with a plain one. An item whose registry key is missing no longer drops the
+command with a null pointer, and an empty hand now says so instead of answering with silence.
+
+Version 2026.09.15hotfix - built but not played through; the menus, the language switch and the
+modifier panel all want a look in game.
 
 ## Releases
 

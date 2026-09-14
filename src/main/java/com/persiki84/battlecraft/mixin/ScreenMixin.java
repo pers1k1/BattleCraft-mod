@@ -5,6 +5,7 @@ import com.persiki84.battlecraft.client.menu.ScreenDress;
 import com.persiki84.battlecraft.client.menu.ScreenSkin;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -13,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Screen.class)
 public abstract class ScreenMixin {
     private static final int PLAIN_VEIL = 2;
+    private static final int PLAIN_INVENTORY = 4;
 
     @Inject(method = "renderBackground(Lnet/minecraft/client/gui/GuiGraphics;)V",
             at = @At("HEAD"), cancellable = true)
@@ -38,6 +40,9 @@ public abstract class ScreenMixin {
 
     private boolean battlecraft$paint(GuiGraphics graphics) {
         if ((HudConfig.plainScreens() & PLAIN_VEIL) != 0) return false;
-        return ScreenSkin.paint((Screen) (Object) this, graphics);
+
+        Screen screen = (Screen) (Object) this;
+        if (screen instanceof InventoryScreen && (HudConfig.plainScreens() & PLAIN_INVENTORY) != 0) return false;
+        return ScreenSkin.paint(screen, graphics);
     }
 }
