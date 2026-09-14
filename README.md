@@ -168,7 +168,7 @@ Announcements carry their own duration, from two to sixty seconds, set in the pa
 
 Every row of the `/bc` hub now has an explanation - match actions, the status lines, all twenty lobby and stamina settings, and each entry of the manage tab. Until now only the module switches had them, which is why hovering the other tabs looked as though hints were broken.
 
-Version 2026.9.14hotfix-prealpha - built but never played through, so report anything that looks wrong.
+Version 2026.9.14v3-prealpha - built but never played through, so report anything that looks wrong.
 
 ## Shop, modifiers and map, 12 September 2026 (second pass)
 
@@ -380,6 +380,11 @@ opened from the panel, and leaving the zone used to close it in the same tick.
 
 Markers follow the zoom along a square root rather than in direct proportion, with a floor: direct
 proportion ate a marker down to a dot once the map was zoomed out.
+
+A tile now lifts when it is picked up and settles when it is dropped, and it settles from where it was
+let go rather than flying back from the slot it started in - its place follows the cursor for the whole
+drag. The editor's team button no longer flickers: the screen kept rebuilding every tick because the
+edit branch skipped the snapshot the tick compares against.
 
 ## Releases
 

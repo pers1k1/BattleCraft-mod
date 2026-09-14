@@ -66,6 +66,8 @@ public final class ShopGrid {
     private static final float SLIDE_SPEED = 17.0f;
     private static final float CARRY_LIFT = 1.12f;
     private static final float CARRY_ALPHA = 0.92f;
+    private static final float LIFT_SPEED = 13.0f;
+    private static final float LIFT_DONE = 0.01f;
 
     private final Map<String, Slide> slides = new HashMap<>();
     private final List<Smooth> hover = new ArrayList<>();
@@ -87,7 +89,9 @@ public final class ShopGrid {
     private int scroll;
     private boolean scrolling;
     private boolean dragging;
+    private final Smooth carryLift = new Smooth(0.0f, LIFT_SPEED);
     private String carried;
+    private String released;
     private int carriedFrom = -1;
     private int carriedTo = -1;
     private float carryX;
@@ -222,12 +226,16 @@ public final class ShopGrid {
 
     // WHY: порядок правится тем же жестом, каким его читают - плитку берут и кладут, а соседи
     // WHY: расступаются на глазах: список со стрелками показывает не витрину, а таблицу
+    // WHY: плитка поднимается и опускается движением, а не подменой размера: щипок без подъёма
+    // WHY: не читается как «взял», а мгновенная посадка - как «положил»
     public void carry(ShopView.Found found, int index, double mouseX, double mouseY) {
         carried = found.entry().id();
+        released = null;
         carriedFrom = index;
         carriedTo = index;
         carryX = (float) mouseX;
         carryY = (float) mouseY;
+        carryLift.snap(0.0f);
     }
 
     public void carryTo(double mouseX, double mouseY, int total) {
@@ -236,8 +244,11 @@ public final class ShopGrid {
         carriedTo = slotAt(mouseX, mouseY, total);
     }
 
+    // WHY: отпущенная плитка обязана поехать от места, где её отпустили, а не от прежнего слота:
+    // WHY: её место всё время переноса держится на курсоре, поэтому посадка идёт оттуда
     public int dropDelta() {
         int delta = carriedTo - carriedFrom;
+        released = carried;
         carried = null;
         carriedFrom = -1;
         carriedTo = -1;
@@ -340,6 +351,11 @@ public final class ShopGrid {
         Slide slide = settled(found, slotOf(index + scroll) - scroll, offset);
         float x = slide.x.get() + switchShift();
         float rawY = slide.y.get() + (1.0f - appear) * APPEAR_LIFT;
+        if (found.entry().id().equals(released)) {
+            settle(graphics, found, x, rawY, showSection);
+            return;
+        }
+
         boolean hovered = mouseX >= x && mouseX < x + TILE_SIZE && mouseY >= rawY && mouseY < rawY + TILE_SIZE
                 && mouseY >= bandTop() && mouseY < bandBottom();
         float focus = hover.get(index + columns()).to(hovered ? 1.0f : 0.0f, UiFrame.delta());
@@ -349,6 +365,14 @@ public final class ShopGrid {
         squash(graphics, index, x, y);
         paintTile(graphics, found, x, y, appear, focus, showSection);
         graphics.pose().popPose();
+    }
+
+    // WHY: отпущенная плитка садится тем же движением, каким поднималась: подъём отдаётся обратно,
+    // WHY: пока она едет к своему месту, и только потом она снова становится обычной
+    private void settle(GuiGraphics graphics, ShopView.Found found, float x, float y, boolean showSection) {
+        float lift = carryLift.to(0.0f, UiFrame.delta());
+        paintLifted(graphics, found, x, y, lift, showSection);
+        if (lift <= LIFT_DONE) released = null;
     }
 
     // WHY: место плитки едет сглаживанием, а не прыгает: соседи расступаются перед переносимой,
@@ -369,21 +393,32 @@ public final class ShopGrid {
 
             float x = carryX - TILE_SIZE / 2.0f;
             float y = carryY - TILE_SIZE / 2.0f;
-            graphics.pose().pushPose();
-            graphics.pose().translate(x + TILE_SIZE / 2.0f, y + TILE_SIZE / 2.0f, 0.0f);
-            graphics.pose().scale(CARRY_LIFT, CARRY_LIFT, 1.0f);
-            graphics.pose().translate(-x - TILE_SIZE / 2.0f, -y - TILE_SIZE / 2.0f, 0.0f);
-            try {
-                paintTile(graphics, found, x, y, CARRY_ALPHA, 1.0f, showSection);
-            } finally {
-                graphics.pose().popPose();
-            }
+            Slide slide = slideOf(carried, x, y);
+            slide.x.snap(x);
+            slide.y.snap(y);
+
+            float lift = carryLift.to(1.0f, UiFrame.delta());
+            paintLifted(graphics, found, x, y, lift, showSection);
             return;
         }
     }
 
+    private void paintLifted(GuiGraphics graphics, ShopView.Found found, float x, float y,
+                             float lift, boolean showSection) {
+        float scale = 1.0f + (CARRY_LIFT - 1.0f) * lift;
+        graphics.pose().pushPose();
+        graphics.pose().translate(x + TILE_SIZE / 2.0f, y + TILE_SIZE / 2.0f, 0.0f);
+        graphics.pose().scale(scale, scale, 1.0f);
+        graphics.pose().translate(-x - TILE_SIZE / 2.0f, -y - TILE_SIZE / 2.0f, 0.0f);
+        try {
+            paintTile(graphics, found, x, y, CARRY_ALPHA, lift, showSection);
+        } finally {
+            graphics.pose().popPose();
+        }
+    }
+
     private void squash(GuiGraphics graphics, int index, float x, float y) {
-        if (index != pressedIndex || carried != null) return;
+        if (index != pressedIndex || carried != null || released != null) return;
 
         float age = (System.currentTimeMillis() - pressedAt) / PRESS_MS;
         if (age >= 1.0f) {

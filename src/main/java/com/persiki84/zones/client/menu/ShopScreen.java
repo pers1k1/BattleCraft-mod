@@ -165,15 +165,16 @@ public class ShopScreen extends GlassScreen {
         addRenderableWidget(search);
     }
 
+    // WHY: снимок значений записывается и в редакторе, хотя кнопки продажи там нет: тик сверяет
+    // WHY: его с живыми числами, и без записи экран пересобирался каждый тик - кнопка моргала
     private void addSellButton() {
+        shownPending = pendingValue();
+        shownBalance = balanceValue();
+        shownAvailable = availableValue();
         if (editing) {
             addViewerButton();
             return;
         }
-
-        shownPending = pendingValue();
-        shownBalance = balanceValue();
-        shownAvailable = availableValue();
 
         UiButton sell = new UiButton(sellLeft(), headerRowTop(), SELL_WIDTH, HEADER_ROW_HEIGHT,
                 sellLabel(), pressed -> sellAll());
