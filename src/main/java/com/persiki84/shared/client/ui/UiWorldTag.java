@@ -41,7 +41,19 @@ public final class UiWorldTag {
 
         if (rangeWidth <= RANGE_FLOOR) return;
 
-        UiRender.labelScaled(graphics, font, range, left + PADDING + nameWidth + GAP * ranged, textY, scale,
-                UiTheme.withAlpha(color, shown * ranged));
+        // WHY: место под дальность растёт множителем, поэтому и сама строка растёт им же: текст
+        // WHY: полного кегля в наполовину раскрытой щели выглядит вылезшим за плашку
+        float rangeLeft = left + PADDING + nameWidth + GAP * ranged;
+        float middle = topY + height / 2.0f;
+        graphics.pose().pushPose();
+        graphics.pose().translate(rangeLeft, middle, 0.0f);
+        graphics.pose().scale(ranged, ranged, 1.0f);
+        graphics.pose().translate(-rangeLeft, -middle, 0.0f);
+        try {
+            UiRender.labelScaled(graphics, font, range, rangeLeft, textY, scale,
+                    UiTheme.withAlpha(color, shown * ranged));
+        } finally {
+            graphics.pose().popPose();
+        }
     }
 }

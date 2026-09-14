@@ -254,18 +254,35 @@ public class CaptureHudOverlay {
         UiVital.card(graphics, x, y, width, PILL_HEIGHT, Math.min(PILL_RADIUS, PILL_HEIGHT / 2.0f), alpha, lift);
 
         if (width < PILL_PADDING * 2.0f) return;
-
-        UiRender.dot(graphics, x + PILL_PADDING - 1.0f, y + PILL_HEIGHT / 2.0f, 1.5f,
-                UiTheme.alpha(dotTint(pill), alpha));
-
-        int labelColor = CaptureColors.label();
-        UiRender.labelScaled(graphics, mc.font, name, x + PILL_PADDING + 5.0f,
-                UiRender.centerY(y, PILL_HEIGHT, LABEL_SCALE), LABEL_SCALE, UiTheme.alpha(labelColor, alpha));
+        renderPillBody(graphics, mc, name, pill, x, y, alpha);
 
         if (pill.progressValue > 0.002f) {
             int bar = ClientCaptureData.isDecaying(name) ? UiPalette.alert() : attackerTint(name);
             UiRender.panel(graphics, x + 3.0f, y + PILL_HEIGHT - 3.0f, (width - 6.0f) * pill.progressValue, 1.5f, 0.75f,
                     UiTheme.alpha(bar, alpha));
+        }
+    }
+
+    // WHY: пилюля уходит сужением, поэтому её нутро обязано сужаться вместе с ней: текст, который
+    // WHY: только гаснет в схлопывающейся плашке, читается как застрявшая надпись без кнопки.
+    // WHY: Масштаб взят от левой кромки и середины по высоте - там же, откуда растёт сама плашка
+    private static void renderPillBody(GuiGraphics graphics, Minecraft mc, String name, Pill pill,
+                                       float x, float y, float alpha) {
+        float shrink = UiAnim.easeOut(alpha);
+        float middle = y + PILL_HEIGHT / 2.0f;
+
+        graphics.pose().pushPose();
+        graphics.pose().translate(x, middle, 0.0f);
+        graphics.pose().scale(shrink, shrink, 1.0f);
+        graphics.pose().translate(-x, -middle, 0.0f);
+        try {
+            UiRender.dot(graphics, x + PILL_PADDING - 1.0f, middle, 1.5f,
+                    UiTheme.alpha(dotTint(pill), alpha));
+            UiRender.labelScaled(graphics, mc.font, name, x + PILL_PADDING + 5.0f,
+                    UiRender.centerY(y, PILL_HEIGHT, LABEL_SCALE), LABEL_SCALE,
+                    UiTheme.alpha(CaptureColors.label(), alpha));
+        } finally {
+            graphics.pose().popPose();
         }
     }
 

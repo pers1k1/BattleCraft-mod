@@ -168,7 +168,7 @@ Announcements carry their own duration, from two to sixty seconds, set in the pa
 
 Every row of the `/bc` hub now has an explanation - match actions, the status lines, all twenty lobby and stamina settings, and each entry of the manage tab. Until now only the module switches had them, which is why hovering the other tabs looked as though hints were broken.
 
-Version 2026.9.14v3-prealpha - built but never played through, so report anything that looks wrong.
+Version 2026.9.14v4-prealpha - built but never played through, so report anything that looks wrong.
 
 ## Shop, modifiers and map, 12 September 2026 (second pass)
 
@@ -385,6 +385,12 @@ A tile now lifts when it is picked up and settles when it is dropped, and it set
 let go rather than flying back from the slot it started in - its place follows the cursor for the whole
 drag. The editor's team button no longer flickers: the screen kept rebuilding every tick because the
 edit branch skipped the snapshot the tick compares against.
+
+A plate that leaves by shrinking now shrinks its contents with it. The capture pills narrowed while
+the name inside them stayed at full size and only faded, which read as a caption left behind by its
+button; the name and its dot are scaled by the same factor, anchored where the plate itself grows
+from. The range chip of a world tag grows the same way instead of appearing at full size in a
+half-opened slot.
 
 ## Releases
 
