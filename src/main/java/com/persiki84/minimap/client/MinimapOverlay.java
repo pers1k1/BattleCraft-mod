@@ -188,10 +188,9 @@ public class MinimapOverlay {
 
         for (MapMarkerSyncPacket.MarkerData marker : ClientMapData.getMarkers()) {
             if (!ClientMapData.showOtherMarkers && !marker.playerName.equals(mc.player.getScoreboardName())) continue;
-            int color = marker.isTeam ? MapRenderUtil.getPlayerTeamColor(marker.playerName) : UiAccent.color();
             String name = marker.isTeam ? marker.playerName : Component.translatable("minimap.label.personal").getString();
             pinged++;
-            renderMarker(guiGraphics, marker.x, marker.z, mapX, mapZ, zoom, cx, cy, color, name,
+            renderMarker(guiGraphics, marker.x, marker.z, mapX, mapZ, zoom, cx, cy, UiAccent.color(), name,
                     MarkerPings.age(MarkerKeys.of(marker), marker.x, marker.z));
         }
         MarkerPings.sweep(pinged);

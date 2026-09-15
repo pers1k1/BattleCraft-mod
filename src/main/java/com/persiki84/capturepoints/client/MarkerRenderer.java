@@ -4,8 +4,8 @@ import com.persiki84.battlecraft.BattleCraftManager;
 import com.persiki84.battlecraft.client.ClientGameData;
 import com.persiki84.capturepoints.CapturePointsMod;
 import com.persiki84.minimap.client.ClientMapData;
-import com.persiki84.minimap.client.MapRenderUtil;
 import com.persiki84.minimap.network.MapMarkerSyncPacket;
+import com.persiki84.shared.client.ui.UiAccent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
@@ -23,7 +23,6 @@ import java.util.Map;
 @Mod.EventBusSubscriber(modid = CapturePointsMod.MOD_ID, value = Dist.CLIENT)
 public final class MarkerRenderer {
     private static final double MARKER_RANGE = 1500.0;
-    private static final int SELF_MARKER_COLOR = 0xFF55FFFF;
     private static final double POINT_LIFT = 1.5;
 
     private static final List<ProjectedMarker> pool = new ArrayList<>();
@@ -103,8 +102,7 @@ public final class MarkerRenderer {
             if (distance < 0.0) continue;
 
             String label = !marker.isTeam && own ? null : marker.playerName;
-            int color = marker.isTeam ? MapRenderUtil.getPlayerTeamColor(marker.playerName) : SELF_MARKER_COLOR;
-            visible.add(claim().set(label, null, false, distance, screenX(), screenY(), color));
+            visible.add(claim().set(label, null, false, distance, screenX(), screenY(), UiAccent.color()));
         }
     }
 

@@ -244,8 +244,8 @@ public final class ZoneMarkers {
             return ranged.to(distance >= RANGE_SHOWN_FROM ? 1.0f : 0.0f, delta);
         }
 
-        public float focus(boolean aimed, float delta) {
-            return focus.to(aimed ? 1.0f : 0.0f, delta);
+        public float focus(float wanted, float delta) {
+            return focus.to(wanted, delta);
         }
 
         public UiTagStack.Slot stack() { return stack; }

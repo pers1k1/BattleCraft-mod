@@ -196,10 +196,9 @@ public class MapScreen extends Screen {
         for (MapMarkerSyncPacket.MarkerData marker : ClientMapData.getMarkers()) {
             if (mc.player == null) break;
             if (!ClientMapData.showOtherMarkers && !marker.playerName.equals(mc.player.getScoreboardName())) continue;
-            int color = marker.isTeam ? MapRenderUtil.getPlayerTeamColor(marker.playerName) : UiAccent.color();
             String name = marker.isTeam ? marker.playerName : Component.translatable("minimap.label.personal_marker").getString();
             pinged++;
-            renderMarker(guiGraphics, marker.x, marker.z, centerX, centerY, color, name,
+            renderMarker(guiGraphics, marker.x, marker.z, centerX, centerY, UiAccent.color(), name,
                     MarkerPings.age(MarkerKeys.of(marker), marker.x, marker.z));
         }
         MarkerPings.sweep(pinged);

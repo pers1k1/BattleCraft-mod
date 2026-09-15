@@ -41,7 +41,9 @@ public final class ZoneHud {
     private static final float MARKER_SCALE = 0.75f;
     private static final float MARKER_IDLE_ALPHA = UiWorldTag.IDLE_ALPHA;
     private static final float MARKER_FOCUS_ALPHA = UiWorldTag.FOCUS_ALPHA;
-    private static final float MARKER_FOCUS_RADIUS = 70.0f;
+    private static final float HOVER_NEAR = 14.0f;
+    private static final float HOVER_FAR = 46.0f;
+    private static final float MARKER_DOT = 1.6f;
     private static final float MARKER_GONE = 0.01f;
     private static final float STACK_SPEED = 12.0f;
 
@@ -147,25 +149,43 @@ public final class ZoneHud {
             float presence = marker.presence(delta);
             if (presence <= MARKER_GONE) continue;
 
-            float focus = marker.focus(aimed(marker, centerScreenX, centerScreenY), delta);
+            float focus = marker.focus(aimedAt(marker, centerScreenX, centerScreenY, scale), delta);
             float alpha = MARKER_IDLE_ALPHA + (MARKER_FOCUS_ALPHA - MARKER_IDLE_ALPHA) * focus;
             float ranged = UiAnim.easeOut(marker.ranged(delta));
             drawMarker(graphics, minecraft, marker, scale, markerScale, height, alpha, focus, ranged, presence);
         }
     }
 
+    // WHY: вне прицела плашка сворачивается в точку и выходит из общего стека меток: во весь размер
+    // WHY: она расталкивала соседей и закрывала собой вид, хотя игрок на неё не смотрит
     private static void drawMarker(GuiGraphics graphics, Minecraft minecraft, ZoneMarkers.Marker marker,
                                    float scale, float markerScale, float height, float alpha,
                                    float focus, float ranged, float presence) {
+        float x = marker.screenX() / scale;
+        float y = marker.screenY() / scale;
+        float plate = focus * focus;
+
+        drawDot(graphics, marker, x, y, focus, presence * (1.0f - plate));
+        if (plate <= MARKER_GONE) return;
+
         UiWorldTag.render(graphics, minecraft.font, marker.label(), marker.rangeLabel(), ranged,
-                marker.screenX() / scale, marker.screenY() / scale - height, height, markerScale,
-                marker.color(), alpha, focus, presence, marker.stack());
+                x, y - height, height, markerScale, marker.color(), alpha, focus,
+                presence * plate, marker.stack());
     }
 
-    private static boolean aimed(ZoneMarkers.Marker marker, float centerX, float centerY) {
+    private static void drawDot(GuiGraphics graphics, ZoneMarkers.Marker marker, float x, float y,
+                                float focus, float shown) {
+        if (shown <= MARKER_GONE) return;
+
+        UiRender.dot(graphics, x, y, MARKER_DOT * HudConfig.markerScale(),
+                UiTheme.withAlpha(marker.color(), (0.45f + 0.55f * focus) * shown));
+    }
+
+    private static float aimedAt(ZoneMarkers.Marker marker, float centerX, float centerY, float scale) {
         float dx = marker.screenX() - centerX;
         float dy = marker.screenY() - centerY;
-        return dx * dx + dy * dy < MARKER_FOCUS_RADIUS * MARKER_FOCUS_RADIUS;
+        float away = (float) Math.sqrt(dx * dx + dy * dy) / scale;
+        return 1.0f - UiAnim.clamp01((away - HOVER_NEAR) / (HOVER_FAR - HOVER_NEAR));
     }
 
     private static void render(GuiGraphics graphics, Minecraft minecraft, float screenWidth, float screenHeight) {

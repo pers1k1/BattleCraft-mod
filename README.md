@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.15v5` in files, `15.09.26v5 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.15v6` in files, `15.09.26v6 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -510,6 +510,17 @@ list gave no way to tell which one an entry had been written with.
 
 Version 2026.09.15v5 - built but not played through; the menus, the language switch, the modifier
 panel, the hints and the point tags all want a look in game.
+
+A base or shop tag in the HUD now behaves like a capture point tag: outside the crosshair radius it
+collapses to its dot, leaves the shared tag stack and stops pushing its neighbours around. Only the
+point tags had learned that; the zone tags stayed up at full size and kept covering the view.
+
+A player marker is drawn in the interface accent colour everywhere - in the world, on the minimap and
+on the full map. A team marker used to take the colour of the team that placed it and a personal one a
+fixed cyan, although every marker a client is sent is either its own or an ally's.
+
+Version 2026.09.15v6 - built but not played through; the zone tags and the marker colour want a look
+in game.
 
 ## Releases
 
