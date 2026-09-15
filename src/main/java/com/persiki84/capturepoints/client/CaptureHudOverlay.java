@@ -63,6 +63,7 @@ public class CaptureHudOverlay {
     private static final float MARKER_LABEL_SCALE = 0.75f;
     private static final float PRESENCE_SPEED = 8.0f;
     private static final float MARKER_GONE = 0.01f;
+    private static final long STATE_KEPT_FRAMES = 600L;
     private static final float STACK_GAP = 5.0f;
     private static final float SAMPLE_PROGRESS = 0.62f;
     private static final String STATE_ARMING = "capturepoints.hud.state.arming";
@@ -72,7 +73,6 @@ public class CaptureHudOverlay {
     private static final String STATE_ROLLBACK = "capturepoints.hud.state.rollback";
     private static final String STATE_FINAL = "capturepoints.hud.state.final";
 
-    private static final Smooth dotPresence = new Smooth(0.0f, PRESENCE_SPEED);
     private static final Smooth bannerPresence = new Smooth(0.0f, PRESENCE_SPEED);
     private static final Map<String, Pill> pills = new LinkedHashMap<>();
     private static final Toggle centralToggle = new Toggle(11.0f, 120L);
@@ -457,7 +457,6 @@ public class CaptureHudOverlay {
                                                boolean points) {
         float scale = UiScale.factor();
         float delta = UiFrame.delta();
-        float dots = UiAnim.easeOut(dotPresence.to(points ? 1.0f : 0.0f, delta));
 
         graphics.pose().pushPose();
         graphics.pose().scale(scale, scale, 1.0f);
@@ -469,7 +468,7 @@ public class CaptureHudOverlay {
                 float focus = 1.0f - UiAnim.clamp01((aimDistance - HOVER_NEAR) / (HOVER_FAR - HOVER_NEAR));
 
                 renderMarker(graphics, mc, marker, marker.screenX() / scale, marker.screenY() / scale,
-                        focus, delta, points, dots);
+                        focus, delta, points);
             }
         } finally {
             graphics.pose().popPose();
@@ -477,22 +476,24 @@ public class CaptureHudOverlay {
         forgetUnseen();
     }
 
+    // WHY: дальность гасит метку присутствием, а не изъятием из кадра: раньше уход за предел
+    // WHY: снимал её одним кадром, и это читалось как мигание на ровном месте
     private static void renderMarker(GuiGraphics graphics, Minecraft mc, ProjectedMarker marker,
-                                     float x, float y, float focus, float delta, boolean points, float dots) {
+                                     float x, float y, float focus, float delta, boolean points) {
+        MarkerState state = stateOf(marker);
+        float presence = state.presence(points && marker.inRange(), delta);
+        if (presence <= MARKER_GONE) return;
+
         if (marker.name() == null) {
-            paintDot(graphics, marker, x, y, focus, dots);
+            paintDot(graphics, marker, x, y, focus, presence);
             return;
         }
-
-        MarkerState state = stateOf(marker);
-        float presence = state.presence(points, delta);
-        if (presence <= MARKER_GONE) return;
 
         // WHY: вне прицела плашка сворачивается в точку и выходит из общего стека меток: прежде она
         // WHY: оставалась во весь размер, расталкивала соседние метки и закрывала собой вид
         float plate = focus * focus;
         if (plate <= MARKER_GONE) {
-            paintDot(graphics, marker, x, y, focus, dots * presence);
+            paintDot(graphics, marker, x, y, focus, presence);
             return;
         }
 
@@ -502,7 +503,7 @@ public class CaptureHudOverlay {
         float ranged = UiAnim.easeOut(state.range.to(marker.distance() >= RANGE_SHOWN_FROM ? 1.0f : 0.0f, delta));
         state.stack.depth((float) marker.distance());
 
-        paintDot(graphics, marker, x, y, focus, dots * presence * (1.0f - plate));
+        paintDot(graphics, marker, x, y, focus, presence * (1.0f - plate));
         UiWorldTag.render(graphics, mc.font, Component.literal(marker.name()),
                 Component.translatable("capturepoints.hud.marker.range", (int) marker.distance()), ranged,
                 x, y - height - MARKER_TAG_GAP, height, scale, markerColor(marker), alpha, focus,
@@ -518,18 +519,20 @@ public class CaptureHudOverlay {
     }
 
     private static MarkerState stateOf(ProjectedMarker marker) {
-        MarkerState state = markerStates.computeIfAbsent(marker.name(), name -> new MarkerState());
+        MarkerState state = markerStates.computeIfAbsent(marker.key(), key -> new MarkerState());
         state.seen = UiFrame.frame();
         return state;
     }
 
     // WHY: метка, пропавшая с кадра, обязана сбросить присутствие в ноль: вернувшаяся из-за края
-    // WHY: экрана иначе вспыхнула бы сразу целиком, а не проявилась заново
+    // WHY: экрана иначе вспыхнула бы сразу целиком, а не проявилась заново. Давно не встреченное
+    // WHY: состояние выбрасывается: ключ метки игрока уходит вместе с игроком и копился бы вечно
     private static void forgetUnseen() {
         long frame = UiFrame.frame();
-        for (MarkerState state : markerStates.values()) {
+        markerStates.values().forEach(state -> {
             if (state.seen != frame) state.presence.snap(0.0f);
-        }
+        });
+        markerStates.values().removeIf(state -> frame - state.seen > STATE_KEPT_FRAMES);
     }
 
     private static int markerColor(ProjectedMarker marker) {

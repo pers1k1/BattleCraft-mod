@@ -3,6 +3,7 @@ package com.persiki84.battlecraft.rules;
 import com.persiki84.battlecraft.BattleCraftMod;
 import com.persiki84.battlecraft.network.PacketHandler;
 import com.persiki84.battlecraft.network.S2CGameRulesPacket;
+import com.persiki84.battlecraft.network.S2CMarkerRangesPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
@@ -20,6 +21,7 @@ public final class GameRulesEvents {
     @SubscribeEvent
     public static void onServerStarting(ServerStartingEvent event) {
         GameRules.load();
+        MarkerRanges.load();
         ConfigManifest.load(event.getServer());
     }
 
@@ -27,6 +29,7 @@ public final class GameRulesEvents {
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), S2CGameRulesPacket.current());
+        PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), S2CMarkerRangesPacket.current());
         ClientAudit.expect(player);
         ConfigAudit.expect(player);
     }
@@ -48,6 +51,7 @@ public final class GameRulesEvents {
     public static void syncToAll(MinecraftServer server) {
         if (server == null) return;
         PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(), S2CGameRulesPacket.current());
+        PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(), S2CMarkerRangesPacket.current());
         ClientAudit.expectAll(server);
         ConfigAudit.expectAll(server);
     }

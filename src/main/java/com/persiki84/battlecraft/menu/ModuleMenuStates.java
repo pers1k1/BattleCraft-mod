@@ -15,6 +15,8 @@ import com.persiki84.sellmod.SellManager;
 import com.persiki84.battlecraft.compat.iff.IffDevice;
 import com.persiki84.battlecraft.rules.GameRule;
 import com.persiki84.battlecraft.rules.GameRules;
+import com.persiki84.battlecraft.rules.MarkerRange;
+import com.persiki84.battlecraft.rules.MarkerRanges;
 import com.persiki84.shared.gunsmith.GunSmith;
 import com.persiki84.shared.menu.MenuStates;
 import net.minecraft.core.BlockPos;
@@ -42,6 +44,7 @@ public final class ModuleMenuStates {
     public static final String SHOP = "shop";
     public static final String GAME_RULES = "gamerules";
     public static final String IFF_AVAILABLE = "iffAvailable";
+    public static final String MARKER_RANGE = "markerRange.";
     public static final String TEAMS = "teams";
     public static final String MAP = "map";
 
@@ -149,6 +152,9 @@ public final class ModuleMenuStates {
         // WHY: правило про свой-чужой держится на чужом моде, и строка меню обязана знать об этом
         // WHY: от сервера: наличие мода у клиента ничего не говорит о том, что стоит на сервере
         tag.putBoolean(IFF_AVAILABLE, IffDevice.available());
+        for (MarkerRange range : MarkerRange.values()) {
+            tag.putInt(MARKER_RANGE + range.id(), MarkerRanges.blocks(range));
+        }
         return tag;
     }
 

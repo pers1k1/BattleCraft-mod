@@ -1,6 +1,7 @@
 package com.persiki84.minimap.network;
 
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.ArrayList;
@@ -18,14 +19,17 @@ public class MapMarkerSyncPacket {
         public final double y;
         public final double z;
         public final boolean isTeam;
+        public final ResourceLocation dimension;
 
-        public MarkerData(UUID playerId, String playerName, double x, double y, double z, boolean isTeam) {
+        public MarkerData(UUID playerId, String playerName, double x, double y, double z, boolean isTeam,
+                          ResourceLocation dimension) {
             this.playerId = playerId;
             this.playerName = playerName;
             this.x = x;
             this.y = y;
             this.z = z;
             this.isTeam = isTeam;
+            this.dimension = dimension;
         }
     }
 
@@ -44,6 +48,7 @@ public class MapMarkerSyncPacket {
             buf.writeDouble(marker.y);
             buf.writeDouble(marker.z);
             buf.writeBoolean(marker.isTeam);
+            buf.writeResourceLocation(marker.dimension);
         }
     }
 
@@ -51,7 +56,8 @@ public class MapMarkerSyncPacket {
         int size = Math.min(Math.max(buf.readInt(), 0), MAX_ENTRIES);
         List<MarkerData> markers = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            markers.add(new MarkerData(buf.readUUID(), buf.readUtf(), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readBoolean()));
+            markers.add(new MarkerData(buf.readUUID(), buf.readUtf(), buf.readDouble(), buf.readDouble(),
+                    buf.readDouble(), buf.readBoolean(), buf.readResourceLocation()));
         }
         return new MapMarkerSyncPacket(markers);
     }

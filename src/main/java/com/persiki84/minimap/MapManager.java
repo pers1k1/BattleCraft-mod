@@ -38,7 +38,8 @@ public class MapManager {
             } else {
                 double y = player.level().getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, (int) x, (int) z);
                 activeTeamMarkers.put(player.getUUID(), new MapMarkerSyncPacket.MarkerData(
-                        player.getUUID(), player.getName().getString(), x, y, z, true
+                        player.getUUID(), player.getName().getString(), x, y, z, true,
+                        player.level().dimension().location()
                 ));
             }
             net.minecraft.world.scores.Team team = player.getTeam();
@@ -57,7 +58,8 @@ public class MapManager {
             } else {
                 double y = player.level().getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, (int) x, (int) z);
                 activePrivateMarkers.put(player.getUUID(), new MapMarkerSyncPacket.MarkerData(
-                        player.getUUID(), player.getName().getString(), x, y, z, false
+                        player.getUUID(), player.getName().getString(), x, y, z, false,
+                        player.level().dimension().location()
                 ));
             }
             syncMarkers(player);
@@ -127,7 +129,8 @@ public class MapManager {
                         member.getName().getString(),
                         member.getX(),
                         member.getZ(),
-                        member.getYRot()
+                        member.getYRot(),
+                        member.level().dimension().location()
                 ));
             }
             PlayerPositionSyncPacket packet = new PlayerPositionSyncPacket(positions);
@@ -143,7 +146,8 @@ public class MapManager {
                     player.getName().getString(),
                     player.getX(),
                     player.getZ(),
-                    player.getYRot()
+                    player.getYRot(),
+                    player.level().dimension().location()
             ));
             PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), new PlayerPositionSyncPacket(positions));
         }

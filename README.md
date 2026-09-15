@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.15v6` in files, `15.09.26v6 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.15v7` in files, `15.09.26v7 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -522,6 +522,28 @@ fixed cyan, although every marker a client is sent is either its own or an ally'
 
 Version 2026.09.15v6 - built but not played through; the zone tags and the marker colour want a look
 in game.
+
+A world tag no longer vanishes the moment it passes its range limit: the range decides how present the
+tag is, so walking away fades it out and walking back fades it in. Until now the marker was dropped
+from the frame outright, which read as a blink.
+
+How far each kind of world tag is shown is a server setting now, 1500 blocks by default for all of
+them: capture points, bases and shops, map marks and player markers. `/bc markers` opens the Markers
+tab of the game rules screen, `/bc markers range <kind> <blocks>` and `/bc markers list` do the same
+from chat, `/bc markers reset` gives every kind its default back. Values live in
+`config/battlecraft-markers.json` and reach every client the way the game rules do. Shop tags used to
+stop at 260 blocks and map marks reached 2000; both follow the setting now.
+
+A player marker and a teammate's position carried no world of their own, so a ping placed in the nether
+was drawn in the overworld at the same coordinates - in the world, on the minimap and on the full map.
+Both now travel with the dimension they were made in and are skipped elsewhere.
+
+A zone tag whose zone had been removed could outlive it: the pruning ran only when the number of known
+tags exceeded the number of zones plus marks, and removing a zone while adding a mark kept that count
+equal. Marker states of players who left are dropped as well instead of being kept for the session.
+
+Version 2026.09.15v7 - built but not played through; the marker ranges, the fade at the limit and the
+dimension filter want a look in game.
 
 ## Releases
 

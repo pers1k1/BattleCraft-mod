@@ -27,6 +27,7 @@ public class PacketHandler {
         registerVote();
         registerRoster();
         registerRules();
+        registerMarkerRanges();
         registerModules();
         registerCombatState();
         registerClientReport();
@@ -203,6 +204,17 @@ public class PacketHandler {
                 C2SClientReportPacket::decode,
                 C2SClientReportPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER)
+        );
+    }
+
+    private static void registerMarkerRanges() {
+        INSTANCE.registerMessage(
+                id(),
+                S2CMarkerRangesPacket.class,
+                S2CMarkerRangesPacket::encode,
+                S2CMarkerRangesPacket::decode,
+                S2CMarkerRangesPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT)
         );
     }
 

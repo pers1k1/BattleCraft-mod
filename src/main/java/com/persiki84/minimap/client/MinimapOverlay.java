@@ -25,6 +25,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraftforge.client.gui.overlay.IGuiOverlay;
 import org.lwjgl.opengl.GL11;
@@ -188,6 +189,7 @@ public class MinimapOverlay {
 
         for (MapMarkerSyncPacket.MarkerData marker : ClientMapData.getMarkers()) {
             if (!ClientMapData.showOtherMarkers && !marker.playerName.equals(mc.player.getScoreboardName())) continue;
+            if (!here(mc, marker.dimension)) continue;
             String name = marker.isTeam ? marker.playerName : Component.translatable("minimap.label.personal").getString();
             pinged++;
             renderMarker(guiGraphics, marker.x, marker.z, mapX, mapZ, zoom, cx, cy, UiAccent.color(), name,
@@ -196,9 +198,15 @@ public class MinimapOverlay {
         MarkerPings.sweep(pinged);
 
         for (PlayerPositionSyncPacket.PlayerPos other : ClientMapData.getPlayers()) {
-            if (other.playerId.equals(mc.player.getUUID())) continue;
+            if (other.playerId.equals(mc.player.getUUID()) || !here(mc, other.dimension)) continue;
             renderPlayerDot(guiGraphics, other.x, other.z, mapX, mapZ, zoom, cx, cy, MapRenderUtil.getPlayerTeamColor(other.playerName));
         }
+    }
+
+    // WHY: метка и тиммейт приходят с координатами без привязки к миру, поэтому поставленное
+    // WHY: в аду рисовалось поверх обычного мира по тем же числам
+    private static boolean here(Minecraft mc, ResourceLocation dimension) {
+        return mc.level != null && mc.level.dimension().location().equals(dimension);
     }
 
     private static void renderBases(GuiGraphics guiGraphics, double mapX, double mapZ, float zoom, float cx, float cy) {

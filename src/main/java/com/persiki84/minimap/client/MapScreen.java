@@ -30,6 +30,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import org.lwjgl.glfw.GLFW;
 
@@ -196,6 +197,7 @@ public class MapScreen extends Screen {
         for (MapMarkerSyncPacket.MarkerData marker : ClientMapData.getMarkers()) {
             if (mc.player == null) break;
             if (!ClientMapData.showOtherMarkers && !marker.playerName.equals(mc.player.getScoreboardName())) continue;
+            if (!here(mc, marker.dimension)) continue;
             String name = marker.isTeam ? marker.playerName : Component.translatable("minimap.label.personal_marker").getString();
             pinged++;
             renderMarker(guiGraphics, marker.x, marker.z, centerX, centerY, UiAccent.color(), name,
@@ -206,9 +208,16 @@ public class MapScreen extends Screen {
         renderPlayers(guiGraphics, mc, centerX, centerY);
     }
 
+    // WHY: метка и тиммейт приходят с координатами без привязки к миру, поэтому поставленное
+    // WHY: в аду рисовалось поверх обычного мира по тем же числам
+    private static boolean here(Minecraft mc, ResourceLocation dimension) {
+        return mc.level != null && mc.level.dimension().location().equals(dimension);
+    }
+
     private void renderPlayers(GuiGraphics guiGraphics, Minecraft mc, int centerX, int centerY) {
         for (PlayerPositionSyncPacket.PlayerPos other : ClientMapData.getPlayers()) {
             if (mc.player != null && other.playerId.equals(mc.player.getUUID())) continue;
+            if (!here(mc, other.dimension)) continue;
             renderPlayerDot(guiGraphics, other.x, other.z, other.yRot, centerX, centerY,
                     MapRenderUtil.getPlayerTeamColor(other.playerName), other.playerName);
         }

@@ -1,5 +1,7 @@
 package com.persiki84.zones.client.render;
 
+import com.persiki84.battlecraft.client.ClientMarkerRanges;
+import com.persiki84.battlecraft.rules.MarkerRange;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiHud;
@@ -25,10 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class ZoneMarkers {
-    private static final double BASE_RANGE = 1500.0;
-    private static final double MARK_RANGE = 2000.0;
     private static final String MARK_PREFIX = "mark:";
-    private static final double SHOP_RANGE = 260.0;
     private static final float LABEL_LIFT = 2.5f;
     private static final double RANGE_SHOWN_FROM = 24.0;
     private static final float MARGIN = 64.0f;
@@ -83,7 +82,8 @@ public final class ZoneMarkers {
                               float screenWidth, float screenHeight) {
         ZoneArea area = zone.area();
         project(zone.id(), baseLabel(zone), area.centerX(), area.maxY() + LABEL_LIFT, area.centerZ(),
-                ZoneColors.packed(zone), range(zone), wanted, camera, view, projection, screenWidth, screenHeight);
+                ZoneColors.packed(zone), range(MarkerRange.ZONES), wanted, camera, view, projection,
+                screenWidth, screenHeight);
     }
 
     private static void placeMarks(boolean shown, Vec3 camera, Matrix4f view, Matrix4f projection,
@@ -97,7 +97,7 @@ public final class ZoneMarkers {
 
             project(MARK_PREFIX + mark.id(), Component.literal(mark.label()),
                     mark.position().getX() + 0.5, mark.position().getY() + LABEL_LIFT,
-                    mark.position().getZ() + 0.5, markColor(mark), MARK_RANGE,
+                    mark.position().getZ() + 0.5, markColor(mark), range(MarkerRange.MARKS),
                     shown && mark.inWorld(), camera, view, projection, screenWidth, screenHeight);
         }
     }
@@ -107,7 +107,8 @@ public final class ZoneMarkers {
     }
 
     // WHY: метка забирается из известных до всех отказов: снятая с кадра обязана сбросить своё
-    // WHY: присутствие в ноль, иначе вернувшаяся из-за края экрана вспыхнула бы сразу целиком
+    // WHY: присутствие в ноль, иначе вернувшаяся из-за края экрана вспыхнула бы сразу целиком.
+    // WHY: Уход за дальность отказом не считается - он гасит метку присутствием, то есть плавно
     private static void project(String key, Component name, double x, double y, double z, int color,
                                 double range, boolean wanted, Vec3 camera, Matrix4f view, Matrix4f projection,
                                 float screenWidth, float screenHeight) {
@@ -117,11 +118,6 @@ public final class ZoneMarkers {
         double dz = z - camera.z;
 
         double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (distance > range) {
-            marker.hide();
-            return;
-        }
-
         scratch.set((float) dx, (float) dy, (float) dz, 1.0f);
         scratch.mul(view);
         scratch.mul(projection);
@@ -137,15 +133,15 @@ public final class ZoneMarkers {
             return;
         }
 
-        live.add(marker.place(screenX, screenY, (int) distance, color, wanted));
+        live.add(marker.place(screenX, screenY, (int) distance, color, wanted && distance <= range));
     }
 
     private static boolean offScreen(float x, float y, float width, float height) {
         return x < -MARGIN || y < -MARGIN || x > width + MARGIN || y > height + MARGIN;
     }
 
-    private static double range(Zone zone) {
-        return zone.type() == ZoneType.BASE ? BASE_RANGE : SHOP_RANGE;
+    private static double range(MarkerRange kind) {
+        return ClientMarkerRanges.blocks(kind);
     }
 
     // WHY: метка живёт по идентификатору зоны, а подпись зависит от типа: смена базы на магазин
@@ -162,8 +158,9 @@ public final class ZoneMarkers {
         return created;
     }
 
+    // WHY: сверка по одному лишь размеру пропускала подмену: снятая зона и добавленная метка
+    // WHY: оставляли счёт прежним, и метка снятой зоны жила до следующего изменения набора
     private static void prune() {
-        if (known.size() <= ClientZoneData.all().size() + ClientMarkData.all().size()) return;
         known.keySet().removeIf(ZoneMarkers::forgotten);
     }
 

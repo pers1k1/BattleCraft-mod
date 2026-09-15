@@ -23,6 +23,7 @@ public final class ClientLifecycle {
     public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         ClientGameData.forget();
         ClientGameRules.forget();
+        ClientMarkerRanges.forget();
         ConfigGuard.forget();
         ServerLocks.release();
         ClientModules.forget();

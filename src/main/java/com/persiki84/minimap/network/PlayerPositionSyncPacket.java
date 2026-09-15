@@ -1,6 +1,7 @@
 package com.persiki84.minimap.network;
 
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.ArrayList;
@@ -17,13 +18,16 @@ public class PlayerPositionSyncPacket {
         public final double x;
         public final double z;
         public final float yRot;
+        public final ResourceLocation dimension;
 
-        public PlayerPos(UUID playerId, String playerName, double x, double z, float yRot) {
+        public PlayerPos(UUID playerId, String playerName, double x, double z, float yRot,
+                         ResourceLocation dimension) {
             this.playerId = playerId;
             this.playerName = playerName;
             this.x = x;
             this.z = z;
             this.yRot = yRot;
+            this.dimension = dimension;
         }
     }
 
@@ -41,6 +45,7 @@ public class PlayerPositionSyncPacket {
             buf.writeDouble(p.x);
             buf.writeDouble(p.z);
             buf.writeFloat(p.yRot);
+            buf.writeResourceLocation(p.dimension);
         }
     }
 
@@ -48,7 +53,8 @@ public class PlayerPositionSyncPacket {
         int size = Math.min(Math.max(buf.readInt(), 0), MAX_ENTRIES);
         List<PlayerPos> players = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            players.add(new PlayerPos(buf.readUUID(), buf.readUtf(), buf.readDouble(), buf.readDouble(), buf.readFloat()));
+            players.add(new PlayerPos(buf.readUUID(), buf.readUtf(), buf.readDouble(), buf.readDouble(),
+                    buf.readFloat(), buf.readResourceLocation()));
         }
         return new PlayerPositionSyncPacket(players);
     }

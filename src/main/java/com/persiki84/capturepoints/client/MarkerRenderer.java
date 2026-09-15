@@ -2,12 +2,15 @@ package com.persiki84.capturepoints.client;
 
 import com.persiki84.battlecraft.BattleCraftManager;
 import com.persiki84.battlecraft.client.ClientGameData;
+import com.persiki84.battlecraft.client.ClientMarkerRanges;
+import com.persiki84.battlecraft.rules.MarkerRange;
 import com.persiki84.capturepoints.CapturePointsMod;
 import com.persiki84.minimap.client.ClientMapData;
 import com.persiki84.minimap.network.MapMarkerSyncPacket;
 import com.persiki84.shared.client.ui.UiAccent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
@@ -22,10 +25,9 @@ import java.util.Map;
 
 @Mod.EventBusSubscriber(modid = CapturePointsMod.MOD_ID, value = Dist.CLIENT)
 public final class MarkerRenderer {
-    private static final double MARKER_RANGE = 1500.0;
+    private static final String PLAYER_PREFIX = "player:";
     private static final double POINT_LIFT = 1.5;
 
-    private static final List<ProjectedMarker> pool = new ArrayList<>();
     private static final List<ProjectedMarker> visible = new ArrayList<>();
     private static final Vector4f scratch = new Vector4f();
 
@@ -74,6 +76,8 @@ public final class MarkerRenderer {
 
     private static void projectPointRow(Vec3 camera, Matrix4f view, Matrix4f projection,
                                         Map<String, String> points, boolean isFinal) {
+        double range = ClientMarkerRanges.blocks(MarkerRange.POINTS);
+
         for (Map.Entry<String, String> entry : points.entrySet()) {
             String name = entry.getKey();
             if (!ClientCaptureData.isPointShownInHud(name)) continue;
@@ -87,37 +91,49 @@ public final class MarkerRenderer {
                     camera, view, projection);
             if (distance < 0.0) continue;
 
-            visible.add(claim().set(name, entry.getValue(), isFinal, distance, screenX(), screenY(), null));
+            visible.add(new ProjectedMarker(name, name, entry.getValue(), isFinal, distance <= range,
+                    distance, screenX(), screenY(), null));
         }
     }
 
     private static void projectPlayerMarkers(Minecraft mc, Vec3 camera, Matrix4f view, Matrix4f projection) {
         String self = mc.player.getScoreboardName();
+        double range = ClientMarkerRanges.blocks(MarkerRange.PLAYERS);
 
+        ResourceLocation here = mc.level == null ? null : mc.level.dimension().location();
         for (MapMarkerSyncPacket.MarkerData marker : ClientMapData.getMarkers()) {
             boolean own = marker.playerName.equals(self);
             if (!ClientMapData.showOtherMarkers && !own) continue;
+            if (!marker.dimension.equals(here)) continue;
 
             double distance = project(marker.x, marker.y, marker.z, camera, view, projection);
             if (distance < 0.0) continue;
 
             String label = !marker.isTeam && own ? null : marker.playerName;
-            visible.add(claim().set(label, null, false, distance, screenX(), screenY(), UiAccent.color()));
+            visible.add(new ProjectedMarker(key(marker), label, null, false, distance <= range,
+                    distance, screenX(), screenY(), UiAccent.color()));
         }
     }
 
+    // WHY: у своей личной метки нет подписи, а присутствие держится по ключу: без своего ключа
+    // WHY: она делила бы состояние с командной меткой того же игрока
+    private static String key(MapMarkerSyncPacket.MarkerData marker) {
+        return PLAYER_PREFIX + marker.playerId + (marker.isTeam ? ":team" : ":private");
+    }
+
+    // WHY: дальность больше не отсеивает метку здесь: снятая с кадра уходила рывком, а плавное
+    // WHY: угасание считает худ по признаку inRange
     private static double project(double x, double y, double z, Vec3 camera, Matrix4f view, Matrix4f projection) {
         double dx = x - camera.x;
         double dy = y - camera.y;
         double dz = z - camera.z;
 
-        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (distance > MARKER_RANGE) return -1.0;
-
         scratch.set((float) dx, (float) dy, (float) dz, 1.0f);
         scratch.mul(view);
         scratch.mul(projection);
-        return scratch.w() > 0.0f ? distance : -1.0;
+        if (scratch.w() <= 0.0f) return -1.0;
+
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     private static float screenX() {
@@ -126,14 +142,5 @@ public final class MarkerRenderer {
 
     private static float screenY() {
         return (1.0f - scratch.y() / scratch.w()) * 0.5f * screenHeight;
-    }
-
-    private static ProjectedMarker claim() {
-        int used = visible.size();
-        if (used < pool.size()) return pool.get(used);
-
-        ProjectedMarker created = new ProjectedMarker();
-        pool.add(created);
-        return created;
     }
 }

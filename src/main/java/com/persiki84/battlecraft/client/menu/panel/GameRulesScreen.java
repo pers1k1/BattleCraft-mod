@@ -2,10 +2,12 @@ package com.persiki84.battlecraft.client.menu.panel;
 
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.battlecraft.rules.GameRule;
+import com.persiki84.battlecraft.rules.MarkerRange;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.PanelScreen;
 import com.persiki84.shared.client.menu.ToggleRow;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -13,6 +15,8 @@ import java.util.List;
 
 public class GameRulesScreen extends PanelScreen {
     private static final String COMMAND = "battlecraft rules";
+    private static final String MARKERS_COMMAND = "battlecraft markers";
+    private static final int RANGE_STEP = 50;
 
     private static final GameRule[] CLIENT_RULES = {
             GameRule.FIRST_PERSON_ONLY,
@@ -75,7 +79,29 @@ public class GameRulesScreen extends PanelScreen {
         return List.of(
                 new Page(Component.translatable("battlecraft.rules.tab.client"), () -> rows(CLIENT_RULES)),
                 new Page(Component.translatable("battlecraft.rules.tab.combat"), () -> rows(COMBAT_RULES)),
-                new Page(Component.translatable("battlecraft.rules.tab.parkour"), () -> rows(PARKOUR_RULES)));
+                new Page(Component.translatable("battlecraft.rules.tab.parkour"), () -> rows(PARKOUR_RULES)),
+                new Page(Component.translatable("battlecraft.rules.tab.markers"), this::markerRows));
+    }
+
+    private List<AbstractWidget> markerRows() {
+        List<AbstractWidget> rows = new ArrayList<>();
+        for (MarkerRange range : MarkerRange.values()) {
+            rows.add(number(range.label(), () -> blocks(range),
+                    value -> send(MARKERS_COMMAND + " range " + range.id() + " " + value),
+                    MarkerRange.MIN_BLOCKS, MarkerRange.MAX_BLOCKS, RANGE_STEP));
+        }
+        rows.add(heading(Component.translatable("battlecraft.rules.group.reset")));
+        rows.add(action("battlecraft.markers.reset_all", "battlecraft.markers.do_reset",
+                () -> send(MARKERS_COMMAND + " reset")).alerting());
+        return rows;
+    }
+
+    // WHY: снимок приходит от сервера, и до первого пакета вкладка обязана показывать заводское
+    // WHY: число, а не ноль: ноль выглядел бы выставленной настройкой, которой никто не делал
+    private int blocks(MarkerRange range) {
+        CompoundTag state = MenuData.state(menuId());
+        String key = ModuleMenuStates.MARKER_RANGE + range.id();
+        return state.contains(key) ? state.getInt(key) : MarkerRange.DEFAULT_BLOCKS;
     }
 
     private List<AbstractWidget> rows(GameRule[] rules) {

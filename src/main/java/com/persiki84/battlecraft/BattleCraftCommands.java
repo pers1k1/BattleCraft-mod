@@ -15,6 +15,7 @@ import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
 import com.persiki84.battlecraft.rules.ConfigGuardCommand;
 import com.persiki84.battlecraft.rules.GameRulesCommand;
+import com.persiki84.battlecraft.rules.MarkerRangeCommand;
 import com.persiki84.battlecraft.rules.GameRulesEvents;
 import com.persiki84.minimap.command.MapCommand;
 import com.persiki84.shared.menu.MenuNetwork;
@@ -70,6 +71,7 @@ public class BattleCraftCommands {
                 .then(forceBranch())
                 .then(AnnounceCommand.build())
                 .then(GameRulesCommand.build())
+                .then(MarkerRangeCommand.build())
                 .then(ConfigGuardCommand.build())
                 .then(ZoneCommand.build())
                 .then(MarkCommand.build())
