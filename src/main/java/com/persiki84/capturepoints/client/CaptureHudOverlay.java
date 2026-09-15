@@ -55,6 +55,7 @@ public class CaptureHudOverlay {
     private static final float ROW_GAP = 5.0f;
     private static final float DOT_COLUMN = 7.0f;
     private static final float MARKER_DOT = 1.6f;
+    private static final float DOT_IDLE_ALPHA = 0.62f;
     private static final float MARKER_TAG_GAP = 4.5f;
     private static final float RANGE_FADE_SPEED = 6.0f;
     private static final double RANGE_SHOWN_FROM = 24.0;
@@ -513,7 +514,7 @@ public class CaptureHudOverlay {
         if (shown <= MARKER_GONE) return;
 
         UiRender.dot(graphics, x, y, MARKER_DOT * HudConfig.markerScale(),
-                UiTheme.alpha(markerColor(marker), (0.45f + 0.55f * focus) * shown));
+                UiTheme.alpha(markerColor(marker), (DOT_IDLE_ALPHA + (1.0f - DOT_IDLE_ALPHA) * focus) * shown));
     }
 
     private static MarkerState stateOf(ProjectedMarker marker) {

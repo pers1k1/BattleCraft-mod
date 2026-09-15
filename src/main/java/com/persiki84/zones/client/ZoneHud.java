@@ -44,6 +44,7 @@ public final class ZoneHud {
     private static final float HOVER_NEAR = 14.0f;
     private static final float HOVER_FAR = 46.0f;
     private static final float MARKER_DOT = 1.6f;
+    private static final float DOT_IDLE_ALPHA = 0.62f;
     private static final float MARKER_GONE = 0.01f;
     private static final float STACK_SPEED = 12.0f;
 
@@ -178,7 +179,7 @@ public final class ZoneHud {
         if (shown <= MARKER_GONE) return;
 
         UiRender.dot(graphics, x, y, MARKER_DOT * HudConfig.markerScale(),
-                UiTheme.withAlpha(marker.color(), (0.45f + 0.55f * focus) * shown));
+                UiTheme.withAlpha(marker.color(), (DOT_IDLE_ALPHA + (1.0f - DOT_IDLE_ALPHA) * focus) * shown));
     }
 
     private static float aimedAt(ZoneMarkers.Marker marker, float centerX, float centerY, float scale) {

@@ -513,7 +513,8 @@ panel, the hints and the point tags all want a look in game.
 
 A base or shop tag in the HUD now behaves like a capture point tag: outside the crosshair radius it
 collapses to its dot, leaves the shared tag stack and stops pushing its neighbours around. Only the
-point tags had learned that; the zone tags stayed up at full size and kept covering the view.
+point tags had learned that; the zone tags stayed up at full size and kept covering the view. The dot
+an unaimed tag leaves behind is a little less transparent than it was, so it stays easy to pick out.
 
 A player marker is drawn in the interface accent colour everywhere - in the world, on the minimap and
 on the full map. A team marker used to take the colour of the team that placed it and a personal one a
