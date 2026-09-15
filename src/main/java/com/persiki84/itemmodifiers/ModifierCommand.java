@@ -371,6 +371,7 @@ public class ModifierCommand {
                                             stack.setTag(null);
                                         }
                                     }
+                                    touch(ctx);
                                     ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.cmd.hand.cleared").withStyle(ChatFormatting.YELLOW), true);
                                     return 1;
                                 })
@@ -464,6 +465,7 @@ public class ModifierCommand {
                                                                         list.add(c);
                                                                     }
                                                                     tag.put("ItemModifiersAttributes", list);
+                                                                    touch(ctx);
                                                                     ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.cmd.hand.attribute_added", Names.attribute(attrId), amt, Names.slot(slot)).withStyle(ChatFormatting.GREEN), true);
                                                                     return 1;
                                                                 })
@@ -523,6 +525,7 @@ public class ModifierCommand {
                                                                     net.minecraft.nbt.CompoundTag c = list.getCompound(i);
                                                                     if (c.getString("Attribute").equals(attrId) && c.getString("Slot").equalsIgnoreCase(slot)) {
                                                                         list.remove(i);
+                                                                        touch(ctx);
                                                                         ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.cmd.hand.attribute_removed", Names.attribute(attrId), Names.slot(slot)).withStyle(ChatFormatting.YELLOW), true);
                                                                         return 1;
                                                                     }
@@ -586,9 +589,18 @@ public class ModifierCommand {
 
     // WHY: снимок для клиента уходит тем же движением, что и сброс кешей: иначе карточка товара
     // WHY: и подсказка предмета показывают старые модификаторы до перезахода игрока
+    // WHY: правка NBT меняет сам стак, и ваниль сверила бы модификаторы сама, но только на
+    // WHY: следующем тике и только по своей копии: пересчёт сразу делает результат предсказуемым
+    private static void touch(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        AttributeHandler.reapply(ctx.getSource().getPlayerOrException());
+    }
+
     private static void refresh(CommandContext<CommandSourceStack> ctx) {
         AttributeHandler.markDirty();
         EffectHandler.markDirty();
-        if (ctx.getSource().getServer() != null) ZonesMod.syncModifiersToAll();
+        if (ctx.getSource().getServer() == null) return;
+
+        ZonesMod.syncModifiersToAll();
+        AttributeHandler.reapplyAll(ctx.getSource().getServer());
     }
 }

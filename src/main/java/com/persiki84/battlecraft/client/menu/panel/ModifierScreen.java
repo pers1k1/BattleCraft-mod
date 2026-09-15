@@ -8,6 +8,7 @@ import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.PanelScreen;
 import com.persiki84.shared.AmountText;
 import com.persiki84.shared.Names;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -17,6 +18,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.item.ItemStack;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -25,6 +27,7 @@ import java.util.List;
 public class ModifierScreen extends PanelScreen {
     private static final String COMMAND = "ie hand";
     private static final int MAX_LEVEL = 255;
+    private static final int ADDITION = 0;
     private static final int AMOUNT_SCALE = 100_000;
     private static final int DECIMALS = String.valueOf(AMOUNT_SCALE).length() - 1;
     private static final int AMOUNT_STEP = 1_000;
@@ -41,6 +44,7 @@ public class ModifierScreen extends PanelScreen {
 
     private FieldRow loreRow;
     private String picked;
+    private boolean handPicked;
     private int effect;
     private int level;
     private int kind;
@@ -154,8 +158,17 @@ public class ModifierScreen extends PanelScreen {
         return new CompoundTag();
     }
 
+    // WHY: запись в руку живёт в NBT стака, а список собран из конфига вида предмета: настроенный
+    // WHY: из меню предмет в списке не появлялся вовсе, и правка выглядела не сработавшей
     private List<AbstractWidget> itemRows() {
         List<AbstractWidget> rows = new ArrayList<>();
+        int inHand = handEntries("ItemModifiersEffects").size() + handEntries("ItemModifiersAttributes").size();
+        if (inHand > 0) {
+            rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                    Component.translatable("itemmodifiers.menu.item.in_hand", heldLabel()),
+                    () -> Component.translatable("itemmodifiers.menu.item.count", inHand),
+                    this::pickHand));
+        }
         for (CompoundTag item : tracked()) {
             String id = item.getString("item");
             int count = item.getList("effects", Tag.TAG_STRING).size()
@@ -172,11 +185,37 @@ public class ModifierScreen extends PanelScreen {
     // WHY: переводит цель на этот предмет, иначе список вводит в заблуждение
     private void pickItem(String id) {
         picked = id;
+        handPicked = false;
         target = PICKED_TARGET;
         rebuild();
     }
 
+    private void pickHand() {
+        handPicked = true;
+        target = HAND_TARGET;
+        rebuild();
+    }
+
+    private static ItemStack held() {
+        return Minecraft.getInstance().player == null
+                ? ItemStack.EMPTY
+                : Minecraft.getInstance().player.getMainHandItem();
+    }
+
+    private static List<CompoundTag> handEntries(String key) {
+        ItemStack stack = held();
+        if (stack.isEmpty() || !stack.hasTag() || !stack.getTag().contains(key, Tag.TAG_LIST)) return List.of();
+
+        ListTag stored = stack.getTag().getList(key, Tag.TAG_COMPOUND);
+        List<CompoundTag> entries = new ArrayList<>();
+        for (int index = 0; index < stored.size(); index++) {
+            entries.add(stored.getCompound(index));
+        }
+        return entries;
+    }
+
     private List<AbstractWidget> pickedRows() {
+        if (handPicked) return handRows();
         if (picked == null) return List.of(reading("itemmodifiers.menu.item.none", Component::empty));
 
         List<AbstractWidget> rows = new ArrayList<>();
@@ -190,6 +229,31 @@ public class ModifierScreen extends PanelScreen {
                 Component.translatable("itemmodifiers.menu.item.clear"),
                 () -> Component.translatable("itemmodifiers.menu.action.clear"),
                 () -> send("ie item " + picked + " clear")).alerting());
+        return rows;
+    }
+
+    private List<AbstractWidget> handRows() {
+        List<AbstractWidget> rows = new ArrayList<>();
+        rows.add(reading("itemmodifiers.menu.item.picked", ModifierScreen::heldLabel));
+
+        for (CompoundTag entry : handEntries("ItemModifiersEffects")) {
+            String id = entry.getString("Effect");
+            Component value = Component.translatable("itemmodifiers.menu.item.level", entry.getInt("Level"));
+            rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, Names.effect(id), () -> value,
+                    () -> send(COMMAND + " remove potion " + id)).alerting());
+        }
+        for (CompoundTag entry : handEntries("ItemModifiersAttributes")) {
+            String id = entry.getString("Attribute");
+            String slot = entry.getString("Slot");
+            Component value = Component.translatable("itemmodifiers.menu.item.value",
+                    AmountText.signed(entry.getDouble("Amount"), entry.getInt("Operation") != ADDITION));
+            rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                    Component.translatable("itemmodifiers.menu.item.slotted", Names.attribute(id), Names.slot(slot)),
+                    () -> value, () -> send(COMMAND + " remove attribute " + id + " " + slot)).alerting());
+        }
+
+        if (rows.size() == 1) rows.add(reading("itemmodifiers.menu.item.clean", Component::empty));
+        rows.add(clearRow());
         return rows;
     }
 
@@ -318,8 +382,11 @@ public class ModifierScreen extends PanelScreen {
         rows.add(targetRow());
         rows.add(pick("itemmodifiers.menu.attribute", attributeNames, () -> attribute, picked -> attribute = picked));
         rows.add(amountRow());
-        rows.add(pick("itemmodifiers.menu.operation", operationOptions(), () -> operation,
-                picked -> operation = picked));
+        rows.add(pick("itemmodifiers.menu.operation", operationOptions(), () -> operation, picked -> {
+            operation = picked;
+            rebuild();
+        }));
+        rows.add(reading("itemmodifiers.menu.result", this::resultLabel));
         rows.add(pick("itemmodifiers.menu.slot", slotOptions(), () -> slot, picked -> slot = picked));
         rows.add(action("itemmodifiers.menu.add_attribute", "itemmodifiers.menu.action.add", this::addAttribute));
         rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
@@ -346,6 +413,12 @@ public class ModifierScreen extends PanelScreen {
         if (attributeIds.isEmpty()) return;
         send(base() + " addattribute " + attributeIds.get(attribute) + " " + amountText() + " "
                 + operation + " " + SLOTS[slot]);
+    }
+
+    // WHY: одно и то же число у «Прибавить» и у умножающих операций даёт разный итог, и разница
+    // WHY: у скорости передвижения десятикратная: строка показывает, что именно уйдёт предмету
+    private Component resultLabel() {
+        return Component.literal(AmountText.signed(amount / (double) AMOUNT_SCALE, operation != ADDITION));
     }
 
     private String amountText() {

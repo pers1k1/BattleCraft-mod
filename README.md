@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.15v3` in files, `15.09.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.15v4` in files, `15.09.26v4 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -483,7 +483,27 @@ A capture point tag in the HUD collapses to its dot when the crosshair is not on
 inside its radius. Until now the full plate stayed up, took its place in the shared tag stack, pushed
 its neighbours around and covered the view behind it.
 
-Version 2026.09.15v3 - built but not played through; the menus, the language switch, the modifier
+An attribute could stay on a player for the rest of the session, item or no item. Minecraft reconciles
+an item's attribute modifiers only when the stack in a slot changes, and editing the config for an item
+kind does not change the stack, so a removed entry went on being applied - and the next reconciliation
+computed the modifiers from the new config, found nothing to take away, and left it there for good.
+Every `/ie` change now strips the pack's own modifiers off every online player by name, not by a
+recomputed identity, and hands out what the current configuration actually says.
+
+The identity of a modifier now carries the slot it is applied in as well as the slot it was written
+for. An entry written for any slot, on an item held in both hands, produced one identity twice, and a
+second application of the same identity is an error in vanilla.
+
+An item modified in hand did not appear in the Items tab at all, because that list is built from the
+config for item kinds while the in-hand target writes the stack's own tag. The held item is listed
+there now when it carries its own modifiers, and picking it shows them with their slots and takes them
+off one by one.
+
+The attribute tab gained a line showing what the item will actually get, because the same number means
+very different things per operation: movement speed is 0.1 at base, so Add 0.05 is +50% while Multiply
+base 0.05 is +5%.
+
+Version 2026.09.15v4 - built but not played through; the menus, the language switch, the modifier
 panel, the hints and the point tags all want a look in game.
 
 ## Releases
