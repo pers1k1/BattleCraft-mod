@@ -82,7 +82,7 @@
   "battlecraft.visuals.plain.note": "No blur at all, the fastest mode",
   "battlecraft.menu.title": "BATTLECRAFT",
   "battlecraft.menu.subtitle": "SERVER PACK",
-  "battlecraft.menu.version": "BattleCraft 15.09.26v4 PRE-ALPHA",
+  "battlecraft.menu.version": "BattleCraft 15.09.26v5 PRE-ALPHA",
   "battlecraft.lobby.waiting_for": "Waiting for %s",
   "battlecraft.lobby.auto_assigned": "You were placed into team %s",
   "battlecraft.error.team_full": "Team %s is full, pick another one",

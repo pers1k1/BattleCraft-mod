@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.15v4` in files, `15.09.26v4 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.15v5` in files, `15.09.26v5 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -503,7 +503,12 @@ The attribute tab gained a line showing what the item will actually get, because
 very different things per operation: movement speed is 0.1 at base, so Add 0.05 is +50% while Multiply
 base 0.05 is +5%.
 
-Version 2026.09.15v4 - built but not played through; the menus, the language switch, the modifier
+A listed modifier now says how its number is applied, not only how big it is: flat, of the base, or of
+the total, with the slot it was written for beside the attribute name. A listed effect says whether it
+is a buff or a debuff next to its level. The same number means different things per operation, and the
+list gave no way to tell which one an entry had been written with.
+
+Version 2026.09.15v5 - built but not played through; the menus, the language switch, the modifier
 panel, the hints and the point tags all want a look in game.
 
 ## Releases

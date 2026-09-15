@@ -36,6 +36,7 @@ public class ModifierScreen extends PanelScreen {
     private static final int PICKED_TARGET = 2;
     private static final int LORE_LENGTH = 128;
     private static final String[] SLOTS = {"mainhand", "offhand", "head", "chest", "legs", "feet", "any"};
+    private static final String[] OPERATIONS = {"add", "multiply_base", "multiply_total"};
 
     private final List<ResourceLocation> effectIds = new ArrayList<>();
     private final List<Component> effectNames = new ArrayList<>();
@@ -238,15 +239,14 @@ public class ModifierScreen extends PanelScreen {
 
         for (CompoundTag entry : handEntries("ItemModifiersEffects")) {
             String id = entry.getString("Effect");
-            Component value = Component.translatable("itemmodifiers.menu.item.level", entry.getInt("Level"));
+            Component value = effectValue(entry.getInt("Level"), "DEBUFF".equals(entry.getString("Type")));
             rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, Names.effect(id), () -> value,
                     () -> send(COMMAND + " remove potion " + id)).alerting());
         }
         for (CompoundTag entry : handEntries("ItemModifiersAttributes")) {
             String id = entry.getString("Attribute");
             String slot = entry.getString("Slot");
-            Component value = Component.translatable("itemmodifiers.menu.item.value",
-                    AmountText.signed(entry.getDouble("Amount"), entry.getInt("Operation") != ADDITION));
+            Component value = attributeValue(entry.getDouble("Amount"), entry.getInt("Operation"));
             rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                     Component.translatable("itemmodifiers.menu.item.slotted", Names.attribute(id), Names.slot(slot)),
                     () -> value, () -> send(COMMAND + " remove attribute " + id + " " + slot)).alerting());
@@ -263,19 +263,33 @@ public class ModifierScreen extends PanelScreen {
             if (parts.length < 3) continue;
 
             String id = parts[1];
-            Component label = effects ? Names.effect(id) : Names.attribute(id);
+            Component label = effects ? Names.effect(id) : attributeLabel(parts, id);
             Component value = effects
-                    ? Component.translatable("itemmodifiers.menu.item.level", parts[2])
-                    : Component.translatable("itemmodifiers.menu.item.value", amountLabel(parts));
+                    ? effectValue(parseWhole(parts[2]), parts.length > 3 && "DEBUFF".equals(parts[3].trim()))
+                    : attributeValue(parseAmount(parts[2]), parts.length > 3 ? parseWhole(parts[3]) : ADDITION);
             rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, label, () -> value,
                     () -> dropEntry(effects, id)).alerting());
         }
     }
 
-    private static String amountLabel(String[] parts) {
-        double value = parseAmount(parts[2]);
-        boolean percent = parts.length > 3 && !"0".equals(parts[3].trim());
-        return AmountText.signed(value, percent);
+    private static Component attributeLabel(String[] parts, String id) {
+        if (parts.length < 5) return Names.attribute(id);
+
+        return Component.translatable("itemmodifiers.menu.item.slotted", Names.attribute(id),
+                Names.slot(parts[4].trim()));
+    }
+
+    // WHY: одно и то же число прибавляется, множит базу или множит итог, и по самому числу это
+    // WHY: не читается: строка списка называет способ, а не только величину
+    private static Component attributeValue(double amount, int operation) {
+        int kind = Math.max(0, Math.min(operation, OPERATIONS.length - 1));
+        return Component.translatable("itemmodifiers.menu.item.op." + OPERATIONS[kind],
+                AmountText.signed(amount, kind != ADDITION));
+    }
+
+    private static Component effectValue(int level, boolean debuff) {
+        return Component.translatable("itemmodifiers.menu.item.level", level,
+                Component.translatable(debuff ? "itemmodifiers.menu.kind.debuff" : "itemmodifiers.menu.kind.buff"));
     }
 
     private static double parseAmount(String stored) {
@@ -283,6 +297,14 @@ public class ModifierScreen extends PanelScreen {
             return Double.parseDouble(stored.trim());
         } catch (NumberFormatException unreadable) {
             return 0.0;
+        }
+    }
+
+    private static int parseWhole(String stored) {
+        try {
+            return Integer.parseInt(stored.trim());
+        } catch (NumberFormatException unreadable) {
+            return 0;
         }
     }
 
@@ -418,7 +440,7 @@ public class ModifierScreen extends PanelScreen {
     // WHY: одно и то же число у «Прибавить» и у умножающих операций даёт разный итог, и разница
     // WHY: у скорости передвижения десятикратная: строка показывает, что именно уйдёт предмету
     private Component resultLabel() {
-        return Component.literal(AmountText.signed(amount / (double) AMOUNT_SCALE, operation != ADDITION));
+        return attributeValue(amount / (double) AMOUNT_SCALE, operation);
     }
 
     private String amountText() {
