@@ -115,12 +115,14 @@ public abstract class PanelScreen extends ManagerScreen {
         }
     }
 
+    // WHY: снимок приходит по таймеру, а набранное живёт в самой строке: пересборка посреди
+    // WHY: набора числа стирала ввод молча, и в команду уходило прежнее значение строки
     @Override
     public void tick() {
         MenuData.request(menuId());
 
         List<Page> pages = pages();
-        if (pages.isEmpty() || tab >= pages.size()) return;
+        if (pages.isEmpty() || tab >= pages.size() || typingInRow()) return;
 
         int stateHash = MenuData.state(menuId()).hashCode();
         if (pages.get(tab).rows().get().size() != sourceRows || stateHash != shownState) {

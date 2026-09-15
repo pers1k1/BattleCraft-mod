@@ -16,8 +16,10 @@ import net.minecraftforge.registries.ForgeRegistries;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class AttributeHandler {
@@ -77,16 +79,18 @@ public class AttributeHandler {
         if (itemId == null) return;
 
         String key = itemId.toString();
-        addConfigured(event, key);
-        addStored(event, stack, key);
+        addConfigured(event, key, addStored(event, stack, key));
     }
 
-    private void addConfigured(ItemAttributeModifierEvent event, String key) {
+    // WHY: запись в стаке и запись в конфиге вида предмета жили независимо и складывались: предмет,
+    // WHY: настроенный сначала командой, а потом из меню, получал двойную величину. Своя запись
+    // WHY: предмета старше общей, как и должно быть у исключения из правила
+    private void addConfigured(ItemAttributeModifierEvent event, String key, Set<Attribute> overridden) {
         List<AttributeEntry> entries = entries().get(key);
         if (entries == null) return;
 
         for (AttributeEntry entry : entries) {
-            if (!fits(entry.slotName(), event)) continue;
+            if (overridden.contains(entry.attribute()) || !fits(entry.slotName(), event)) continue;
 
             UUID uuid = named(key + ":" + entry.attribute().getDescriptionId() + ":" + entry.slotName());
             event.addModifier(entry.attribute(),
@@ -96,9 +100,10 @@ public class AttributeHandler {
 
     // WHY: номер записи в списке смещается после снятия соседней, и модификатор менял UUID
     // WHY: на живом предмете: имя берём от атрибута и слота, а не от позиции в списке
-    private void addStored(ItemAttributeModifierEvent event, ItemStack stack, String key) {
-        if (!stack.hasTag() || !stack.getTag().contains("ItemModifiersAttributes", Tag.TAG_LIST)) return;
+    private Set<Attribute> addStored(ItemAttributeModifierEvent event, ItemStack stack, String key) {
+        if (!stack.hasTag() || !stack.getTag().contains("ItemModifiersAttributes", Tag.TAG_LIST)) return Set.of();
 
+        Set<Attribute> added = new HashSet<>();
         ListTag list = stack.getTag().getList("ItemModifiersAttributes", Tag.TAG_COMPOUND);
         for (int index = 0; index < list.size(); index++) {
             CompoundTag compound = list.getCompound(index);
@@ -112,7 +117,9 @@ public class AttributeHandler {
             UUID uuid = named(key + ":" + attrId + ":" + slotName + ":nbt");
             event.addModifier(attr, new AttributeModifier(uuid, "ItemMod NBT Modifier",
                     compound.getDouble("Amount"), operationOf(compound.getInt("Operation"))));
+            added.add(attr);
         }
+        return added;
     }
 
     private static boolean fits(String slotName, ItemAttributeModifierEvent event) {

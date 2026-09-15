@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.15hotfix` in files, `15.09.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.15v3` in files, `15.09.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -419,7 +419,7 @@ toggle on `N`; weapon inspection moved onto the freed `G`, and the new points ke
 The pack's own defaults were moved with them, so a fresh install and the launcher's recommended
 layout agree.
 
-## Vanilla screens through mixins and the item modifier percent, 15 September 2026 (second pass)
+## Vanilla screens through mixins, the modifier field and HUD point tags, 15 September 2026
 
 The pause screen, the inventory, the creative inventory and every vanilla container screen used to be
 replaced on open: the game built its own screen, the pack threw it away and built a subclass of it
@@ -437,11 +437,22 @@ pack listens on, so for the fade in and the fade out the screen was painted with
 and snapped back once the reload finished. The call is now routed through the hook like every other
 frame.
 
-Item modifier values are typed in whole percent. One percent is `0.01` and one hundred percent is
-`1.00`, for the flat operation as well as for the two multiplying ones, so nothing in the screen takes
-a fractional number any more and the decimal separator of a Russian keyboard cannot silently turn
-`0,5` into `5`. The stored value does not change, and the list of an item's modifiers still shows a
-flat bonus in attribute units and a multiplier as a percentage.
+The item modifier value is a single fractional field again, in attribute units, with five decimals, so
+`0.00005` can be entered for something as fine as movement speed. It no longer changes its unit when
+the operation changes - that swap silently reinterpreted a number already typed. The displayed value
+drops its trailing zeros, and it is formatted from a double rather than a float, which at five decimals
+is the difference between what is shown and what is stored.
+
+That field was losing what was typed into it, which is the real reason a value set in the panel did not
+match the one a command produced. A module panel rebuilds itself whenever a new snapshot arrives from
+the server, on a timer, and the rebuild replaces the row together with the half-typed number; the panel
+now holds the rebuild while a row is being typed into, the way the manager screens already did. A
+number also commits when the row loses focus instead of only on Enter, so typing a value and clicking
+Add sends the value that was typed.
+
+An item's own modifier now overrides the configured one for the same attribute instead of adding to it.
+An item set up first with a command, which writes the config for the item kind, and then from the panel,
+which by default writes the held stack, was carrying both and applying twice the value.
 
 The modifier submodule had a set of problems behind the screen. Its config is a common config, which
 on a dedicated server exists only on the server, so the client read its own empty copy and an item's
@@ -464,8 +475,16 @@ produced a tag the game could not read, and clearing the lore left an empty `dis
 the item from stacking with a plain one. An item whose registry key is missing no longer drops the
 command with a null pointer, and an empty hand now says so instead of answering with silence.
 
-Version 2026.09.15hotfix - built but not played through; the menus, the language switch and the
-modifier panel all want a look in game.
+A hint window follows the cursor, and the text inside it was drawn at whatever fraction of a pixel the
+window happened to sit on, so moving the mouse slowly along a row made the letters shimmer. The window
+and each line of it now land on whole screen pixels.
+
+A capture point tag in the HUD collapses to its dot when the crosshair is not on it and unfolds only
+inside its radius. Until now the full plate stayed up, took its place in the shared tag stack, pushed
+its neighbours around and covered the view behind it.
+
+Version 2026.09.15v3 - built but not played through; the menus, the language switch, the modifier
+panel, the hints and the point tags all want a look in game.
 
 ## Releases
 

@@ -1319,6 +1319,16 @@ public final class UiRender {
         return pixelsPerUnit(graphics);
     }
 
+    // WHY: окно, которое едет за курсором, встаёт на доли пикселя, и текст внутри ложится
+    // WHY: на полупиксель: при медленном движении мыши буквы дрожат относительно друг друга
+    public static float snapX(GuiGraphics graphics, float x) {
+        Matrix4f matrix = graphics.pose().last().pose();
+        if (Math.abs(matrix.m01()) > 1.0E-4f || matrix.m00() <= 1.0E-4f) return x;
+
+        double gui = Math.max(1.0, Minecraft.getInstance().getWindow().getGuiScale());
+        return snap(x, matrix.m00(), matrix.m30(), gui);
+    }
+
     private static void tracked(GuiGraphics graphics, Font font, Component value, ResourceLocation[] faces,
                                 float[] bakes, float centerX, float y, float scale, float tracking, int color) {
         toned(graphics, font, value, faces, bakes, centerX, y, scale, tracking, color, null);

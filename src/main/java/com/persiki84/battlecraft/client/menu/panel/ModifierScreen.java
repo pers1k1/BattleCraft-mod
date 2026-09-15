@@ -25,10 +25,10 @@ import java.util.List;
 public class ModifierScreen extends PanelScreen {
     private static final String COMMAND = "ie hand";
     private static final int MAX_LEVEL = 255;
-    private static final int PERCENT_DECIMALS = 2;
-    private static final int WHOLE_PERCENT = 100;
-    private static final int PERCENT_STEP = 1;
-    private static final int MAX_PERCENT = 100_000;
+    private static final int AMOUNT_SCALE = 100_000;
+    private static final int DECIMALS = String.valueOf(AMOUNT_SCALE).length() - 1;
+    private static final int AMOUNT_STEP = 1_000;
+    private static final int MAX_AMOUNT = 1_000 * AMOUNT_SCALE;
     private static final int HAND_TARGET = 0;
     private static final int PICKED_TARGET = 2;
     private static final int LORE_LENGTH = 128;
@@ -45,7 +45,7 @@ public class ModifierScreen extends PanelScreen {
     private int level;
     private int kind;
     private int attribute;
-    private int amount = WHOLE_PERCENT;
+    private int amount = AMOUNT_SCALE;
     private int operation;
     private int slot;
     private int target;
@@ -306,11 +306,11 @@ public class ModifierScreen extends PanelScreen {
         send(base() + " remove potion " + effectIds.get(effect));
     }
 
-    // WHY: величина набирается целыми процентами, где сотня это единица: дробный ввод у обеих
-    // WHY: операций читался по-разному и ломался на запятой, а сотые доли покрывают оба случая
+    // WHY: строка одна на все три операции и всегда в единицах атрибута: переключение единицы
+    // WHY: вместе с операцией молча меняло смысл уже набранного числа
     private AbstractWidget amountRow() {
-        return number("itemmodifiers.menu.amount_percent", () -> amount, value -> amount = value,
-                -MAX_PERCENT, MAX_PERCENT, PERCENT_STEP);
+        return number("itemmodifiers.menu.amount", () -> amount, value -> amount = value,
+                -MAX_AMOUNT, MAX_AMOUNT, AMOUNT_STEP).scaledBy(AMOUNT_SCALE).trimmed();
     }
 
     private List<AbstractWidget> attributeRows() {
@@ -349,7 +349,7 @@ public class ModifierScreen extends PanelScreen {
     }
 
     private String amountText() {
-        return BigDecimal.valueOf(amount, PERCENT_DECIMALS).stripTrailingZeros().toPlainString();
+        return BigDecimal.valueOf(amount, DECIMALS).stripTrailingZeros().toPlainString();
     }
 
     // WHY: конфиг держит модификатор одной записью на предмет и атрибут, поэтому у команды вида

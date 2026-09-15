@@ -479,8 +479,7 @@ public class CaptureHudOverlay {
     private static void renderMarker(GuiGraphics graphics, Minecraft mc, ProjectedMarker marker,
                                      float x, float y, float focus, float delta, boolean points, float dots) {
         if (marker.name() == null) {
-            UiRender.dot(graphics, x, y, MARKER_DOT * HudConfig.markerScale(),
-                    UiTheme.alpha(markerColor(marker), (0.45f + 0.55f * focus) * dots));
+            paintDot(graphics, marker, x, y, focus, dots);
             return;
         }
 
@@ -488,16 +487,33 @@ public class CaptureHudOverlay {
         float presence = state.presence(points, delta);
         if (presence <= MARKER_GONE) return;
 
+        // WHY: вне прицела плашка сворачивается в точку и выходит из общего стека меток: прежде она
+        // WHY: оставалась во весь размер, расталкивала соседние метки и закрывала собой вид
+        float plate = focus * focus;
+        if (plate <= MARKER_GONE) {
+            paintDot(graphics, marker, x, y, focus, dots * presence);
+            return;
+        }
+
         float scale = MARKER_LABEL_SCALE * HudConfig.markerScale();
         float alpha = UiWorldTag.IDLE_ALPHA + (UiWorldTag.FOCUS_ALPHA - UiWorldTag.IDLE_ALPHA) * focus;
         float height = UiWorldTag.height(mc.font, scale);
         float ranged = UiAnim.easeOut(state.range.to(marker.distance() >= RANGE_SHOWN_FROM ? 1.0f : 0.0f, delta));
         state.stack.depth((float) marker.distance());
 
+        paintDot(graphics, marker, x, y, focus, dots * presence * (1.0f - plate));
         UiWorldTag.render(graphics, mc.font, Component.literal(marker.name()),
                 Component.translatable("capturepoints.hud.marker.range", (int) marker.distance()), ranged,
                 x, y - height - MARKER_TAG_GAP, height, scale, markerColor(marker), alpha, focus,
-                presence, state.stack);
+                presence * plate, state.stack);
+    }
+
+    private static void paintDot(GuiGraphics graphics, ProjectedMarker marker, float x, float y,
+                                 float focus, float shown) {
+        if (shown <= MARKER_GONE) return;
+
+        UiRender.dot(graphics, x, y, MARKER_DOT * HudConfig.markerScale(),
+                UiTheme.alpha(markerColor(marker), (0.45f + 0.55f * focus) * shown));
     }
 
     private static MarkerState stateOf(ProjectedMarker marker) {

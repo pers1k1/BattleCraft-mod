@@ -121,7 +121,7 @@ public final class MenuHint {
         if (lines.isEmpty()) return;
 
         boolean below = below(minecraft);
-        float boxX = anchorX(minecraft);
+        float boxX = UiRender.snapX(graphics, anchorX(minecraft));
         float boxY = below ? ownerY + ownerHeight + GAP : ownerY - GAP - boxHeight;
         keep(boxX, boxY, shown, below);
         paint(graphics, font, boxX, boxY, boxWidth, boxHeight, shown, below,
@@ -231,6 +231,8 @@ public final class MenuHint {
         return ownerY - GAP - boxHeight < SCREEN_MARGIN;
     }
 
+    // WHY: окно едет за курсором и останавливается на целом пикселе экрана: на дробном
+    // WHY: положении текст внутри дрожал при медленном движении мыши влево-вправо
     private static float anchorX(Minecraft minecraft) {
         float limit = minecraft.getWindow().getGuiScaledWidth() - boxWidth - SCREEN_MARGIN;
         float wanted = Math.max(SCREEN_MARGIN, Math.min(limit, pointerX - boxWidth / 2.0f));
@@ -272,7 +274,8 @@ public final class MenuHint {
 
         for (FormattedCharSequence line : drawn) {
             float span = UiRender.measureLine(graphics, font, line, TEXT_SCALE);
-            UiRender.textLine(graphics, font, line, x + (width - span) / 2.0f, textY, TEXT_SCALE, color, false);
+            float lineX = UiRender.snapX(graphics, x + (width - span) / 2.0f);
+            UiRender.textLine(graphics, font, line, lineX, textY, TEXT_SCALE, color, false);
             textY += step;
         }
     }

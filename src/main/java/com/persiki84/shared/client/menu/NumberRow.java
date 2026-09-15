@@ -56,6 +56,7 @@ public class NumberRow extends MenuRow {
     private Component floorLabel;
     private int divisor = 1;
     private int decimals;
+    private boolean trimmed;
 
     public NumberRow(int x, int y, int width, int height, Component label,
                      IntSupplier value, IntConsumer apply, int minimum, int maximum, int step) {
@@ -75,20 +76,36 @@ public class NumberRow extends MenuRow {
     public NumberRow scaledBy(int divisor) {
         this.divisor = Math.max(1, divisor);
         this.decimals = String.valueOf(this.divisor).length() - 1;
+        this.displayValue = Integer.MIN_VALUE;
+        return this;
+    }
+
+    // WHY: у мелкого шага знаков после точки пять, и постоянные нули занимают всю ширину места
+    // WHY: под число: 0.05 читается, а 0.05000 выглядит другим числом
+    public NumberRow trimmed() {
+        this.trimmed = true;
+        this.displayValue = Integer.MIN_VALUE;
         return this;
     }
 
     private int displayValue = Integer.MIN_VALUE;
     private String displayText;
 
+    // WHY: доля считалась во float, и на пяти знаках показанное число расходилось с хранимым
     private String display(int raw) {
         if (raw == displayValue && displayText != null) return displayText;
 
         displayValue = raw;
-        displayText = divisor == 1
-                ? String.valueOf(raw)
-                : String.format(Locale.ROOT, "%." + decimals + "f", raw / (float) divisor);
+        displayText = divisor == 1 ? String.valueOf(raw) : fraction(raw);
         return displayText;
+    }
+
+    private String fraction(int raw) {
+        String shown = String.format(Locale.ROOT, "%." + decimals + "f", raw / (double) divisor);
+        if (!trimmed || shown.indexOf('.') < 0) return shown;
+
+        shown = shown.replaceAll("0+$", "");
+        return shown.endsWith(".") ? shown.substring(0, shown.length() - 1) : shown;
     }
 
     @Override
@@ -233,7 +250,7 @@ public class NumberRow extends MenuRow {
     }
 
     private void beginHold(int sign) {
-        stopTyping();
+        commitTyped();
         holding = sign;
         holdStart = System.currentTimeMillis();
         lastRepeat = holdStart;
@@ -243,6 +260,14 @@ public class NumberRow extends MenuRow {
     @Override
     public boolean capturing() {
         return typing;
+    }
+
+    // WHY: набранное принималось только по Enter, а щелчок мимо строки его молча выбрасывал:
+    // WHY: игрок вводил число, жал «Добавить» и отправлял прежнее значение
+    @Override
+    public void setFocused(boolean focused) {
+        if (!focused) commitTyped();
+        super.setFocused(focused);
     }
 
     private void beginTyping() {

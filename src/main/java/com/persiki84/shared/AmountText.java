@@ -6,7 +6,7 @@ import java.math.RoundingMode;
 // WHY: String.format берёт разделитель дробной части из локали клиента, и на русской раскладке
 // WHY: величина модификатора уезжала в запятую, которую ни команда, ни конфиг не читают
 public final class AmountText {
-    private static final int DECIMALS = 3;
+    private static final int DECIMALS = 5;
 
     private AmountText() {}
 
