@@ -9,25 +9,22 @@ import com.persiki84.shared.client.ui.UiTheme;
 import com.persiki84.shared.client.ui.UiWash;
 import net.minecraft.util.FastColor;
 
-// WHY: визуализатор это перенос обложки на ряд полосок: цвет берётся с того самого места картинки,
-// WHY: где полоска стоит - слева сверху полоски лежит цвет левого верхнего угла обложки. Выдуманных
-// WHY: цветов тут нет вовсе, поэтому чёрно-белая обложка честно даёт серебряную лесенку
 public final class IslandTone {
     private static final int COLUMNS = MediaWatch.BANDS;
-    private static final int ROWS = 2;
-    private static final float WASH_SECONDS = 0.7f;
-    private static final int SAMPLE_EDGE = 96;
+    private static final int ROWS = 7;
+    private static final int GRID = 32;
     private static final int CLEAR_ALPHA = 32;
-    private static final float SHARPEN = 2.0f;
-    private static final float VIVID_BASE = 0.04f;
-    private static final float CHROMA_CAP = 2.4f;
-    private static final float DARK_FLOOR = 0.26f;
-    private static final float TOP_TARGET = 0.66f;
-    private static final float TOP_GAIN = 2.2f;
+    private static final float BLUR_SHARE = 0.154f;
+    private static final float SPAN_ACROSS = 0.738f;
+    private static final float SPAN_DOWN = 0.938f;
+    private static final float LIGHT_SCALE = 0.807f;
+    private static final float LIGHT_BASE = 0.091f;
+    private static final float TOP_TARGET = 0.577f;
+    private static final float TOP_GAIN = 1.459f;
+    private static final float CHROMA_GAIN = 1.286f;
+    private static final float WASH_SECONDS = 0.43f;
 
-    // WHY: снимок обложки собирается в фоне и кладётся сюда целиком одной ссылкой: рендер-поток
-    // WHY: читает уже готовое и никогда не видит наполовину посчитанную лесенку
-    private record Cells(int[] mean, float[] light, float[] chroma, float gain) {}
+    private record Cells(int[] base, float[] light, float[] chroma) {}
 
     private static final int[] ramp = new int[COLUMNS * ROWS];
     private static final UiWash[] washes = new UiWash[COLUMNS * ROWS];
@@ -47,24 +44,14 @@ public final class IslandTone {
     private IslandTone() {}
 
     public static void read(NativeImage image) {
-        int size = COLUMNS * ROWS;
-        float[] weights = new float[size];
-        float[] chromas = new float[size];
-        float[] reds = new float[size];
-        float[] greens = new float[size];
-        float[] blues = new float[size];
-        float[] plainWeights = new float[size];
-        float[] plainLights = new float[size];
-
-        int stride = Math.max(1, Math.min(image.getWidth(), image.getHeight()) / SAMPLE_EDGE);
-        for (int y = 0; y < image.getHeight(); y += stride) {
-            float row = (y + 0.5f) / image.getHeight() * ROWS - 0.5f;
-            for (int x = 0; x < image.getWidth(); x += stride) {
-                splat(image.getPixelRGBA(x, y), (x + 0.5f) / image.getWidth() * COLUMNS - 0.5f, row,
-                        weights, chromas, reds, greens, blues, plainWeights, plainLights);
-            }
+        float[][] plane = shrunk(image);
+        if (total(plane[3]) <= 0.0f) {
+            cells = null;
+            return;
         }
-        cells = gathered(weights, chromas, reds, greens, blues, plainWeights, plainLights);
+
+        float[][] soft = blurred(plane);
+        cells = sampled(soft, topLight(soft));
     }
 
     public static void advance(float delta) {
@@ -76,19 +63,17 @@ public final class IslandTone {
         }
     }
 
-    // WHY: цвет привязан к ряду, а не к полоске: иначе тихая полоска сжимала бы весь переход
-    // WHY: в свои несколько пикселей и цвета ездили бы вверх-вниз вместе со звуком
     public static int barAt(int column, float share) {
-        int at = Math.max(0, Math.min(COLUMNS - 1, column));
-        return UiTheme.mix(washes[at].get(), washes[at + COLUMNS].get(), clamp(share));
+        int at = Math.max(0, Math.min(COLUMNS - 1, column)) * ROWS;
+        float row = clamp(share) * (ROWS - 1);
+        int low = Math.min(ROWS - 2, (int) row);
+        return UiTheme.mix(washes[at + low].get(), washes[at + low + 1].get(), row - low);
     }
 
     public static void forget() {
         cells = null;
     }
 
-    // WHY: ручки правят уже снятые цвета, а не выборку, поэтому обложку заново читать не надо -
-    // WHY: лесенка пересобирается только на новой обложке или когда ползунок действительно сдвинули
     private static void restamp() {
         Cells fresh = cells;
         if (fresh == shownCells && HudConfig.visualizerLight() == shownLight
@@ -104,115 +89,131 @@ public final class IslandTone {
         }
     }
 
-    // WHY: пиксель раскладывается по четырём ближайшим ячейкам, а не падает в одну: так соседние
-    // WHY: полоски сходятся переходом, а не ступенью на границе блока. Билинейный вес возводится
-    // WHY: в степень, потому что он размазан на две ячейки в каждую сторону, то есть на треть
-    // WHY: картинки, и предмет на обложке расплывался по всему ряду вместо своего места
-    private static void splat(int pixel, float column, float row, float[] weights, float[] chromas,
-                              float[] reds, float[] greens, float[] blues,
-                              float[] plainWeights, float[] plainLights) {
-        if (FastColor.ABGR32.alpha(pixel) <= CLEAR_ALPHA) return;
-
-        int left = (int) Math.floor(column);
-        int top = (int) Math.floor(row);
-        float alongX = column - left;
-        float alongY = row - top;
-        add(left, top, pixel, near(1.0f - alongX) * near(1.0f - alongY),
-                weights, chromas, reds, greens, blues, plainWeights, plainLights);
-        add(left + 1, top, pixel, near(alongX) * near(1.0f - alongY),
-                weights, chromas, reds, greens, blues, plainWeights, plainLights);
-        add(left, top + 1, pixel, near(1.0f - alongX) * near(alongY),
-                weights, chromas, reds, greens, blues, plainWeights, plainLights);
-        add(left + 1, top + 1, pixel, near(alongX) * near(alongY),
-                weights, chromas, reds, greens, blues, plainWeights, plainLights);
-    }
-
-    private static float near(float share) {
-        return (float) Math.pow(share, SHARPEN);
-    }
-
-    // WHY: светлота ячейки берётся с обычного среднего, а цвет с взвешенного по насыщенности.
-    // WHY: одним весом их брать нельзя: по насыщенности чёрное весит почти ноль и на визуализатор
-    // WHY: не попадает вовсе, а без веса яркое поле с тёмной фигурой усредняется в муть
-    private static void add(int column, int row, int pixel, float weight, float[] weights, float[] chromas,
-                            float[] reds, float[] greens, float[] blues,
-                            float[] plainWeights, float[] plainLights) {
-        if (weight <= 0.0f) return;
-
-        int cell = Math.max(0, Math.min(COLUMNS - 1, column))
-                + Math.max(0, Math.min(ROWS - 1, row)) * COLUMNS;
-        int argb = argbOf(pixel);
-        float chroma = UiOklab.chroma(argb);
-        plainWeights[cell] += weight;
-        plainLights[cell] += UiOklab.lightness(argb) * weight;
-
-        float pull = weight * (VIVID_BASE + chroma);
-        weights[cell] += pull;
-        chromas[cell] += chroma * pull;
-        reds[cell] += FastColor.ABGR32.red(pixel) * pull;
-        greens[cell] += FastColor.ABGR32.green(pixel) * pull;
-        blues[cell] += FastColor.ABGR32.blue(pixel) * pull;
-    }
-
-    private static Cells gathered(float[] weights, float[] chromas, float[] reds, float[] greens,
-                                  float[] blues, float[] plainWeights, float[] plainLights) {
-        if (weights[0] <= 0.0f) return null;
-
-        int size = weights.length;
-        int[] mean = new int[size];
-        float[] light = new float[size];
-        float[] chroma = new float[size];
-        for (int cell = 0; cell < size; cell++) {
-            if (weights[cell] <= 0.0f || plainWeights[cell] <= 0.0f) continue;
-
-            int red = Math.round(reds[cell] / weights[cell]);
-            int green = Math.round(greens[cell] / weights[cell]);
-            int blue = Math.round(blues[cell] / weights[cell]);
-            mean[cell] = 0xFF000000 | (red << 16) | (green << 8) | blue;
-            light[cell] = plainLights[cell] / plainWeights[cell];
-            chroma[cell] = chromas[cell] / weights[cell];
-        }
-        return new Cells(mean, light, chroma, gain(light));
-    }
-
-    // WHY: тёмная обложка целиком ушла бы под стекло, но гасить контраст внутри неё нельзя:
-    // WHY: поднимается вся лесенка разом по своей самой светлой ячейке, а не каждая по себе.
-    // WHY: низ диапазона не обрезается, а поджимается: обрезка сплющила бы все тёмные ячейки
-    // WHY: в одну светлоту, и тень на обложке перестала бы отличаться от чёрного
-    private static float gain(float[] light) {
-        float top = 0.0f;
-        for (float value : light) {
-            top = Math.max(top, value);
-        }
-        if (top <= 0.0f) return 1.0f;
-
-        return Math.max(1.0f, Math.min(TOP_GAIN, TOP_TARGET / top));
-    }
-
     private static int shown(Cells snapshot, int cell) {
-        if (snapshot.mean()[cell] == 0) return UiAccent.color();
-
-        int mean = snapshot.mean()[cell];
-        float band = DARK_FLOOR + (1.0f - DARK_FLOOR) * clamp(snapshot.light()[cell] * snapshot.gain());
-        float light = clamp(band * shownLight);
-        return vivid(UiOklab.withLightness(mean, light), mean, snapshot.chroma()[cell], light);
+        int placed = UiOklab.withLightness(snapshot.base()[cell], clamp(snapshot.light()[cell] * shownLight));
+        return UiOklab.withChroma(placed, snapshot.chroma()[cell] * shownColor);
     }
 
-    // WHY: густота берётся средней по пикселям области, а не у усреднённого цвета - противоположные
-    // WHY: оттенки в среднем гасят друг друга. Сверху она ограничена, чтобы пара ярких пикселей
-    // WHY: не вытянула почти серую область в чистый цвет
-    private static int vivid(int placed, int mean, float meanChroma, float light) {
-        float plain = Math.max(1.0E-4f, UiOklab.lightness(mean));
-        float target = meanChroma * light / plain * shownColor;
-        return UiOklab.withChroma(placed, Math.min(target, UiOklab.chroma(placed) * CHROMA_CAP * shownColor));
+    private static float[][] shrunk(NativeImage image) {
+        float[][] plane = new float[4][GRID * GRID];
+        int stride = Math.max(1, Math.min(image.getWidth(), image.getHeight()) / (GRID * 4));
+        for (int y = 0; y < image.getHeight(); y += stride) {
+            int row = Math.min(GRID - 1, y * GRID / image.getHeight()) * GRID;
+            for (int x = 0; x < image.getWidth(); x += stride) {
+                int pixel = image.getPixelRGBA(x, y);
+                if (FastColor.ABGR32.alpha(pixel) <= CLEAR_ALPHA) continue;
+
+                int cell = row + Math.min(GRID - 1, x * GRID / image.getWidth());
+                plane[0][cell] += FastColor.ABGR32.red(pixel);
+                plane[1][cell] += FastColor.ABGR32.green(pixel);
+                plane[2][cell] += FastColor.ABGR32.blue(pixel);
+                plane[3][cell] += 1.0f;
+            }
+        }
+        return plane;
+    }
+
+    private static float[][] blurred(float[][] plane) {
+        float[] kernel = kernel(BLUR_SHARE * GRID);
+        float[] weight = pass(pass(plane[3], kernel, true), kernel, false);
+        float[][] soft = new float[3][];
+        for (int channel = 0; channel < 3; channel++) {
+            soft[channel] = pass(pass(plane[channel], kernel, true), kernel, false);
+            for (int cell = 0; cell < weight.length; cell++) {
+                soft[channel][cell] = weight[cell] > 0.0f ? soft[channel][cell] / weight[cell] : 0.0f;
+            }
+        }
+        return soft;
+    }
+
+    private static float[] kernel(float sigma) {
+        int reach = (int) Math.ceil(sigma * 3.0f);
+        float[] kernel = new float[reach * 2 + 1];
+        float sum = 0.0f;
+        for (int tap = -reach; tap <= reach; tap++) {
+            kernel[tap + reach] = (float) Math.exp(-(tap * tap) / (2.0f * sigma * sigma));
+            sum += kernel[tap + reach];
+        }
+        for (int tap = 0; tap < kernel.length; tap++) {
+            kernel[tap] /= sum;
+        }
+        return kernel;
+    }
+
+    private static float[] pass(float[] source, float[] kernel, boolean across) {
+        int reach = kernel.length / 2;
+        float[] out = new float[source.length];
+        for (int y = 0; y < GRID; y++) {
+            for (int x = 0; x < GRID; x++) {
+                float sum = 0.0f;
+                for (int tap = -reach; tap <= reach; tap++) {
+                    int from = across ? y * GRID + edge(x + tap) : edge(y + tap) * GRID + x;
+                    sum += source[from] * kernel[tap + reach];
+                }
+                out[y * GRID + x] = sum;
+            }
+        }
+        return out;
+    }
+
+    private static float topLight(float[][] soft) {
+        float top = 0.0f;
+        for (int cell = 0; cell < GRID * GRID; cell++) {
+            top = Math.max(top, UiOklab.lightness(argb(soft, cell)));
+        }
+        return top;
+    }
+
+    private static Cells sampled(float[][] soft, float top) {
+        float gain = top > 0.0f ? Math.max(1.0f, Math.min(TOP_GAIN, TOP_TARGET / top)) : 1.0f;
+        int[] base = new int[COLUMNS * ROWS];
+        float[] light = new float[COLUMNS * ROWS];
+        float[] chroma = new float[COLUMNS * ROWS];
+        for (int column = 0; column < COLUMNS; column++) {
+            float across = 0.5f + (IslandGlyph.along(column) - 0.5f) * SPAN_ACROSS;
+            for (int row = 0; row < ROWS; row++) {
+                float down = 0.5f + (row / (float) (ROWS - 1) - 0.5f) * SPAN_DOWN;
+                int cell = column * ROWS + row;
+                base[cell] = pick(soft, across, down);
+                light[cell] = LIGHT_SCALE * UiOklab.lightness(base[cell]) * gain + LIGHT_BASE;
+                chroma[cell] = UiOklab.chroma(base[cell]) * CHROMA_GAIN;
+            }
+        }
+        return new Cells(base, light, chroma);
+    }
+
+    private static int pick(float[][] soft, float across, float down) {
+        float x = Math.max(0.0f, Math.min(GRID - 1.001f, across * GRID - 0.5f));
+        float y = Math.max(0.0f, Math.min(GRID - 1.001f, down * GRID - 0.5f));
+        int left = (int) x;
+        int top = (int) y;
+        int upper = UiTheme.mix(argb(soft, top * GRID + left), argb(soft, top * GRID + left + 1), x - left);
+        int lower = UiTheme.mix(argb(soft, (top + 1) * GRID + left), argb(soft, (top + 1) * GRID + left + 1),
+                x - left);
+        return UiTheme.mix(upper, lower, y - top);
+    }
+
+    private static int argb(float[][] soft, int cell) {
+        return 0xFF000000 | (channel(soft[0][cell]) << 16) | (channel(soft[1][cell]) << 8) | channel(soft[2][cell]);
+    }
+
+    private static int channel(float value) {
+        return Math.max(0, Math.min(255, Math.round(value)));
+    }
+
+    private static int edge(int index) {
+        return Math.max(0, Math.min(GRID - 1, index));
+    }
+
+    private static float total(float[] weight) {
+        float sum = 0.0f;
+        for (float value : weight) {
+            sum += value;
+        }
+        return sum;
     }
 
     private static float clamp(float value) {
         return Math.max(0.0f, Math.min(1.0f, value));
-    }
-
-    private static int argbOf(int abgr) {
-        return (FastColor.ABGR32.alpha(abgr) << 24) | (FastColor.ABGR32.red(abgr) << 16)
-                | (FastColor.ABGR32.green(abgr) << 8) | FastColor.ABGR32.blue(abgr);
     }
 }

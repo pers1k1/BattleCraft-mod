@@ -3,6 +3,7 @@
   "capturepoints.error.player_only": "This command can only be used by a player",
   "key.capturepoints.capture": "Capture Point",
   "capturepoints.error.point_exists": "Capture point '%s' already exists!",
+  "capturepoints.error.unknown_effect": "Unknown effect: %s",
   "capturepoints.error.point_not_found": "Capture point not found!",
   "capturepoints.error.point_name_not_found": "Capture point '%s' not found!",
   "capturepoints.error.final_point_exists": "Final point '%s' already exists!",

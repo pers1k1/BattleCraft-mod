@@ -74,7 +74,6 @@ public final class MediaWatch {
         MediaBridge.stop();
         track = MediaTrack.NONE;
         bands = new float[BANDS];
-        MediaGain.forget();
     }
 
     public static void tick() {

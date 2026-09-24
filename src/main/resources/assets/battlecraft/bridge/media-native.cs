@@ -550,17 +550,19 @@ interface IAudioSessionControl2 {
 // WHY: усиления идут лесенкой вверх по частоте: у музыки энергия падает примерно на три децибела
 // WHY: на октаву, и без этого наклона бас с нижней серединой стоят в потолке, а верх не видно.
 // WHY: пик за интервал у сведённой музыки почти не гуляет, поэтому полоски по нему стоят на месте.
-// WHY: Настоящий визуализатор берёт сам поток: loopback-захват вывода, окно Ханна, БПФ и пять полос
-// WHY: по логарифму частоты. Тогда бас, голос и тарелки живут отдельно и ничего не подстраивается
+// WHY: Настоящий визуализатор берёт сам поток: loopback-захват вывода, окно Ханна, БПФ и шесть полос
+// WHY: с границами айфона. Тогда бас, голос и тарелки живут отдельно и ничего не подстраивается
 public static class BattleCraftSpectrum {
-    const int Size = 1024;
+    const int Size = 2048;
     const int Bands = 6;
     const int LoopbackFlag = 0x00020000;
     const int EventFlag = 0x00040000;
     const int StopWaitMs = 200;
     const long BufferSpan = 2000000;
-    static readonly int[] Edge = {1, 3, 7, 15, 32, 75, 200};
-    static readonly float[] Gain = {1.0f, 1.6f, 2.4f, 3.4f, 5.0f, 8.2f};
+    static readonly float[] LowHz = {15.0f, 80.0f, 188.0f, 560.0f, 1520.0f, 4550.0f};
+    static readonly float[] HighHz = {95.0f, 188.0f, 560.0f, 1520.0f, 4550.0f, 10000.0f};
+    static readonly int[] low = new int[Bands];
+    static readonly int[] high = new int[Bands];
 
     static readonly object door = new object();
     static readonly float[] ring = new float[Size];
@@ -581,6 +583,7 @@ public static class BattleCraftSpectrum {
     static bool whole;
     static int tag;
     static int bits;
+    static int rate = 48000;
 
     public static bool Ready() {
         return running && !broken;
@@ -603,7 +606,7 @@ public static class BattleCraftSpectrum {
         lock (door) {
             for (int band = 0; band < Bands; band++) {
                 if (band > 0) text.Append(",");
-                text.Append(level[band].ToString("0.0000", CultureInfo.InvariantCulture));
+                text.Append(level[band].ToString("0.000000", CultureInfo.InvariantCulture));
             }
         }
         return text.Append("]}").ToString();
@@ -654,6 +657,7 @@ public static class BattleCraftSpectrum {
             }
             aimed = app;
             Open(excluded, app);
+            Split();
             running = true;
             worker = new Thread(Pump);
             worker.IsBackground = true;
@@ -663,6 +667,17 @@ public static class BattleCraftSpectrum {
             broken = true;
             running = false;
         }
+    }
+
+    static void Split() {
+        for (int band = 0; band < Bands; band++) {
+            low[band] = Bin(LowHz[band]);
+            high[band] = Bin(HighHz[band]);
+        }
+    }
+
+    static int Bin(float hertz) {
+        return Math.Min(Size / 2, (int) Math.Ceiling(hertz * Size / (double) Math.Max(1, rate)));
     }
 
     static void Open(int excluded, string app) {
@@ -690,6 +705,7 @@ public static class BattleCraftSpectrum {
         Marshal.WriteInt16(shape, 16, 0);
         channels = 2;
         floating = true;
+        rate = 48000;
         return shape;
     }
 
@@ -746,6 +762,7 @@ public static class BattleCraftSpectrum {
 
         var format = (WaveFormat) Marshal.PtrToStructure(shape, typeof(WaveFormat));
         channels = format.channels;
+        rate = format.rate;
         tag = format.tag;
         bits = format.bits;
         floating = format.tag == 3 || (format.tag == -2 && format.bits == 32);
@@ -822,13 +839,10 @@ public static class BattleCraftSpectrum {
         var fresh = new float[Bands];
         for (int band = 0; band < Bands; band++) {
             float sum = 0.0f;
-            int from = Edge[band];
-            int to = Math.Min(Edge[band + 1], Size / 2);
-            for (int bin = from; bin < to; bin++) {
+            for (int bin = low[band]; bin < high[band]; bin++) {
                 sum += (float) Math.Sqrt(real[bin] * real[bin] + imaginary[bin] * imaginary[bin]);
             }
-            float loud = sum / Math.Max(1, to - from) * Gain[band];
-            fresh[band] = (float) Math.Sqrt(loud);
+            fresh[band] = sum / (Size / 4.0f);
         }
         lock (door) {
             Array.Copy(fresh, level, Bands);

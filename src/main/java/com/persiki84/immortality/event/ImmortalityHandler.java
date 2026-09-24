@@ -8,6 +8,9 @@ import net.minecraft.server.MinecraftServer;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
@@ -171,19 +174,28 @@ public class ImmortalityHandler {
 
     @SubscribeEvent
     public static void onLivingHurt(LivingHurtEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) {
-            if (isImmortal(player)) {
-                event.setCanceled(true);
-            }
+        if (event.getEntity() instanceof ServerPlayer player && shielded(player, event.getSource())) {
+            event.setCanceled(true);
         }
     }
 
     @SubscribeEvent
     public static void onLivingAttack(LivingAttackEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) {
-            if (isImmortal(player)) {
-                event.setCanceled(true);
-            }
+        forfeit(event.getSource(), event.getEntity());
+        if (event.getEntity() instanceof ServerPlayer player && shielded(player, event.getSource())) {
+            event.setCanceled(true);
         }
+    }
+
+    private static boolean shielded(ServerPlayer player, DamageSource source) {
+        return isImmortal(player) && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY);
+    }
+
+    private static void forfeit(DamageSource source, LivingEntity target) {
+        if (!(source.getEntity() instanceof ServerPlayer attacker) || attacker == target) return;
+        if (!isImmortal(attacker)) return;
+
+        removeImmortality(attacker);
+        attacker.sendSystemMessage(Component.translatable("immortality.lost.attack").withStyle(ChatFormatting.RED));
     }
 }

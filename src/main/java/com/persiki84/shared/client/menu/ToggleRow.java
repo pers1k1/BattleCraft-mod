@@ -7,6 +7,7 @@ import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiGlassStyle;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiSound;
+import com.persiki84.shared.client.ui.UiSwap;
 import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -21,11 +22,13 @@ public class ToggleRow extends MenuRow {
     private static final float SLIDE_SPEED = 17.0f;
     private static final float STATE_GAP = 8.0f;
     private static final float LENS_SHEEN = 0.42f;
+    private static final float MIN_ALPHA = 0.02f;
 
     private final BooleanSupplier state;
     private final Consumer<Boolean> apply;
     private final Smooth slide = new Smooth(SLIDE_SPEED);
     private final Pending pending = new Pending();
+    private final UiSwap swap = new UiSwap();
 
     public ToggleRow(int x, int y, int width, int height, Component label,
                      BooleanSupplier state, Consumer<Boolean> apply) {
@@ -81,9 +84,32 @@ public class ToggleRow extends MenuRow {
 
     private void renderStateLabel(GuiGraphics graphics, float rightX, boolean on, float focus) {
         Component label = Component.translatable(on ? "battlecraft.menu.on" : "battlecraft.menu.off");
-        UiRender.textRight(graphics, font(), label, rightX,
-                UiRender.centerY(getY(), height, LABEL_SCALE), LABEL_SCALE,
-                on && !faded() ? UiTheme.mix(UiAccent.text(), UiTheme.WHITE, focus) : UiAccent.textFaint(), false);
+        float phase = swap.advance(label, UiFrame.delta());
+        Component leaving = swap.outgoing();
+        float y = UiRender.centerY(getY(), height, LABEL_SCALE);
+        if (leaving != null) {
+            paintState(graphics, leaving, rightX, y - phase * UiSwap.LIFT, stateColor(!on, focus), 1.0f - phase);
+        }
+        paintState(graphics, label, rightX, y + (1.0f - phase) * UiSwap.LIFT, stateColor(on, focus), phase);
+    }
+
+    private void paintState(GuiGraphics graphics, Component text, float rightX, float y, int color, float alpha) {
+        if (alpha <= MIN_ALPHA) return;
+        UiRender.textRight(graphics, font(), text, rightX, y, LABEL_SCALE, UiTheme.alpha(color, alpha), false);
+    }
+
+    private int stateColor(boolean on, float focus) {
+        return on && !faded() ? UiTheme.mix(UiAccent.text(), UiTheme.WHITE, focus) : UiAccent.textFaint();
+    }
+
+    @Override
+    public void adopt(MenuRow previous) {
+        super.adopt(previous);
+        if (!(previous instanceof ToggleRow older)) return;
+
+        slide.take(older.slide);
+        pending.take(older.pending);
+        swap.take(older.swap);
     }
 
     private boolean chosen() {

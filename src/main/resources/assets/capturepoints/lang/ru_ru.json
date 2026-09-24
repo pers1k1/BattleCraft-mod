@@ -3,6 +3,7 @@
   "capturepoints.error.player_only": "Эту команду может использовать только игрок",
   "key.capturepoints.capture": "Захватить точку",
   "capturepoints.error.point_exists": "Точка с названием '%s' уже существует!",
+  "capturepoints.error.unknown_effect": "Неизвестный эффект: %s",
   "capturepoints.error.point_not_found": "Точка не найдена!",
   "capturepoints.error.point_name_not_found": "Точка с названием '%s' не найдена!",
   "capturepoints.error.final_point_exists": "Финальная точка '%s' уже существует!",

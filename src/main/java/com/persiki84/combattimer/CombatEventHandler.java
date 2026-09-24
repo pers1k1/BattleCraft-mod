@@ -40,7 +40,7 @@ public class CombatEventHandler {
     }
 
     private void startCombat(ServerPlayer player) {
-        long endTime = System.currentTimeMillis() + (CombatTimerMod.combatDuration * 1000L);
+        long endTime = System.currentTimeMillis() + (CombatTimerMod.combatDuration() * 1000L);
         if (combatTimers.put(player.getUUID(), endTime) == null) {
             tellClient(player, true);
         }
@@ -83,7 +83,7 @@ public class CombatEventHandler {
             if (bar == null) continue;
 
             long timeLeft = endTime - now;
-            bar.setProgress(Math.min(1.0f, (float) timeLeft / (CombatTimerMod.combatDuration * 1000L)));
+            bar.setProgress(Math.min(1.0f, (float) timeLeft / (CombatTimerMod.combatDuration() * 1000L)));
             bar.setName(Component.translatable("combattimer.boss.timer", (int) (timeLeft / 1000) + 1));
         }
     }
@@ -128,7 +128,7 @@ public class CombatEventHandler {
     }
 
     private void punishCombatLog(ServerPlayer player) {
-        if (!CombatTimerMod.killOnLogout) {
+        if (!CombatTimerMod.killOnLogout()) {
             announce(player, "combattimer.logout.warning", ChatFormatting.YELLOW);
             return;
         }

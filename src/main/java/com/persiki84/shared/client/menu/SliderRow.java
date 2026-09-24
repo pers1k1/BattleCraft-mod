@@ -106,6 +106,15 @@ public class SliderRow extends MenuRow {
     }
 
     @Override
+    public void adopt(MenuRow previous) {
+        super.adopt(previous);
+        if (!(previous instanceof SliderRow older)) return;
+
+        fill.take(older.fill);
+        settled = older.settled;
+    }
+
+    @Override
     public void onClick(double mouseX, double mouseY) {
         super.onClick(mouseX, mouseY);
         if (mouseX < trackLeft() - KNOB || mouseX > trackLeft() + trackWidth() + KNOB) return;

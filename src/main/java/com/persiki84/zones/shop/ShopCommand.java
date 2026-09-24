@@ -655,7 +655,13 @@ public final class ShopCommand {
         if (entry == null) return 0;
 
         String entryId = entry.id();
-        entry.setDescription(StringArgumentType.getString(context, "text"));
+        String text = StringArgumentType.getString(context, "text");
+        if (text.length() > ShopEntry.DESCRIPTION_LIMIT) {
+            context.getSource().sendFailure(Component.translatable("zones.shop.error.description_too_long",
+                    ShopEntry.DESCRIPTION_LIMIT).withStyle(ChatFormatting.RED));
+            return 0;
+        }
+        entry.setDescription(text);
         ShopCatalog.persist();
         return report(context, "zones.shop.success.described", entryId);
     }

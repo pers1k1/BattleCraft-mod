@@ -1,6 +1,5 @@
 package com.persiki84.minimap.network;
 
-import com.persiki84.minimap.server.ServerMapStorage;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -51,16 +50,7 @@ public class MapChunkSyncPacket {
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> {
-            if (ctx.get().getDirection().getReceptionSide().isServer()) {
-                net.minecraft.server.level.ServerPlayer player = ctx.get().getSender();
-                if (player != null) {
-                    ServerMapStorage.receiveChunks(dimension, chunks, player);
-                }
-            } else {
-                com.persiki84.minimap.client.ClientMapData.receiveMapChunks(dimension, chunks);
-            }
-        });
+        ctx.get().enqueueWork(() -> com.persiki84.minimap.client.ClientMapData.receiveMapChunks(dimension, chunks));
         ctx.get().setPacketHandled(true);
     }
 

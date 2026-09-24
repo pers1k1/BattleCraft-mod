@@ -10,7 +10,6 @@ import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTitle;
-import com.persiki84.shared.menu.MenuKind;
 import com.persiki84.zones.client.menu.ItemTurntable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -90,11 +89,6 @@ public final class ItemPickerScreen extends GlassScreen {
     }
 
     @Override
-    public MenuKind presence() {
-        return MenuKind.ADMIN;
-    }
-
-    @Override
     protected void closing() {
         if (parent == null) {
             super.closing();
@@ -132,12 +126,6 @@ public final class ItemPickerScreen extends GlassScreen {
     @Override
     protected float revealSpan() {
         return panelHeight();
-    }
-
-    @Override
-    protected Area frameArea() {
-        float top = TITLE_TOP - 8.0f;
-        return new Area(left() - 8.0f, top, contentWidth() + 16.0f, top() + panelHeight() + 8.0f - top);
     }
 
     @Override

@@ -3,18 +3,23 @@ package com.persiki84.minimap.client;
 import com.persiki84.minimap.network.MapRequestPacket;
 import com.persiki84.minimap.network.PacketHandler;
 import com.persiki84.minimap.server.MapShareScope;
+import com.persiki84.shared.client.menu.GlassScreen;
+import com.persiki84.shared.client.menu.MenuFeedback;
+import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiButton;
+import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiBackdrop;
 import com.persiki84.shared.client.ui.UiGlassStyle;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiSlider;
 import com.persiki84.shared.client.ui.UiAccent;
+import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-public class MinimapSettingsScreen extends Screen {
+public class MinimapSettingsScreen extends GlassScreen {
     private static final int PANEL_WIDTH = 232;
     private static final int ROW_WIDTH = 200;
     private static final int ROW_HEIGHT = 20;
@@ -28,6 +33,10 @@ public class MinimapSettingsScreen extends Screen {
     private static final float PANEL_TOP_PAD = 22.0f;
     private static final float PANEL_BOTTOM_PAD = 22.0f;
     private static final float NOTICE_GAP = 8.0f;
+    private static final float NOTICE_SPEED = 12.0f;
+    private static final float NOTICE_RISE = 4.0f;
+    private static final float GONE = 0.01f;
+    private static final int BACKDROP = 0xC00A0A0C;
 
     private final Screen parent;
 
@@ -36,6 +45,7 @@ public class MinimapSettingsScreen extends Screen {
     private long armedUntil;
     private Component notice;
     private long noticeUntil;
+    private final Smooth noticeShown = new Smooth(0.0f, NOTICE_SPEED);
     private int rows;
     private int placed;
 
@@ -218,35 +228,46 @@ public class MinimapSettingsScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        if (armed != null && System.currentTimeMillis() > armedUntil) disarm();
+    protected void renderBackdrop(GuiGraphics guiGraphics) {
+        UiRender.rect(guiGraphics, 0, 0, this.width, this.height, BACKDROP);
+        guiGraphics.flush();
+        UiBackdrop.restage();
+    }
 
-        UiRender.rect(guiGraphics, 0, 0, this.width, this.height, 0xC00A0A0C);
-        UiBackdrop.capture();
+    @Override
+    protected void renderContent(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        if (armed != null && System.currentTimeMillis() > armedUntil) disarm();
 
         float panelX = (this.width - PANEL_WIDTH) / 2.0f;
         float panelY = panelTop();
 
         UiGlass.sheet(guiGraphics, panelX, panelY, PANEL_WIDTH, panelHeight(), UiGlassStyle.radiusPanel() + 3.0f, 1.0f);
+        UiGlass.layer(guiGraphics);
         UiRender.textCentered(guiGraphics, this.font, this.title, this.width / 2.0f, panelY + 8.0f, 1.0f,
                 UiAccent.text(), false);
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
-        renderNotice(guiGraphics, panelY + panelHeight() + NOTICE_GAP);
+        renderWidgets(guiGraphics, mouseX, mouseY, partialTick);
+        float below = panelY + panelHeight() + NOTICE_GAP;
+        renderNotice(guiGraphics, below);
+        MenuFeedback.render(guiGraphics, this.width / 2.0f, below + this.font.lineHeight + NOTICE_GAP);
     }
 
     private void renderNotice(GuiGraphics guiGraphics, float y) {
+        boolean live = notice != null && System.currentTimeMillis() <= noticeUntil;
+        float shown = noticeShown.to(live ? 1.0f : 0.0f, UiFrame.delta());
         if (notice == null) return;
-        if (System.currentTimeMillis() > noticeUntil) {
+        if (!live && shown <= GONE) {
             notice = null;
             return;
         }
 
-        UiRender.textCentered(guiGraphics, this.font, notice, this.width / 2.0f, y, 1.0f, UiAccent.text(), false);
+        UiRender.textCentered(guiGraphics, this.font, notice, this.width / 2.0f, y + (1.0f - shown) * NOTICE_RISE,
+                1.0f, UiTheme.alpha(UiAccent.text(), shown), false);
     }
 
     @Override
-    public void onClose() {
+    protected void closing() {
+        if (parent instanceof GlassScreen glass) glass.reenter();
         this.minecraft.setScreen(parent);
     }
 

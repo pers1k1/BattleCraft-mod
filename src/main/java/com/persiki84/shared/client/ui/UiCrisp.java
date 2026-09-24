@@ -22,8 +22,12 @@ import java.io.IOException;
 // WHY: и на встроенном экране ноутбука, и на 4K: мягкость берётся от пикселей на единицу интерфейса
 @Mod.EventBusSubscriber(modid = "battlecraft", value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
 public final class UiCrisp {
+    public static final int STOPS = 4;
+
     private static final ResourceLocation SHADER = new ResourceLocation("battlecraft", "ui_crisp");
     private static final float EDGE_SOFT_PIXELS = 1.15f;
+
+    private static final int[] shade = new int[STOPS];
 
     private static ShaderInstance crispShader;
 
@@ -47,10 +51,19 @@ public final class UiCrisp {
 
     public static void panelShaded(GuiGraphics graphics, float x, float y, float width, float height,
                                    float radius, int top, int bottom) {
-        if (crispShader == null || width <= 0.0f || height <= 0.0f) return;
+        shade[0] = top;
+        shade[1] = UiTheme.mix(top, bottom, 1.0f / 3.0f);
+        shade[2] = UiTheme.mix(top, bottom, 2.0f / 3.0f);
+        shade[3] = bottom;
+        panelRamp(graphics, x, y, width, height, radius, shade);
+    }
+
+    public static void panelRamp(GuiGraphics graphics, float x, float y, float width, float height,
+                                 float radius, int[] tints) {
+        if (crispShader == null || width <= 0.0f || height <= 0.0f || tints.length != STOPS) return;
 
         float pad = softness(graphics);
-        arm(top, bottom, width, height, radius, pad);
+        arm(tints, width, height, radius, pad);
         UiRender.standardBlend();
         RenderSystem.disableCull();
         RenderSystem.setShader(() -> crispShader);
@@ -62,9 +75,11 @@ public final class UiCrisp {
         return EDGE_SOFT_PIXELS / Math.max(0.05f, UiRender.pixels(graphics));
     }
 
-    private static void arm(int top, int bottom, float width, float height, float radius, float pad) {
-        tint("TopTint", top);
-        tint("BottomTint", bottom);
+    private static void arm(int[] tints, float width, float height, float radius, float pad) {
+        tint("TopTint", tints[0]);
+        tint("UpperTint", tints[1]);
+        tint("LowerTint", tints[2]);
+        tint("BottomTint", tints[3]);
         crispShader.safeGetUniform("Half").set(width / 2.0f + pad, height / 2.0f + pad);
         crispShader.safeGetUniform("Shape").set(width / 2.0f, height / 2.0f);
         crispShader.safeGetUniform("Radius").set(Math.min(radius, Math.min(width, height) / 2.0f));

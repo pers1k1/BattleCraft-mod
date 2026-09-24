@@ -2,6 +2,7 @@ package com.persiki84.sellmod;
 
 import com.persiki84.battlecraft.BattleCraftCommands;
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -39,6 +40,7 @@ public class SellEvents {
                 .then(pricesNode())
                 .then(helpNode())
                 .then(currencyNode(event.getBuildContext()))
+                .then(guardNode())
                 .then(priceNode(event.getBuildContext())));
     }
 
@@ -58,7 +60,8 @@ public class SellEvents {
             if (context.getSource().hasPermission(2)) {
                 message.append(Component.translatable("sellmod.help.setcurrency").withStyle(ChatFormatting.WHITE))
                         .append(Component.translatable("sellmod.help.priceset").withStyle(ChatFormatting.WHITE))
-                        .append(Component.translatable("sellmod.help.priceremove").withStyle(ChatFormatting.WHITE));
+                        .append(Component.translatable("sellmod.help.priceremove").withStyle(ChatFormatting.WHITE))
+                        .append(Component.translatable("sellmod.help.currencyguard").withStyle(ChatFormatting.WHITE));
             }
             MutableComponent shown = message;
             context.getSource().sendSuccess(() -> shown, false);
@@ -71,6 +74,11 @@ public class SellEvents {
                 .requires(source -> source.hasPermission(2))
                 .then(Commands.argument("item", ItemArgument.item(build)).executes(context -> {
                     ResourceLocation id = itemId(ItemArgument.getItem(context, "item").getItem());
+                    if (id != null && SellManager.currencyGuard() && SellManager.hasPrice(id.toString())) {
+                        context.getSource().sendFailure(Component.translatable("sellmod.cmd.currency_has_price",
+                                Names.item(id.toString())).withStyle(ChatFormatting.RED));
+                        return 0;
+                    }
                     if (id == null || !SellManager.setCurrency(id.toString())) {
                         context.getSource().sendFailure(
                                 Component.translatable("sellmod.cmd.currency_failed").withStyle(ChatFormatting.RED));
@@ -79,6 +87,19 @@ public class SellEvents {
                     PacketHandler.syncToAll(context.getSource().getServer());
                     context.getSource().sendSuccess(() -> Component.translatable("sellmod.cmd.currency_set",
                             Names.item(id.toString())).withStyle(ChatFormatting.GREEN), true);
+                    return 1;
+                }));
+    }
+
+    private static ArgumentBuilder<CommandSourceStack, ?> guardNode() {
+        return Commands.literal("currencyguard")
+                .requires(source -> source.hasPermission(2))
+                .then(Commands.argument("enabled", BoolArgumentType.bool()).executes(context -> {
+                    boolean enabled = BoolArgumentType.getBool(context, "enabled");
+                    SellManager.setCurrencyGuard(enabled);
+                    context.getSource().sendSuccess(() -> Component.translatable(enabled
+                            ? "sellmod.cmd.currency_guard_on" : "sellmod.cmd.currency_guard_off")
+                            .withStyle(ChatFormatting.GREEN), true);
                     return 1;
                 }));
     }
@@ -98,6 +119,11 @@ public class SellEvents {
                     if (id == null) {
                         context.getSource().sendFailure(
                                 Component.translatable("sellmod.cmd.price_failed").withStyle(ChatFormatting.RED));
+                        return 0;
+                    }
+                    if (price > 0 && SellManager.currencyGuard() && id.toString().equals(SellManager.getCurrencyId())) {
+                        context.getSource().sendFailure(Component.translatable("sellmod.cmd.price_is_currency",
+                                Names.item(id.toString())).withStyle(ChatFormatting.RED));
                         return 0;
                     }
                     SellManager.setPrice(id.toString(), price);

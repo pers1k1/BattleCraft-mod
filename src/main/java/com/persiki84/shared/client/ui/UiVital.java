@@ -93,7 +93,11 @@ public final class UiVital {
 
     private static int shaded(int base) {
         if (shading <= 0.001f) return base;
-        return UiTheme.withAlpha(UiTheme.BLACK, Math.max(shading, ((base >>> 24) & 0xFF) / 255.0f));
+
+        float tint = ((base >>> 24) & 0xFF) / 255.0f;
+        float cover = tint + shading * (1.0f - tint);
+        int color = UiTheme.mix(UiTheme.BLACK, base | 0xFF000000, tint / cover);
+        return UiTheme.withAlpha(color, cover);
     }
 
     public static void cardTinted(GuiGraphics graphics, float x, float y, float width, float height,

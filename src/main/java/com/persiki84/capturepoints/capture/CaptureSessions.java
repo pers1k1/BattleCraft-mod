@@ -311,6 +311,9 @@ public final class CaptureSessions {
         String dominant = dominantTeam();
         if (dominant == null || dominant.equals(session.getPoint().getOwnerTeam())) return false;
         if (!session.getMode().contested()) return false;
+        if (session.getPoint() instanceof FinalCapturePoint && !CapturePointManager.mayTakeFinal(dominant)) {
+            return false;
+        }
 
         session.setAttackerTeam(dominant);
         return true;

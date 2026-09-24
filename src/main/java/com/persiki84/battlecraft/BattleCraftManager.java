@@ -2,8 +2,6 @@ package com.persiki84.battlecraft;
 
 import com.persiki84.killreward.KillRewardMod;
 import net.minecraft.ChatFormatting;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -37,13 +35,11 @@ public class BattleCraftManager {
     public static class PlayerSession {
         public final UUID uuid;
         public final String teamName;
-        public final CompoundTag inventoryData;
         public final String ipAddress;
 
-        public PlayerSession(UUID uuid, String teamName, CompoundTag inventoryData, String ipAddress) {
+        public PlayerSession(UUID uuid, String teamName, String ipAddress) {
             this.uuid = uuid;
             this.teamName = teamName;
-            this.inventoryData = inventoryData;
             this.ipAddress = ipAddress;
         }
     }
@@ -172,6 +168,8 @@ public class BattleCraftManager {
     }
 
     private boolean ownsAddress(ServerPlayer player) {
+        if (!config.ipLock) return true;
+
         String ip = getCleanIp(player);
         for (PlayerSession session : sessions.values()) {
             if (session.ipAddress.equals(ip) && !session.uuid.equals(player.getUUID())) {
@@ -585,12 +583,12 @@ public class BattleCraftManager {
         ActiveVote vote = activeVotes.get(teamName);
         if (vote == null) return;
 
-        List<ServerPlayer> teamPlayers = getOnlineTeamPlayers(server, teamName);
-        int onlineCount = teamPlayers.size();
-        if (leaving != null) {
-            for (ServerPlayer member : teamPlayers) {
-                if (member.getUUID().equals(leaving)) onlineCount--;
-            }
+        Set<UUID> present = presentMembers(server, teamName, leaving);
+        vote.yesVotes.retainAll(present);
+        vote.noVotes.retainAll(present);
+        if (present.isEmpty()) {
+            activeVotes.remove(teamName);
+            return;
         }
 
         if (vote.noVotes.size() > 0) {
@@ -600,7 +598,7 @@ public class BattleCraftManager {
             return;
         }
 
-        if (vote.yesVotes.size() >= onlineCount) {
+        if (vote.yesVotes.size() >= present.size()) {
             activeVotes.remove(teamName);
             server.getPlayerList().broadcastSystemMessage(Component.translatable("battlecraft.vote.surrendered", teamName).withStyle(ChatFormatting.RED), false);
             executeConsoleCommands(server, config.surrenderCommands);
@@ -609,12 +607,26 @@ public class BattleCraftManager {
         }
     }
 
+    private Set<UUID> presentMembers(MinecraftServer server, String teamName, UUID leaving) {
+        Set<UUID> present = new HashSet<>();
+        for (ServerPlayer member : getOnlineTeamPlayers(server, teamName)) {
+            if (!member.getUUID().equals(leaving)) present.add(member.getUUID());
+        }
+        return present;
+    }
+
     private String getOtherTeam(MinecraftServer server, String teamName) {
         if (server == null) return null;
-        for (var team : server.getScoreboard().getPlayerTeams()) {
-            if (!team.getName().equals(teamName)) return team.getName();
+        String winner = null;
+        int most = 0;
+        for (Map.Entry<String, List<ServerPlayer>> entry : LobbyRoster.byTeam(server, LobbyRoster.pool(server)).entrySet()) {
+            int online = entry.getValue().size();
+            if (entry.getKey().equals(teamName) || online <= most) continue;
+
+            winner = entry.getKey();
+            most = online;
         }
-        return null;
+        return winner;
     }
 
     private List<ServerPlayer> getOnlineTeamPlayers(MinecraftServer server, String teamName) {
@@ -692,9 +704,6 @@ public class BattleCraftManager {
         if (team != null) {
             server.getScoreboard().addPlayerToTeam(player.getScoreboardName(), team);
         }
-        if (session.inventoryData != null) {
-            player.getInventory().load(session.inventoryData.getList("Inventory", 10));
-        }
         undecidedSince.remove(player.getUUID());
     }
 
@@ -736,12 +745,8 @@ public class BattleCraftManager {
             if (phase == GamePhase.ACTIVE) {
                 net.minecraft.world.scores.Team team = player.getTeam();
                 if (team != null) {
-                    ListTag invList = player.getInventory().save(new ListTag());
-                    CompoundTag tag = new CompoundTag();
-                    tag.put("Inventory", invList);
-
                     String ip = getCleanIp(player);
-                    sessions.put(player.getUUID(), new PlayerSession(player.getUUID(), team.getName(), tag, ip));
+                    sessions.put(player.getUUID(), new PlayerSession(player.getUUID(), team.getName(), ip));
 
                     MinecraftServer server = player.getServer();
                     if (server != null) {

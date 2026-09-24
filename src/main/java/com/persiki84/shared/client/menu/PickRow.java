@@ -76,6 +76,7 @@ public class PickRow extends MenuRow {
 
     @Override
     public void adopt(MenuRow previous) {
+        super.adopt(previous);
         if (!(previous instanceof PickRow older)) return;
 
         swap.snap(older.swap.get());

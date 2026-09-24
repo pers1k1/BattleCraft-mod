@@ -127,6 +127,23 @@ public class NumberRow extends MenuRow {
         renderRolling(graphics, delta);
     }
 
+    @Override
+    public void adopt(MenuRow previous) {
+        super.adopt(previous);
+        if (!(previous instanceof NumberRow older)) return;
+
+        pending.take(older.pending);
+        roll.take(older.roll);
+        minusPress.take(older.minusPress);
+        plusPress.take(older.plusPress);
+        shown = older.shown;
+        this.previous = older.previous;
+        direction = older.direction;
+        holding = older.holding;
+        holdStart = older.holdStart;
+        lastRepeat = older.lastRepeat;
+    }
+
     private int currentValue() {
         return pending.resolve(value.getAsInt());
     }

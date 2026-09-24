@@ -1,5 +1,6 @@
 package com.persiki84.minimap.server;
 
+import com.persiki84.shared.WorldFiles;
 import com.persiki84.minimap.MapPainter;
 import com.persiki84.minimap.network.MapChunkSyncPacket;
 import com.persiki84.minimap.network.PacketHandler;
@@ -37,11 +38,11 @@ public class ServerMapStorage {
     private static final String TEAMS = "teams";
     private static final String SHARED = "shared";
     private static final String SUFFIX = ".dat";
+    private static final String TEMPORARY = ".tmp";
     private static final int CHUNK_COLORS = 256;
     private static final int BATCH_SIZE = 50;
     private static final int TRACK_INTERVAL = 20;
     private static final int SHUTDOWN_WAIT_SECONDS = 10;
-    private static final int CHUNK_REACH = 32;
 
     private static final Map<String, Map<String, Map<ChunkPos, int[]>>> teamChunkData = new ConcurrentHashMap<>();
     private static final Map<String, Map<ChunkPos, int[]>> sharedChunkData = new ConcurrentHashMap<>();
@@ -231,7 +232,8 @@ public class ServerMapStorage {
     private static void writeChunks(Path file, String team, Map<ChunkPos, int[]> live) throws IOException {
         List<Map.Entry<ChunkPos, int[]>> chunks = new ArrayList<>(live.entrySet());
 
-        try (DataOutputStream sink = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(file)))) {
+        Path temporary = file.resolveSibling(file.getFileName() + TEMPORARY);
+        try (DataOutputStream sink = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(temporary)))) {
             sink.writeUTF(team);
             sink.writeInt(chunks.size());
             for (Map.Entry<ChunkPos, int[]> chunk : chunks) {
@@ -242,6 +244,7 @@ public class ServerMapStorage {
                 }
             }
         }
+        WorldFiles.moveIntoPlace(temporary, file);
     }
 
     public static void repaint(ServerLevel level, Collection<ChunkPos> positions) {
@@ -282,20 +285,6 @@ public class ServerMapStorage {
 
     // WHY: измерение и координаты приходят от клиента: чужое имя завело бы свой файл и свою
     // WHY: кучу в памяти, а координата с другого конца мира копилась бы вечно
-    public static void receiveChunks(String dimension, List<MapChunkSyncPacket.ChunkData> chunks, ServerPlayer sender) {
-        if (chunks.isEmpty()) return;
-        if (!dimensionKey(sender.serverLevel()).equals(dimension)) return;
-
-        ChunkPos origin = sender.chunkPosition();
-        List<MapChunkSyncPacket.ChunkData> near = new ArrayList<>();
-        for (MapChunkSyncPacket.ChunkData chunk : chunks) {
-            if (Math.abs(chunk.x - origin.x) > CHUNK_REACH || Math.abs(chunk.z - origin.z) > CHUNK_REACH) continue;
-
-            near.add(chunk);
-        }
-        shareWithTeam(sender, dimension, near);
-    }
-
     public static void shareWithTeam(ServerPlayer sender, String dimension,
                                      List<MapChunkSyncPacket.ChunkData> chunks) {
         String team = teamKey(sender);

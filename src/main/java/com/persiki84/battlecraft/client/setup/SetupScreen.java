@@ -384,7 +384,7 @@ public final class SetupScreen extends GlassScreen implements Ambient, UiMotion.
     public boolean keyPressed(int key, int scan, int modifiers) {
         if (page.keyPressed(key, scan)) return true;
         if (greet()) return true;
-        if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_BACKSPACE) {
+        if (key == GLFW.GLFW_KEY_ESCAPE) {
             retreat();
             return true;
         }

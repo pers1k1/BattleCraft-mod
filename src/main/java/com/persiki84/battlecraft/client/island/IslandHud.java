@@ -33,7 +33,7 @@ public final class IslandHud {
     private static final float WAVE_HEIGHT = 9.5f;
     private static final float WAVE_GAP = 6.0f;
     private static final float WAVE_CARD_WIDTH = 14.0f;
-    private static final float WAVE_CARD_HEIGHT = 13.0f;
+    private static final float WAVE_CARD_HEIGHT = 15.4f;
     private static final float WAVE_CARD_CENTER = 15.5f;
     private static final float CAPSULE_GAP = 4.0f;
     private static final float CAPSULE_PAD = 6.0f;

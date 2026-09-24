@@ -117,11 +117,6 @@ public class BattleCraftMenuScreen extends ManagerScreen {
     }
 
     @Override
-    public boolean broadcast() {
-        return tab == 0;
-    }
-
-    @Override
     protected void pickTab(int index) {
         tab = index;
         rowScroll = 0;

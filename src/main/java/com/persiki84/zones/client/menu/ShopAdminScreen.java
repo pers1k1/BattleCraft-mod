@@ -18,7 +18,6 @@ import com.persiki84.zones.shop.ShopAccess;
 import com.persiki84.zones.shop.ShopEntry;
 import com.persiki84.zones.shop.ShopSection;
 import com.persiki84.zones.shop.StockScope;
-import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -79,11 +78,6 @@ public class ShopAdminScreen extends ManagerScreen {
 
     public ShopAdminScreen() {
         super(Component.translatable("zones.shopadmin.title"));
-    }
-
-    @Override
-    public MenuKind presence() {
-        return MenuKind.ADMIN;
     }
 
     @Override
@@ -187,7 +181,7 @@ public class ShopAdminScreen extends ManagerScreen {
         y += ROW_HEIGHT + ROW_GAP;
 
         noteField = new MenuField(x, y, rowsWidth(), Component.translatable("zones.shopadmin.notes.text"),
-                noteText, value -> noteText = value);
+                noteText, value -> noteText = value, ShopEntry.DESCRIPTION_LIMIT);
         addRenderableWidget(noteField.box());
         y += MenuField.BLOCK_HEIGHT + ROW_GAP;
 

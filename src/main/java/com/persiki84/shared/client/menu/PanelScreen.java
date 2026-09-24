@@ -24,11 +24,6 @@ public abstract class PanelScreen extends ManagerScreen {
 
     protected abstract String menuId();
 
-    @Override
-    public boolean broadcast() {
-        return false;
-    }
-
     protected abstract List<Page> pages();
 
     @Override

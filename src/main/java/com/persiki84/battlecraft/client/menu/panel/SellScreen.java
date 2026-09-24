@@ -90,6 +90,8 @@ public class SellScreen extends PanelScreen {
         List<AbstractWidget> rows = new ArrayList<>();
         rows.add(pickRow("sellmod.menu.currency", () -> Names.item(MenuData.state(menuId()).getString("currency")),
                 this::pickCurrency));
+        rows.add(toggle("sellmod.menu.currency_guard", () -> MenuData.state(menuId()).getBoolean("currencyGuard"),
+                value -> send(COMMAND + " currencyguard " + value)));
         rows.add(pickRow("sellmod.menu.set_price", () -> Component.translatable("sellmod.menu.action.pick"),
                 this::pickPrice));
         return rows;

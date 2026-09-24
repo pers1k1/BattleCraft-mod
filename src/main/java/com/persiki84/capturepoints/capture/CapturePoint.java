@@ -349,22 +349,25 @@ public class CapturePoint {
         return point;
     }
 
-    private static void readBonuses(CompoundTag tag, CapturePoint point) {
-        if (tag.contains("rewardItem")) {
-            Item rewardItem = ForgeRegistries.ITEMS.getValue(new ResourceLocation(tag.getString("rewardItem")));
-            if (rewardItem != null) point.reward = new ItemStack(rewardItem);
-        }
+    protected static void readBonuses(CompoundTag tag, CapturePoint point) {
+        Item rewardItem = itemOf(tag, "rewardItem");
+        if (rewardItem != null) point.reward = new ItemStack(rewardItem);
         point.rewardAmount = tag.getInt("rewardAmount");
 
         if (tag.contains("buffEffect")) point.buffEffect = tag.getString("buffEffect");
         if (tag.contains("buffAmplifier")) point.buffAmplifier = tag.getInt("buffAmplifier");
         readCommands(tag, point);
 
-        if (tag.contains("incomeItem")) {
-            Item incomeStored = ForgeRegistries.ITEMS.getValue(new ResourceLocation(tag.getString("incomeItem")));
-            if (incomeStored != null) point.incomeItem = new ItemStack(incomeStored);
-        }
+        Item incomeStored = itemOf(tag, "incomeItem");
+        if (incomeStored != null) point.incomeItem = new ItemStack(incomeStored);
         if (tag.contains("passiveIncomeAmount")) point.passiveIncomeAmount = tag.getInt("passiveIncomeAmount");
         if (tag.contains("incomeInterval")) point.incomeIntervalSeconds = tag.getInt("incomeInterval");
+    }
+
+    private static Item itemOf(CompoundTag tag, String key) {
+        if (!tag.contains(key)) return null;
+
+        ResourceLocation id = ResourceLocation.tryParse(tag.getString(key));
+        return id == null ? null : ForgeRegistries.ITEMS.getValue(id);
     }
 }

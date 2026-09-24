@@ -199,14 +199,15 @@ public final class ModuleMenuStates {
 
     private static CompoundTag combat() {
         CompoundTag tag = new CompoundTag();
-        tag.putInt("duration", CombatTimerMod.combatDuration);
-        tag.putBoolean("killOnLogout", CombatTimerMod.killOnLogout);
+        tag.putInt("duration", CombatTimerMod.combatDuration());
+        tag.putBoolean("killOnLogout", CombatTimerMod.killOnLogout());
         return tag;
     }
 
     private static CompoundTag sell(ServerPlayer player) {
         CompoundTag tag = new CompoundTag();
         tag.putString("currency", SellManager.getCurrencyId());
+        tag.putBoolean("currencyGuard", SellManager.currencyGuard());
 
         ListTag prices = new ListTag();
         for (Map.Entry<String, SellManager.SellPrice> entry : SellManager.getSellPrices().entrySet()) {

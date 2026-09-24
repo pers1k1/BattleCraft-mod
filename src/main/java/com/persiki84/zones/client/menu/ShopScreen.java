@@ -23,7 +23,6 @@ import com.persiki84.zones.network.ShopRefreshPacket;
 import com.persiki84.zones.network.ShopSellPacket;
 import com.persiki84.zones.shop.ShopEntry;
 import com.persiki84.zones.shop.ShopSection;
-import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -58,7 +57,6 @@ public class ShopScreen extends GlassScreen {
     private static final int MAX_ITEMS_PER_PURCHASE = 64;
 
     private static final int TITLE_TOP = 12;
-    private static final float FRAME_MARGIN = 8.0f;
     private static final float TITLE_SCALE = 1.0f;
     private static final float LINE_SCALE = 0.75f;
     private static final float BALANCE_SCALE = 1.0f;
@@ -92,11 +90,6 @@ public class ShopScreen extends GlassScreen {
 
     public ShopScreen() {
         super(Component.translatable("zones.shop.title"));
-    }
-
-    @Override
-    public MenuKind presence() {
-        return MenuKind.SHOP;
     }
 
     @Override
@@ -139,18 +132,6 @@ public class ShopScreen extends GlassScreen {
 
     private int contentLeft() {
         return (this.width - contentWidth()) / 2;
-    }
-
-    @Override
-    public boolean broadcast() {
-        return !editing;
-    }
-
-    @Override
-    protected Area frameArea() {
-        float top = TITLE_TOP - FRAME_MARGIN;
-        return new Area(contentLeft() - FRAME_MARGIN, top, contentWidth() + FRAME_MARGIN * 2.0f,
-                contentTop() + panelHeight() + FRAME_MARGIN - top);
     }
 
     private int contentTop() {

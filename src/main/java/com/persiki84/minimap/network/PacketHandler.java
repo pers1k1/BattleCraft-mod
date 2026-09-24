@@ -30,7 +30,7 @@ public class PacketHandler {
                 MapMarkerSyncPacket::decode, MapMarkerSyncPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT));
         INSTANCE.registerMessage(id(), MapChunkSyncPacket.class, MapChunkSyncPacket::toBytes,
-                MapChunkSyncPacket::new, MapChunkSyncPacket::handle);
+                MapChunkSyncPacket::new, MapChunkSyncPacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
         INSTANCE.registerMessage(id(), PlayerPositionSyncPacket.class, PlayerPositionSyncPacket::encode,
                 PlayerPositionSyncPacket::decode, PlayerPositionSyncPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT));

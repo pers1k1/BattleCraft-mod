@@ -380,7 +380,7 @@ public class BattleCraftCommands {
     private static LiteralArgumentBuilder<CommandSourceStack> addCommandBranch(
             String kind, Function<BattleCraftConfig, List<String>> pick) {
         return Commands.literal("addcommand")
-                .requires(source -> source.hasPermission(2))
+                .requires(source -> source.hasPermission(4))
                 .then(Commands.argument("command", StringArgumentType.greedyString())
                         .suggests(COMMAND_SUGGESTIONS)
                         .executes(context -> addCommand(context, kind, pick)));

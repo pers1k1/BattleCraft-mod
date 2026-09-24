@@ -1,29 +1,38 @@
 package com.persiki84.battlecraft.client.menu;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.persiki84.battlecraft.BattleCraftManager;
 import com.persiki84.battlecraft.client.ClientGameData;
 import com.persiki84.battlecraft.client.ClientLobbyData;
 import com.persiki84.battlecraft.network.S2CLobbyRosterPacket;
 import com.persiki84.minimap.client.MapRenderUtil;
+import com.persiki84.shared.client.menu.GlassScreen;
+import com.persiki84.shared.client.menu.MenuFeedback;
+import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiButton;
+import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiSwap;
 import com.persiki84.shared.client.ui.UiTitle;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.PlayerFaceRenderer;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
-public class TeamSelectScreen extends Screen {
+public class TeamSelectScreen extends GlassScreen {
     private static final int COLUMN_MAX_WIDTH = 210;
     private static final int COLUMN_MIN_WIDTH = 96;
     private static final int COLUMN_TIGHT_WIDTH = 58;
@@ -51,8 +60,20 @@ public class TeamSelectScreen extends Screen {
     private static final float LABEL_SCALE = 1.0f;
     private static final float NAME_SCALE = 1.0f;
     private static final float STATUS_SCALE = 0.8f;
+    private static final float TILE_SPEED = 14.0f;
+    private static final float OWN_SPEED = 10.0f;
+    private static final float TILE_RISE = 6.0f;
+    private static final float GONE = 0.01f;
+    private static final float OWN_LIFT = 0.34f;
+    private static final float OWN_TINT = 0.38f;
+    private static final float TEAM_TINT = 0.10f;
+    private static final float FEEDBACK_GAP = 10.0f;
 
     private final List<TeamChoice> choices = new ArrayList<>();
+    private final Map<String, Tile> tiles = new LinkedHashMap<>();
+    private final Map<String, Smooth> owned = new HashMap<>();
+    private final UiSwap status = new UiSwap();
+    private boolean seeded;
     private UiButton readyButton;
     private boolean readyShown;
     private int readyCooldownShown = -1;
@@ -126,6 +147,7 @@ public class TeamSelectScreen extends Screen {
 
     @Override
     public void tick() {
+        if (leaving()) return;
         if (closesOnMatchStart()) {
             onClose();
             return;
@@ -192,29 +214,41 @@ public class TeamSelectScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics);
-        graphics.flush();
-
+    protected void renderContent(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        float delta = UiFrame.delta();
         UiTitle.title(graphics, this.font, getTitle(), this.width / 2.0f, TITLE_TOP,
                 TITLE_SCALE, TITLE_TRACKING, UiAccent.text());
-        renderStatus(graphics);
+        renderStatus(graphics, delta);
 
         List<String> teams = ClientLobbyData.teams();
+        syncTiles(teams);
         for (int index = 0; index < teams.size(); index++) {
-            renderColumn(graphics, teams.get(index), columnX(index));
+            renderColumn(graphics, teams.get(index), columnX(index), delta);
         }
 
         renderUndecided(graphics);
-        super.render(graphics, mouseX, mouseY, partialTick);
+        renderWidgets(graphics, mouseX, mouseY, partialTick);
+        MenuFeedback.render(graphics, this.width / 2.0f, feedbackTop());
     }
 
-    private void renderStatus(GuiGraphics graphics) {
-        Component status = statusLine();
-        if (status == null) return;
+    private float feedbackTop() {
+        if (readyButton == null) return COLUMN_TOP + columnHeight + UiMetrics.GAP_WIDE;
+        return readyButton.getY() + BUTTON_HEIGHT + FEEDBACK_GAP;
+    }
 
-        UiRender.emphasisCentered(graphics, this.font, status, this.width / 2.0f,
-                COLUMN_TOP - this.font.lineHeight - UiMetrics.GAP_WIDE, LABEL_SCALE, UiAccent.textDim());
+    private void renderStatus(GuiGraphics graphics, float delta) {
+        Component line = statusLine();
+        float phase = status.advance(line, delta);
+        Component leaving = status.outgoing();
+        float y = COLUMN_TOP - this.font.lineHeight - UiMetrics.GAP_WIDE;
+        if (leaving != null) paintStatus(graphics, leaving, y - phase * UiSwap.LIFT, 1.0f - phase);
+        paintStatus(graphics, line, y + (1.0f - phase) * UiSwap.LIFT, phase);
+    }
+
+    private void paintStatus(GuiGraphics graphics, Component line, float y, float alpha) {
+        if (alpha <= GONE || line.getString().isEmpty()) return;
+        UiRender.emphasisCentered(graphics, this.font, line, this.width / 2.0f, y, LABEL_SCALE,
+                UiTheme.alpha(UiAccent.textDim(), alpha));
     }
 
     private Component statusLine() {
@@ -235,26 +269,77 @@ public class TeamSelectScreen extends Screen {
         return Component.translatable("battlecraft.lobby.waiting_ready");
     }
 
-    private void renderColumn(GuiGraphics graphics, String team, int columnX) {
+    private void syncTiles(List<String> teams) {
+        tiles.values().removeIf(tile -> !teams.contains(tile.team));
+        for (Tile tile : tiles.values()) tile.listed = false;
+
+        int rows = visibleRows();
+        for (String team : teams) {
+            List<S2CLobbyRosterPacket.Member> members = ClientLobbyData.membersOf(team);
+            for (int index = 0; index < Math.min(members.size(), rows); index++) {
+                Tile tile = tiles.computeIfAbsent(team + "\n" + members.get(index).uuid(),
+                        key -> new Tile(team, seeded));
+                tile.member = members.get(index);
+                tile.row = index;
+                tile.listed = true;
+            }
+        }
+        seeded = true;
+    }
+
+    private void renderColumn(GuiGraphics graphics, String team, int columnX, float delta) {
         List<S2CLobbyRosterPacket.Member> members = ClientLobbyData.membersOf(team);
-        boolean own = team.equals(ClientLobbyData.ownTeam());
         int accent = MapRenderUtil.getTeamColor(team);
+        float own = owned.computeIfAbsent(team, key -> new Smooth(OWN_SPEED))
+                .to(team.equals(ClientLobbyData.ownTeam()) ? 1.0f : 0.0f, delta);
 
         UiGlass.tinted(graphics, columnX, COLUMN_TOP, columnWidth, columnHeight, COLUMN_RADIUS,
-                1.0f, own ? 0.34f : 0.0f, UiTheme.withAlpha(accent, own ? 0.38f : 0.10f));
+                1.0f, OWN_LIFT * own, UiTheme.withAlpha(accent, TEAM_TINT + (OWN_TINT - TEAM_TINT) * own));
         renderHeading(graphics, team, accent, columnX, members.size());
 
-        float rowY = COLUMN_TOP + UiMetrics.PAD + HEADING_HEIGHT + UiMetrics.GAP;
-        int rows = Math.min(members.size(), visibleRows());
-        for (int index = 0; index < rows; index++) {
-            renderMember(graphics, members.get(index), accent, columnX, rowY);
-            rowY += ROW_HEIGHT;
-        }
+        float top = COLUMN_TOP + UiMetrics.PAD + HEADING_HEIGHT + UiMetrics.GAP;
+        renderTiles(graphics, team, accent, columnX, top, delta);
 
-        int hidden = members.size() - rows;
+        int hidden = members.size() - Math.min(members.size(), visibleRows());
         if (hidden > 0) {
             UiRender.textCentered(graphics, this.font, Component.translatable("battlecraft.lobby.more", hidden),
-                    columnX + columnWidth / 2.0f, rowY + UiMetrics.GAP_TIGHT, STATUS_SCALE, UiAccent.textFaint(), false);
+                    columnX + columnWidth / 2.0f, top + visibleRows() * ROW_HEIGHT + UiMetrics.GAP_TIGHT,
+                    STATUS_SCALE, UiAccent.textFaint(), false);
+        }
+    }
+
+    private void renderTiles(GuiGraphics graphics, String team, int accent, int columnX, float top, float delta) {
+        Iterator<Tile> walk = tiles.values().iterator();
+        while (walk.hasNext()) {
+            Tile tile = walk.next();
+            if (!tile.team.equals(team)) continue;
+
+            float shown = tile.presence.to(tile.listed ? 1.0f : 0.0f, delta);
+            float row = tile.place.to(tile.row, delta);
+            float ready = tile.ready.to(tile.member.ready() ? 1.0f : 0.0f, delta);
+            if (!tile.listed && shown <= GONE) {
+                walk.remove();
+                continue;
+            }
+            float rowY = top + row * ROW_HEIGHT + (1.0f - shown) * TILE_RISE;
+            fading(graphics, shown, () -> renderMember(graphics, tile.member, accent, columnX, rowY, ready));
+        }
+    }
+
+    private static void fading(GuiGraphics graphics, float alpha, Runnable body) {
+        float[] tone = RenderSystem.getShaderColor();
+        float red = tone[0];
+        float green = tone[1];
+        float blue = tone[2];
+        float base = tone[3];
+
+        graphics.flush();
+        RenderSystem.setShaderColor(red, green, blue, base * alpha);
+        try {
+            body.run();
+            graphics.flush();
+        } finally {
+            RenderSystem.setShaderColor(red, green, blue, base);
         }
     }
 
@@ -275,13 +360,13 @@ public class TeamSelectScreen extends Screen {
                 HEADING_HEIGHT, nameWidth, LABEL_SCALE, 0.0f, UiTheme.mix(accent, UiTheme.WHITE, 0.35f), true, 0.0f);
     }
 
-    private void renderMember(GuiGraphics graphics, S2CLobbyRosterPacket.Member member, int accent, int columnX, float rowY) {
+    private void renderMember(GuiGraphics graphics, S2CLobbyRosterPacket.Member member, int accent, int columnX,
+                              float rowY, float ready) {
         float tileX = columnX + TILE_INSET;
         float tileWidth = columnWidth - TILE_INSET * 2.0f;
         float radius = UiMetrics.radius(TILE_HEIGHT);
-        boolean self = isSelf(member);
 
-        if (self) {
+        if (isSelf(member)) {
             UiGlass.tinted(graphics, tileX, rowY, tileWidth, TILE_HEIGHT, radius, 1.0f, 0.38f,
                     UiTheme.withAlpha(accent, 0.34f));
         } else {
@@ -289,8 +374,8 @@ public class TeamSelectScreen extends Screen {
         }
 
         renderHead(graphics, member, tileX + TILE_PADDING, rowY + (TILE_HEIGHT - HEAD_SIZE) / 2.0f);
-        renderReady(graphics, member, accent, tileX + tileWidth - TILE_PADDING - DOT_RADIUS, rowY + TILE_HEIGHT / 2.0f);
-        renderIdentity(graphics, member, accent, tileX, tileWidth, rowY);
+        renderReady(graphics, accent, tileX + tileWidth - TILE_PADDING - DOT_RADIUS, rowY + TILE_HEIGHT / 2.0f, ready);
+        renderIdentity(graphics, member, accent, tileX, tileWidth, rowY, ready);
     }
 
     private void renderHead(GuiGraphics graphics, S2CLobbyRosterPacket.Member member, float x, float y) {
@@ -300,11 +385,14 @@ public class TeamSelectScreen extends Screen {
         ResourceLocation skin = skinOf(member);
         if (skin == null) return;
 
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
         PlayerFaceRenderer.draw(graphics, skin, Math.round(x), Math.round(y), HEAD_SIZE);
+        RenderSystem.disableBlend();
     }
 
     private void renderIdentity(GuiGraphics graphics, S2CLobbyRosterPacket.Member member, int accent,
-                                float tileX, float tileWidth, float rowY) {
+                                float tileX, float tileWidth, float rowY, float ready) {
         float textLeft = tileX + TILE_PADDING + HEAD_SIZE + UiMetrics.GAP;
         float textWidth = tileX + tileWidth - TILE_PADDING - DOT_RADIUS * 2.0f - UiMetrics.GAP - textLeft;
         if (textWidth < NAME_MIN_WIDTH) return;
@@ -313,23 +401,29 @@ public class TeamSelectScreen extends Screen {
         UiRender.textTrackedBox(graphics, this.font, Component.literal(member.name()), textLeft, top,
                 NAME_ROW, textWidth, NAME_SCALE, 0.0f, UiAccent.text(), false, 0.0f);
 
-        Component status = Component.translatable(member.ready()
-                ? "battlecraft.lobby.member_ready" : "battlecraft.lobby.member_waiting");
-        int tone = member.ready() ? UiTheme.mix(accent, UiTheme.WHITE, 0.45f) : UiAccent.textFaint();
-        UiRender.textTrackedBox(graphics, this.font, status, textLeft, top + NAME_ROW,
-                STATUS_ROW, textWidth, STATUS_SCALE, 0.0f, tone, false, 0.0f);
+        int lit = UiTheme.mix(accent, UiTheme.WHITE, 0.45f);
+        paintMemberStatus(graphics, "battlecraft.lobby.member_waiting", UiAccent.textFaint(), 1.0f - ready,
+                textLeft, top + NAME_ROW, textWidth);
+        paintMemberStatus(graphics, "battlecraft.lobby.member_ready", lit, ready, textLeft, top + NAME_ROW, textWidth);
     }
 
-    private void renderReady(GuiGraphics graphics, S2CLobbyRosterPacket.Member member, int accent,
-                             float centerX, float centerY) {
-        if (!member.ready()) {
-            UiRender.ring(graphics, centerX, centerY, DOT_RADIUS, 1.1f, 1.0f,
-                    UiTheme.withAlpha(UiTheme.WHITE, 0.24f));
-            return;
-        }
+    private void paintMemberStatus(GuiGraphics graphics, String key, int tone, float alpha,
+                                   float left, float top, float width) {
+        if (alpha <= GONE) return;
+        UiRender.textTrackedBox(graphics, this.font, Component.translatable(key), left, top,
+                STATUS_ROW, width, STATUS_SCALE, 0.0f, UiTheme.alpha(tone, alpha), false, 0.0f);
+    }
 
-        UiRender.dot(graphics, centerX, centerY, DOT_RADIUS * 2.0f, UiTheme.withAlpha(accent, 0.18f));
-        UiRender.dot(graphics, centerX, centerY, DOT_RADIUS, UiTheme.mix(accent, UiTheme.WHITE, 0.25f));
+    private void renderReady(GuiGraphics graphics, int accent, float centerX, float centerY, float ready) {
+        if (ready < 1.0f) {
+            UiRender.ring(graphics, centerX, centerY, DOT_RADIUS, 1.1f, 1.0f,
+                    UiTheme.withAlpha(UiTheme.WHITE, 0.24f * (1.0f - ready)));
+        }
+        if (ready <= GONE) return;
+
+        float grown = DOT_RADIUS * (0.6f + 0.4f * ready);
+        UiRender.dot(graphics, centerX, centerY, grown * 2.0f, UiTheme.withAlpha(accent, 0.18f * ready));
+        UiRender.dot(graphics, centerX, centerY, grown, UiTheme.alpha(UiTheme.mix(accent, UiTheme.WHITE, 0.25f), ready));
     }
 
     private boolean isSelf(S2CLobbyRosterPacket.Member member) {
@@ -358,13 +452,23 @@ public class TeamSelectScreen extends Screen {
                 this.height - UiMetrics.MARGIN_WIDE * 2.0f, NAME_SCALE, UiAccent.textDim(), false);
     }
 
-    @Override
-    public boolean isPauseScreen() {
-        return false;
-    }
-
     public static void open() {
         Minecraft.getInstance().setScreen(new TeamSelectScreen());
+    }
+
+    private static final class Tile {
+        private final String team;
+        private final Smooth presence;
+        private final Smooth place = new Smooth(TILE_SPEED);
+        private final Smooth ready = new Smooth(TILE_SPEED);
+        private S2CLobbyRosterPacket.Member member;
+        private int row;
+        private boolean listed;
+
+        private Tile(String team, boolean fresh) {
+            this.team = team;
+            this.presence = new Smooth(fresh ? 0.0f : 1.0f, TILE_SPEED);
+        }
     }
 
     private static final class TeamChoice {

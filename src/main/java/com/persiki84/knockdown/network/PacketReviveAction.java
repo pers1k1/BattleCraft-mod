@@ -38,7 +38,7 @@ public class PacketReviveAction {
         ctx.get().enqueueWork(() -> {
             ServerPlayer healer = ctx.get().getSender();
             if (healer == null || !msg.isPressing || !ReviveRate.allow(healer)) return;
-            if (knocked(healer)) return;
+            if (knocked(healer) || !healer.isAlive() || healer.isSpectator()) return;
 
             Player target = nearestKnocked(healer);
             if (target == null) return;
@@ -47,6 +47,11 @@ public class PacketReviveAction {
                     .ifPresent(cap -> advance((ServerPlayer) target, cap));
         });
         ctx.get().setPacketHandled(true);
+    }
+
+    private static boolean sameSide(ServerPlayer healer, Player target) {
+        if (healer.getTeam() == null && target.getTeam() == null) return true;
+        return healer.isAlliedTo(target);
     }
 
     private static boolean knocked(ServerPlayer player) {
@@ -63,7 +68,7 @@ public class PacketReviveAction {
         double best = Double.MAX_VALUE;
 
         for (Player target : nearby) {
-            if (target == healer || !(target instanceof ServerPlayer)) continue;
+            if (target == healer || !(target instanceof ServerPlayer) || !sameSide(healer, target)) continue;
 
             KnockdownCapability cap = target.getCapability(KnockdownProvider.KNOCKDOWN_CAP).orElse(null);
             if (cap == null || !cap.isKnocked()) continue;

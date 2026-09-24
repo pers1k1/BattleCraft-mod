@@ -78,6 +78,12 @@ public class ColorRow extends MenuRow {
         return hexText;
     }
 
+    @Override
+    public void adopt(MenuRow previous) {
+        super.adopt(previous);
+        if (previous instanceof ColorRow older) wash.take(older.wash);
+    }
+
     private float swatchLeft() {
         return getX() + width - PAD - SWATCH_WIDTH;
     }

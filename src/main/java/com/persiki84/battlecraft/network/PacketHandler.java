@@ -8,7 +8,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.Optional;
 
 public class PacketHandler {
-    private static final String PROTOCOL_VERSION = "3";
+    private static final String PROTOCOL_VERSION = "4";
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation("battlecraft", "main"),
             () -> PROTOCOL_VERSION,
@@ -40,54 +40,6 @@ public class PacketHandler {
         registerAnnounceRequest();
         registerRadioTalk();
         registerRadioKey();
-        registerMenuPresence();
-        registerMenuPresenceState();
-        registerMenuFrame();
-        registerMenuFrameState();
-    }
-
-    private static void registerMenuFrame() {
-        INSTANCE.registerMessage(
-                id(),
-                C2SMenuFramePacket.class,
-                C2SMenuFramePacket::encode,
-                C2SMenuFramePacket::decode,
-                C2SMenuFramePacket::handle,
-                Optional.of(NetworkDirection.PLAY_TO_SERVER)
-        );
-    }
-
-    private static void registerMenuFrameState() {
-        INSTANCE.registerMessage(
-                id(),
-                S2CMenuFramePacket.class,
-                S2CMenuFramePacket::encode,
-                S2CMenuFramePacket::decode,
-                S2CMenuFramePacket::handle,
-                Optional.of(NetworkDirection.PLAY_TO_CLIENT)
-        );
-    }
-
-    private static void registerMenuPresence() {
-        INSTANCE.registerMessage(
-                id(),
-                C2SMenuPresencePacket.class,
-                C2SMenuPresencePacket::encode,
-                C2SMenuPresencePacket::decode,
-                C2SMenuPresencePacket::handle,
-                Optional.of(NetworkDirection.PLAY_TO_SERVER)
-        );
-    }
-
-    private static void registerMenuPresenceState() {
-        INSTANCE.registerMessage(
-                id(),
-                S2CMenuPresencePacket.class,
-                S2CMenuPresencePacket::encode,
-                S2CMenuPresencePacket::decode,
-                S2CMenuPresencePacket::handle,
-                Optional.of(NetworkDirection.PLAY_TO_CLIENT)
-        );
     }
 
     private static void registerRadioKey() {

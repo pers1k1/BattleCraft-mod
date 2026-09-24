@@ -14,6 +14,14 @@ import net.minecraft.world.entity.Entity;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BucketItem;
+import net.minecraft.world.item.FireChargeItem;
+import net.minecraft.world.item.FlintAndSteelItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraftforge.event.entity.player.FillBucketEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
 import net.minecraftforge.event.entity.living.MobSpawnEvent;
@@ -68,6 +76,37 @@ public final class ZoneRuleGuard {
 
         event.setCanceled(true);
         if (placer instanceof Player player) refuse(player, zone, "zones.rule.denied.block_place");
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void onBucket(FillBucketEvent event) {
+        Player player = event.getEntity();
+        if (player.level().isClientSide || player.isCreative() || muted()) return;
+        if (!(event.getTarget() instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) return;
+
+        boolean pouring = event.getEmptyBucket().getItem() instanceof BucketItem bucket
+                && bucket.getFluid() != Fluids.EMPTY;
+        ZoneRule rule = pouring ? ZoneRule.BLOCK_PLACE : ZoneRule.BLOCK_BREAK;
+        Zone zone = zoneAround(rule, player, event.getLevel(), hit);
+        if (zone == null) return;
+
+        event.setCanceled(true);
+        refuse(player, zone, pouring ? "zones.rule.denied.block_place" : "zones.rule.denied.block_break");
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void onIgnite(PlayerInteractEvent.RightClickBlock event) {
+        Player player = event.getEntity();
+        if (event.getLevel().isClientSide || player.isCreative() || muted()) return;
+
+        Item held = event.getItemStack().getItem();
+        if (!(held instanceof FlintAndSteelItem) && !(held instanceof FireChargeItem)) return;
+
+        Zone zone = zoneAround(ZoneRule.BLOCK_PLACE, player, event.getLevel(), event.getHitVec());
+        if (zone == null) return;
+
+        event.setCanceled(true);
+        refuse(player, zone, "zones.rule.denied.block_place");
     }
 
     @SubscribeEvent(priority = EventPriority.HIGH)
@@ -157,6 +196,11 @@ public final class ZoneRuleGuard {
     private static Zone zoneBarring(ZoneRule rule, Entity actor, LevelAccessor level, BlockPos pos) {
         return ZoneLookup.barring(rule, actor, ZoneLookup.dimensionOf(level),
                 pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+    }
+
+    private static Zone zoneAround(ZoneRule rule, Entity actor, LevelAccessor level, BlockHitResult hit) {
+        Zone zone = zoneBarring(rule, actor, level, hit.getBlockPos());
+        return zone != null ? zone : zoneBarring(rule, actor, level, hit.getBlockPos().relative(hit.getDirection()));
     }
 
     private static void refuse(Player player, Zone zone, String key) {

@@ -20,6 +20,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingHealEvent;
 import net.minecraftforge.event.entity.player.AttackEntityEvent;
@@ -237,6 +238,14 @@ public class ModEvents {
 
     private static void send(Player player, PacketSyncKnockdown packet) {
         NetworkHandler.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> (ServerPlayer) player), packet);
+    }
+
+    @SubscribeEvent
+    public static void onKnockedStrike(LivingAttackEvent event) {
+        if (!(event.getSource().getEntity() instanceof Player striker) || striker == event.getEntity()) return;
+        if (finishing.contains(event.getEntity().getUUID())) return;
+
+        striker.getCapability(KnockdownProvider.KNOCKDOWN_CAP).ifPresent(c -> { if (c.isKnocked()) event.setCanceled(true); });
     }
 
     @SubscribeEvent

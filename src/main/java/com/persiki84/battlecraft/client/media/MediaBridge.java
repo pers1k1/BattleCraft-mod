@@ -180,14 +180,14 @@ public final class MediaBridge {
         for (int index = 0; index < fresh.length && index < sent.size(); index++) {
             fresh[index] = Math.max(0.0f, sent.get(index).getAsFloat());
         }
-        return MediaGain.normalize(fresh);
+        return fresh;
     }
 
     // WHY: если захват потока не поднялся, мост шлёт один пик, и полоски идут от него все разом
     private static float[] spread(float peak) {
         float[] fresh = new float[MediaWatch.BANDS];
         java.util.Arrays.fill(fresh, Math.max(0.0f, peak));
-        return MediaGain.normalize(fresh);
+        return fresh;
     }
 
     private static MediaTrack read(JsonObject state) {

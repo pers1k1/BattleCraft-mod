@@ -3,10 +3,6 @@ package com.persiki84.capturepoints.capture;
 import com.persiki84.shared.zone.ZoneArea;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -71,11 +67,7 @@ public class FinalCapturePoint extends CapturePoint {
         }
 
         point.setLastCaptureTime(tag.getLong("lastCaptureTime"));
-        if (tag.contains("rewardItem")) {
-            Item rewardItem = ForgeRegistries.ITEMS.getValue(new ResourceLocation(tag.getString("rewardItem")));
-            if (rewardItem != null) point.setReward(new ItemStack(rewardItem));
-        }
-        point.setRewardAmount(tag.getInt("rewardAmount"));
+        readBonuses(tag, point);
         readTuning(tag, point);
         readCommandBlocks(tag, point);
 

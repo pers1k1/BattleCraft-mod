@@ -19,7 +19,6 @@ import com.persiki84.zones.ZoneRule;
 import com.persiki84.zones.ZoneType;
 import com.persiki84.zones.client.ClientZoneData;
 import com.persiki84.zones.client.render.ZoneColors;
-import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -54,11 +53,6 @@ public class ZoneManagerScreen extends ManagerScreen {
 
     public ZoneManagerScreen() {
         super(Component.translatable("zones.menu.title"));
-    }
-
-    @Override
-    public MenuKind presence() {
-        return MenuKind.ADMIN;
     }
 
     @Override

@@ -3,29 +3,44 @@ package com.persiki84.battlecraft.client.island;
 import com.persiki84.battlecraft.client.hud.HudConfig;
 import com.persiki84.battlecraft.client.media.MediaWatch;
 import com.persiki84.shared.client.ui.UiAnim;
-import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiCrisp;
+import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.gui.GuiGraphics;
 
 public final class IslandGlyph {
     private static final int BARS = MediaWatch.BANDS;
-    private static final float GAP_SHARE = 0.75f;
-    private static final float REST_SHARE = 0.09f;
-    private static final float BAR_RISE = 18.0f;
-    private static final int[] BAND_AT = {5, 4, 2, 1, 3, 0};
-    private static final float[] BAR_FALL = {11.0f, 10.0f, 8.5f, 7.5f, 9.0f, 6.5f};
+    private static final float GAP_SHARE = 0.69f;
+    private static final float REST_SHARE = 0.078f;
+    private static final float TICK_SECONDS = 1.0f / 15.0f;
+    private static final float GLIDE_SECONDS = 0.115f;
+    private static final float[] BAND_DECIBELS = {-1.277f, -3.687f, 1.353f, -0.083f, -1.338f, -3.379f};
+    private static final float LEVEL_POWER = 0.759f;
+    private static final float LEVEL_FLOOR = 0.002f;
 
+    private static final float[] start = new float[BARS];
+    private static final float[] goal = new float[BARS];
     private static final float[] reach = new float[BARS];
+    private static final float[] bandGain = new float[BARS];
+    private static final int[] tints = new int[UiCrisp.STOPS];
+    private static final float floorPower = (float) Math.pow(LEVEL_FLOOR, LEVEL_POWER);
+
+    private static float since;
     private static long stamp = -1L;
+
+    static {
+        for (int index = 0; index < BARS; index++) {
+            bandGain[index] = (float) Math.pow(10.0, BAND_DECIBELS[index] / 20.0);
+        }
+    }
 
     private IslandGlyph() {}
 
-    // WHY: полоска красится переходом от своей верхней точки к нижней, и обе берутся по её месту
-    // WHY: в ряду: ряд целиком повторяет раскладку цветов обложки. Остановок ровно две - заливка
-    // WHY: идёт веером от центра фигуры, и промежуточные растекались от боков к середине чёрными
-    // WHY: клиньями, то есть крестом поперёк полоски
+    static float along(int column) {
+        return (column * (1.0f + GAP_SHARE) + 0.5f) / (BARS + GAP_SHARE * (BARS - 1));
+    }
+
     public static void visualizer(GuiGraphics graphics, float centerX, float centerY, float width, float height,
                                   float fade) {
         float bar = width / (BARS + GAP_SHARE * (BARS - 1));
@@ -35,43 +50,59 @@ public final class IslandGlyph {
         if (sharp) graphics.flush();
 
         for (int index = 0; index < BARS; index++) {
-            float share = REST_SHARE + (1.0f - REST_SHARE) * reach[index];
-            float tall = Math.max(bar, height * share);
+            float tall = Math.max(bar, height * (REST_SHARE + (1.0f - REST_SHARE) * reach[index]));
             float spread = tall / (2.0f * height);
-            int top = UiTheme.alpha(IslandTone.barAt(index, 0.5f - spread), fade);
-            int bottom = UiTheme.alpha(IslandTone.barAt(index, 0.5f + spread), fade);
-            paint(graphics, sharp, left + index * (bar + gap), centerY - tall / 2.0f, bar, tall, top, bottom);
+            float x = left + index * (bar + gap);
+            float y = centerY - tall / 2.0f;
+            if (sharp) {
+                UiCrisp.panelRamp(graphics, x, y, bar, tall, bar / 2.0f, tinted(index, spread, fade));
+                continue;
+            }
+            UiRender.panelShaded(graphics, x, y, bar, tall, bar / 2.0f,
+                    UiTheme.alpha(IslandTone.barAt(index, 0.5f - spread), fade),
+                    UiTheme.alpha(IslandTone.barAt(index, 0.5f + spread), fade));
         }
     }
 
-    private static void paint(GuiGraphics graphics, boolean sharp, float x, float y, float width, float height,
-                              int top, int bottom) {
-        if (sharp) {
-            UiCrisp.panelShaded(graphics, x, y, width, height, width / 2.0f, top, bottom);
-            return;
+    private static int[] tinted(int index, float spread, float fade) {
+        for (int stop = 0; stop < tints.length; stop++) {
+            float share = 0.5f - spread + 2.0f * spread * stop / (tints.length - 1);
+            tints[stop] = UiTheme.alpha(IslandTone.barAt(index, share), fade);
         }
-        UiRender.panelShaded(graphics, x, y, width, height, width / 2.0f, top, bottom);
+        return tints;
     }
 
-    // WHY: каждая полоска это своя полоса частот из моста, поэтому им не нужны выдуманные синусоиды:
-    // WHY: бас, середина и верх и так живут по-своему. Порядок не по возрастанию частоты: бас
-    // WHY: последний, нижняя середина в центре. Подъём быстрый, но не мгновенный: покадровый разбор
-    // WHY: записи iOS даёт на подъёме те же скорости, что и на спаде, только вдвое короче
-    // WHY: ход отвязан от отрисовки: остров зовёт его каждый кадр, чтобы полоски не замирали на
-    // WHY: время морфинга и не прыгали с устаревших значений, когда визуализатор снова виден
     public static void pulse(float energy) {
         long frame = UiFrame.frame();
         if (frame == stamp) return;
 
         stamp = frame;
-        float delta = UiFrame.delta();
-        float gain = HudConfig.visualizerGain() * energy;
-        float speed = HudConfig.visualizerSpeed();
+        since += UiFrame.delta() * HudConfig.visualizerSpeed();
+        if (since >= TICK_SECONDS) {
+            since %= TICK_SECONDS;
+            retarget(energy);
+        }
+        glide();
+    }
+
+    private static void retarget(float energy) {
+        float gain = HudConfig.visualizerGain();
+        for (int index = 0; index < BARS; index++) {
+            start[index] = goal[index];
+            goal[index] = level(MediaWatch.band(index) * bandGain[index] * gain) * energy;
+        }
+    }
+
+    private static float level(float amplitude) {
+        float lifted = (float) Math.pow(Math.max(0.0f, amplitude), LEVEL_POWER);
+        return UiAnim.clamp01((lifted - floorPower) / (1.0f - floorPower));
+    }
+
+    private static void glide() {
         float rise = HudConfig.visualizerAttack();
         for (int index = 0; index < BARS; index++) {
-            float target = UiAnim.clamp01(MediaWatch.band(BAND_AT[index]) * gain);
-            float pace = target > reach[index] ? BAR_RISE * rise : BAR_FALL[index] * speed;
-            reach[index] = UiAnim.approach(reach[index], target, pace, delta);
+            float span = goal[index] > start[index] ? GLIDE_SECONDS / rise : GLIDE_SECONDS;
+            reach[index] = start[index] + (goal[index] - start[index]) * UiAnim.smoothstep(0.0f, span, since);
         }
     }
 }

@@ -21,6 +21,7 @@ import java.util.Map;
 public final class ConfigManifest {
     public static final int MAX_FILES = 512;
     public static final int MAX_PATH = 128;
+    public static final long MISSING = 0L;
 
     private static final String FOLDER = "battlecraft";
     private static final String FILE = "configs.dat";
@@ -60,14 +61,14 @@ public final class ConfigManifest {
 
     public static long hash(String path) {
         Long stored = expected.get(path);
-        return stored == null ? 0L : stored;
+        return stored == null ? MISSING : stored;
     }
 
     public static void replace(MinecraftServer server, Map<String, Long> fresh) {
         expected.clear();
         for (Map.Entry<String, Long> entry : fresh.entrySet()) {
             if (expected.size() >= MAX_FILES) break;
-            expected.put(entry.getKey(), entry.getValue());
+            if (ConfigScope.watched(entry.getKey())) expected.put(entry.getKey(), entry.getValue());
         }
         save(server);
     }
@@ -117,13 +118,18 @@ public final class ConfigManifest {
 
     private static void read(CompoundTag tag) {
         ListTag list = tag.getList(ENTRIES, Tag.TAG_COMPOUND);
+        int skipped = 0;
         for (int index = 0; index < list.size() && expected.size() < MAX_FILES; index++) {
             CompoundTag row = list.getCompound(index);
             String path = row.getString(PATH);
-            if (path.isEmpty() || path.length() > MAX_PATH) continue;
-
-            expected.put(path, row.getLong(HASH));
+            if (ConfigScope.watched(path)) {
+                expected.put(path, row.getLong(HASH));
+            } else {
+                skipped++;
+            }
         }
+        BattleCraftMod.LOGGER.info("Config manifest: {} files watched, {} personal or own files skipped, own mods {}",
+                expected.size(), skipped, ConfigScope.ownIds());
     }
 
     private static Path file(MinecraftServer server) {

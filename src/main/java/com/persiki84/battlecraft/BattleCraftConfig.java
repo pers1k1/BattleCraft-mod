@@ -38,6 +38,7 @@ public class BattleCraftConfig {
     public int armedJumpStaminaPermille = 7;
     public boolean requireTeams = true;
     public int teamsNeeded = 2;
+    public boolean ipLock = true;
     public List<String> startCommands = new ArrayList<>();
     public List<String> stopCommands = new ArrayList<>();
     public List<String> surrenderCommands = new ArrayList<>();

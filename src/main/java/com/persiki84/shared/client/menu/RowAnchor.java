@@ -22,6 +22,10 @@ public final class RowAnchor {
         lane = chosen;
     }
 
+    public int anchored() {
+        return anchorY;
+    }
+
     public boolean placed() {
         return lane != null;
     }

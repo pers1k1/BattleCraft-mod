@@ -93,7 +93,7 @@ public final class ConfigAudit {
         List<String> broken = new ArrayList<>();
         for (int index = 0; index < paths.size(); index++) {
             String path = paths.get(index);
-            if (ConfigManifest.hash(path) != hashes[index]) broken.add(path);
+            if (hashes[index] != ConfigManifest.MISSING && ConfigManifest.hash(path) != hashes[index]) broken.add(path);
         }
         if (!broken.isEmpty()) refuse(player, broken, "battlecraft.configs.refused");
     }
@@ -131,12 +131,21 @@ public final class ConfigAudit {
         if (player == null) return;
 
         report(server, player, "battlecraft.configs.silent", List.of());
+        if (spare(player, Component.translatable("battlecraft.configs.spared.silent"))) return;
         player.connection.disconnect(Component.translatable("battlecraft.configs.kicked.silent"));
     }
 
     private static void refuse(ServerPlayer player, List<String> broken, String key) {
         report(player.server, player, key, broken);
+        if (spare(player, Component.translatable("battlecraft.configs.spared", names(broken)))) return;
         player.connection.disconnect(Component.translatable("battlecraft.configs.kicked", names(broken)));
+    }
+
+    private static boolean spare(ServerPlayer player, Component notice) {
+        if (!player.hasPermissions(ADMIN_LEVEL)) return false;
+
+        player.sendSystemMessage(notice.copy().withStyle(ChatFormatting.YELLOW));
+        return true;
     }
 
     private static void report(MinecraftServer server, ServerPlayer player, String key, List<String> files) {

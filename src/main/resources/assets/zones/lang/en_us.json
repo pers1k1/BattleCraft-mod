@@ -16,6 +16,7 @@
   "zones.shop.error.not_in_shop": "You can only trade inside a shop zone.",
   "zones.shop.error.nothing_to_sell": "Nothing to sell.",
   "zones.shop.error.no_entry": "That item is no longer available.",
+  "zones.shop.error.description_too_long": "The note is longer than %s characters.",
   "zones.shop.error.not_enough": "Not enough currency: %s more needed.",
   "zones.shop.error.no_section": "Section '%s' not found.",
   "zones.shop.error.no_subsection": "Subsection '%s' not found.",

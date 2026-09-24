@@ -1,6 +1,8 @@
 #version 150
 
 uniform vec4 TopTint;
+uniform vec4 UpperTint;
+uniform vec4 LowerTint;
 uniform vec4 BottomTint;
 uniform vec2 Half;
 uniform vec2 Shape;
@@ -19,11 +21,18 @@ float rounded(vec2 point) {
     return length(max(away, 0.0)) + min(max(away.x, away.y), 0.0) - Radius;
 }
 
+vec4 ramp(float share) {
+    float along = share * 3.0;
+    if (along < 1.0) return mix(TopTint, UpperTint, along);
+    if (along < 2.0) return mix(UpperTint, LowerTint, along - 1.0);
+    return mix(LowerTint, BottomTint, along - 2.0);
+}
+
 void main() {
     vec2 point = (texCoord0 - 0.5) * Half * 2.0;
     float cover = clamp(0.5 - rounded(point) / Soft, 0.0, 1.0);
     float share = clamp((point.y + Shape.y) / max(1.0e-4, Shape.y * 2.0), 0.0, 1.0);
-    vec4 tint = mix(TopTint, BottomTint, share);
+    vec4 tint = ramp(share);
 
     fragColor = vec4(tint.rgb, tint.a * cover);
 }

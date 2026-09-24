@@ -10,13 +10,11 @@ import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTitle;
 import com.persiki84.shared.client.ui.UiAccent;
-import com.persiki84.shared.menu.MenuFace;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.components.events.GuiEventListener;
-import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
@@ -38,7 +36,6 @@ public abstract class ManagerScreen extends GlassScreen {
 
     protected int rowScroll;
     protected int listScroll;
-    private final java.util.Map<String, MenuRow> carried = new java.util.HashMap<>();
     protected int shownRows = -1;
     protected int sourceRows = -1;
     private String shownSignature = "";
@@ -69,7 +66,6 @@ public abstract class ManagerScreen extends GlassScreen {
     protected static final String HINT_SUFFIX = MenuHint.SUFFIX;
 
     private static final int LAYOUT_PASSES = 3;
-    private static final float FRAME_MARGIN = 8.0f;
     private static final float FIT_MARGIN = 12.0f;
     private static final float PAGE_SPEED = 21.0f;
     private static final float PAGE_SLIDE = 14.0f;
@@ -104,18 +100,6 @@ public abstract class ManagerScreen extends GlassScreen {
 
     protected abstract void pickTab(int index);
 
-    @Override
-    public MenuFace face() {
-        return MenuFace.of(presence(), getTitle(), tabs(), activeTab());
-    }
-
-    @Override
-    protected Area frameArea() {
-        float top = TITLE_TOP - FRAME_MARGIN;
-        return new Area(contentLeft() - FRAME_MARGIN, top, CONTENT_WIDTH + FRAME_MARGIN * 2.0f,
-                panelTop() + panelHeight() + FRAME_MARGIN - top);
-    }
-
     protected abstract void buildBody();
 
     protected abstract void renderBody(GuiGraphics graphics, int mouseX, int mouseY, float partialTick);
@@ -141,7 +125,6 @@ public abstract class ManagerScreen extends GlassScreen {
         for (int pass = 0; pass < LAYOUT_PASSES; pass++) {
             int height = contentHeight();
             placed = false;
-            remember();
             clearWidgets();
             buildBody();
             addBackButton();
@@ -151,22 +134,15 @@ public abstract class ManagerScreen extends GlassScreen {
         }
     }
 
-    // WHY: строка узнаётся по своей подписи, а не по номеру: список строк меняет состав, и по
-    // WHY: номеру движение перескакивало бы с одного переключателя на другой
-    private void remember() {
-        carried.clear();
-        for (GuiEventListener child : children()) {
-            if (child instanceof MenuRow row) carried.put(row.getMessage().getString(), row);
-        }
+    @Override
+    protected int carryScope() {
+        return activeTab();
     }
 
     @Override
-    protected <T extends GuiEventListener & Renderable & NarratableEntry> T addRenderableWidget(T widget) {
-        if (widget instanceof MenuRow row) {
-            MenuRow older = carried.get(row.getMessage().getString());
-            if (older != null && older != row) row.adopt(older);
-        }
-        return super.addRenderableWidget(widget);
+    protected void carried(GuiEventListener widget, GuiEventListener older) {
+        if (scrollStep != 0 || !steady()) return;
+        if (widget instanceof MenuRow row && older instanceof MenuRow previous) row.drift(previous);
     }
 
     protected boolean searchable() {

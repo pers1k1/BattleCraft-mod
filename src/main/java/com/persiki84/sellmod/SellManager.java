@@ -44,8 +44,9 @@ public class SellManager {
 
     public static SellResult sellAllItems(Player player) {
         SellResult result = new SellResult();
-        sellFrom(player.getInventory().items, result);
-        sellFrom(player.getInventory().offhand, result);
+        Item currency = currencyGuard ? getCurrencyItem() : null;
+        sellFrom(player.getInventory().items, currency, result);
+        sellFrom(player.getInventory().offhand, currency, result);
 
         if (result.totalCurrencyEarned > 0) {
             giveCurrencyToPlayer(player, result.totalCurrencyEarned);
@@ -55,10 +56,10 @@ public class SellManager {
 
     // WHY: цена задаётся без верхней границы, а сумма считалась в int уже после очистки слота:
     // WHY: полный инвентарь дорогих предметов уходил в минус, вещи пропадали, денег не было
-    private static void sellFrom(List<ItemStack> slots, SellResult result) {
+    private static void sellFrom(List<ItemStack> slots, Item currency, SellResult result) {
         for (int slot = 0; slot < slots.size(); slot++) {
             ItemStack stack = slots.get(slot);
-            if (stack.isEmpty()) continue;
+            if (stack.isEmpty() || (currency != null && stack.is(currency))) continue;
 
             String itemName = getItemName(stack);
             SellPrice price = SELL_PRICES.get(itemName);
@@ -80,9 +81,11 @@ public class SellManager {
     }
 
     private static String currencyItemName = "minecraft:emerald";
+    private static boolean currencyGuard = true;
 
     private static class SellConfig {
         public String currencyItem = "minecraft:emerald";
+        public boolean currencyGuard = true;
         public Map<String, Integer> customPrices = new HashMap<>();
     }
 
@@ -108,6 +111,19 @@ public class SellManager {
         return false;
     }
 
+    public static boolean currencyGuard() {
+        return currencyGuard;
+    }
+
+    public static void setCurrencyGuard(boolean value) {
+        currencyGuard = value;
+        saveConfig();
+    }
+
+    public static boolean hasPrice(String itemId) {
+        return SELL_PRICES.containsKey(itemId);
+    }
+
     public static void setPrice(String itemId, int price) {
         if (price <= 0) {
             SELL_PRICES.remove(itemId);
@@ -124,6 +140,7 @@ public class SellManager {
                 SellConfig config = new Gson().fromJson(reader, SellConfig.class);
                 if (config != null) {
                     currencyItemName = config.currencyItem;
+                    currencyGuard = config.currencyGuard;
                     if (config.customPrices != null) {
                         SELL_PRICES.clear();
                         for (Map.Entry<String, Integer> entry : config.customPrices.entrySet()) {
@@ -145,6 +162,7 @@ public class SellManager {
             Files.createDirectories(path.getParent());
             SellConfig config = new SellConfig();
             config.currencyItem = currencyItemName;
+            config.currencyGuard = currencyGuard;
             for (Map.Entry<String, SellPrice> entry : SELL_PRICES.entrySet()) {
                 config.customPrices.put(entry.getKey(), entry.getValue().price);
             }

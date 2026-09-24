@@ -5,6 +5,7 @@ import com.persiki84.battlecraft.network.C2SConfigReportPacket;
 import com.persiki84.battlecraft.network.C2SConfigSnapshotPacket;
 import com.persiki84.battlecraft.network.PacketHandler;
 import com.persiki84.battlecraft.rules.ConfigManifest;
+import com.persiki84.battlecraft.rules.ConfigScope;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.fml.loading.FMLPaths;
@@ -21,10 +22,8 @@ import java.util.stream.Stream;
 
 public final class ConfigGuard {
     private static final String ALGORITHM = "SHA-256";
-    private static final String OWN_PREFIX = "battlecraft";
-    private static final String SELL_FILE = "sellmod.json";
     private static final int CHUNK = 8192;
-    private static final long MISSING = 0L;
+    private static final long MISSING = ConfigManifest.MISSING;
 
     private static volatile long[] report;
     private static volatile Snapshot snapshot;
@@ -117,7 +116,7 @@ public final class ConfigGuard {
         try (Stream<Path> walk = Files.walk(root)) {
             walk.filter(Files::isRegularFile)
                     .map(file -> root.relativize(file).toString().replace('\\', '/'))
-                    .filter(ConfigGuard::wanted)
+                    .filter(ConfigScope::watched)
                     .sorted()
                     .limit(ConfigManifest.MAX_FILES)
                     .forEach(paths::add);
@@ -131,15 +130,6 @@ public final class ConfigGuard {
             scanned[index] = hash(root.resolve(paths.get(index)));
         }
         return new Snapshot(paths, scanned);
-    }
-
-    // WHY: настройки самой сборки у каждого игрока свои (интерфейс, правила и модули пишутся в
-    // WHY: одиночной игре), поэтому наши файлы в эталон не берутся - иначе кик получают все
-    private static boolean wanted(String path) {
-        if (path.length() > ConfigManifest.MAX_PATH) return false;
-
-        String name = path.substring(path.lastIndexOf('/') + 1);
-        return !name.startsWith(OWN_PREFIX) && !name.equals(SELL_FILE);
     }
 
     private static long hash(Path file) {

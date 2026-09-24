@@ -54,6 +54,14 @@ public final class UiWash {
         phase = 1.0f;
     }
 
+    public void take(UiWash older) {
+        from = older.from;
+        target = older.target;
+        shown = older.shown;
+        phase = older.phase;
+        primed = older.primed;
+    }
+
     public int get() {
         return shown;
     }

@@ -11,6 +11,7 @@ import java.util.Map;
 
 public final class ShopEntry {
     public static final int UNLIMITED = -1;
+    public static final int DESCRIPTION_LIMIT = 160;
     public static final String OWN_POOL = "";
 
     private final String id;

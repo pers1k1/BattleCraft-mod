@@ -16,6 +16,7 @@
   "zones.shop.error.not_in_shop": "Торговать можно только в зоне магазина.",
   "zones.shop.error.nothing_to_sell": "Продавать нечего.",
   "zones.shop.error.no_entry": "Такого товара больше нет.",
+  "zones.shop.error.description_too_long": "Заметка длиннее %s символов.",
   "zones.shop.error.not_enough": "Не хватает валюты: ещё %s.",
   "zones.shop.error.no_section": "Раздел '%s' не найден.",
   "zones.shop.error.no_subsection": "Подраздел '%s' не найден.",

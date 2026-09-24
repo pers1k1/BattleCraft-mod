@@ -20,7 +20,6 @@ import com.persiki84.zones.mark.MapMark;
 import com.persiki84.zones.mark.MarkHideZone;
 import com.persiki84.zones.mark.MarkKind;
 import com.persiki84.zones.mark.MarkMenuState;
-import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -64,11 +63,6 @@ public class MarkManagerScreen extends ManagerScreen {
 
     public MarkManagerScreen() {
         super(Component.translatable("zones.mark.menu.title"));
-    }
-
-    @Override
-    public MenuKind presence() {
-        return MenuKind.ADMIN;
     }
 
     @Override

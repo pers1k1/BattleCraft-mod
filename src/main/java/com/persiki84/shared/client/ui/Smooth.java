@@ -41,6 +41,11 @@ public final class Smooth {
         return value;
     }
 
+    public void take(Smooth older) {
+        value = older.value;
+        primed = older.primed;
+    }
+
     public void snap(float target) {
         value = target;
         primed = true;

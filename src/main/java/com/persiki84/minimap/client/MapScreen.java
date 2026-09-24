@@ -10,6 +10,8 @@ import com.persiki84.capturepoints.client.ClientCaptureData;
 import com.persiki84.minimap.network.MapMarkerSyncPacket;
 import com.persiki84.minimap.network.MapMarkerUpdatePacket;
 import com.persiki84.minimap.network.MapTeleportPacket;
+import com.persiki84.shared.client.menu.GlassScreen;
+import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.PaletteStack;
 import com.persiki84.shared.client.menu.PaletteWindow;
 import com.persiki84.zones.network.MarkEditPacket;
@@ -21,14 +23,12 @@ import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
-import com.persiki84.shared.client.ui.UiBackdrop;
 import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -39,7 +39,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public class MapScreen extends Screen {
+public class MapScreen extends GlassScreen {
     private static final int OPERATOR_LEVEL = 2;
     private static final float MARKER_CLEARANCE = 2.0f;
     private static final float LABEL_SCALE = 0.85f;
@@ -53,6 +53,7 @@ public class MapScreen extends Screen {
     private static final float MARKER_SCALE_MAX = 2.2f;
     private static final Component BASE_LABEL = Component.translatable("zones.marker.base");
     private static final long DOUBLE_CLICK_MS = 400L;
+    private static final float FEEDBACK_HEIGHT = 18.0f;
 
     private final MapActionMenu actions = new MapActionMenu();
     private final PaletteStack palettes = new PaletteStack();
@@ -91,7 +92,7 @@ public class MapScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    protected void renderContent(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         int centerX = this.width / 2;
         int centerY = this.height / 2;
         applyZoom(mouseX, mouseY, centerX, centerY);
@@ -107,10 +108,15 @@ public class MapScreen extends Screen {
 
         guiGraphics.disableScissor();
 
-        UiBackdrop.capture();
-        renderChrome(guiGraphics, mouseX, mouseY, centerX, centerY);
+        UiGlass.layer(guiGraphics);
+        float hintY = renderChrome(guiGraphics, mouseX, mouseY, centerX, centerY);
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        renderWidgets(guiGraphics, mouseX, mouseY, partialTick);
+        MenuFeedback.render(guiGraphics, centerX, hintY - FEEDBACK_HEIGHT - UiMetrics.GAP);
+    }
+
+    @Override
+    protected void renderOverlay(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         actions.render(guiGraphics, this.font, mouseX, mouseY);
         palettes.render(guiGraphics, this.width, this.height, mouseX, mouseY);
         prompt.render(guiGraphics, this.font, this.width, this.height);
@@ -232,7 +238,7 @@ public class MapScreen extends Screen {
                 UiAccent.color(), Component.translatable("minimap.label.you").getString());
     }
 
-    private void renderChrome(GuiGraphics guiGraphics, int mouseX, int mouseY, int centerX, int centerY) {
+    private float renderChrome(GuiGraphics guiGraphics, int mouseX, int mouseY, int centerX, int centerY) {
         double worldX = mapX + (mouseX - centerX) / zoom;
         double worldZ = mapZ + (mouseY - centerY) / zoom;
 
@@ -252,6 +258,7 @@ public class MapScreen extends Screen {
                 UiMetrics.radius(rowHeight), 1.0f);
         UiRender.textCentered(guiGraphics, this.font, hint, this.width / 2.0f,
                 UiRender.centerY(hintY, rowHeight, scale), scale, UiAccent.text(), false);
+        return hintY;
     }
 
     private void labelAbove(GuiGraphics guiGraphics, String value, float centerX,
@@ -502,6 +509,7 @@ public class MapScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (leaving()) return true;
         if (palettes.mouseDragged(mouseX, mouseY)) return true;
         if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             if (sizingLabel) {
@@ -522,6 +530,7 @@ public class MapScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (leaving()) return true;
         if (actions.open() || prompt.open() || palettes.covering(mouseX, mouseY)) return true;
 
         targetZoom = (float) Math.max(0.1, Math.min(10.0, targetZoom + delta * 0.15 * targetZoom));
@@ -530,6 +539,7 @@ public class MapScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (leaving()) return true;
         if (prompt.open()) return prompt.click(mouseX, mouseY, button);
         if (palettes.mouseClicked(mouseX, mouseY)) return true;
         if (actions.open()) {
@@ -683,8 +693,4 @@ public class MapScreen extends Screen {
         return super.keyPressed(key, scan, modifiers);
     }
 
-    @Override
-    public boolean isPauseScreen() {
-        return false;
-    }
 }

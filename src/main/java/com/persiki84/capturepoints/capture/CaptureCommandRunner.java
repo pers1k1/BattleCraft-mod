@@ -15,7 +15,7 @@ public final class CaptureCommandRunner {
     private static final String X_MARK = "%x%";
     private static final String Y_MARK = "%y%";
     private static final String Z_MARK = "%z%";
-    private static final int OPERATOR_LEVEL = 4;
+    public static final int OPERATOR_LEVEL = 4;
 
     private CaptureCommandRunner() {}
 

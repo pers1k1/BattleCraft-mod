@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiAssemble;
+import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.client.ui.UiDress;
 import com.persiki84.shared.client.ui.UiEmber;
 import com.persiki84.shared.client.ui.UiFarewell;
@@ -15,14 +16,17 @@ import com.persiki84.shared.client.ui.UiStage;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiMotion;
 import com.persiki84.shared.client.ui.UiMotionSet;
-import com.persiki84.shared.menu.MenuFace;
-import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Renderable;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmber {
     private static final float ENTER_SCALE = 0.94f;
@@ -48,9 +52,66 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
     private double rawX;
     private double rawY;
     private boolean leaving;
+    private final Map<String, GuiEventListener> carried = new HashMap<>();
+    private int builtScope = Integer.MIN_VALUE;
+    private int builtWidth = -1;
+    private int builtHeight = -1;
+    private boolean steady;
 
     protected GlassScreen(Component title) {
         super(title);
+    }
+
+    protected int carryScope() {
+        return 0;
+    }
+
+    protected boolean steady() {
+        return steady;
+    }
+
+    protected void carried(GuiEventListener widget, GuiEventListener older) {
+    }
+
+    @Override
+    protected void clearWidgets() {
+        remember();
+        super.clearWidgets();
+    }
+
+    private void remember() {
+        carried.clear();
+        boolean sameScope = builtScope == carryScope();
+        steady = sameScope && builtWidth == this.width && builtHeight == this.height;
+        if (!sameScope) return;
+        for (GuiEventListener child : children()) {
+            String key = carryKey(child);
+            if (key != null) carried.put(key, carried.containsKey(key) ? null : child);
+        }
+    }
+
+    private static String carryKey(GuiEventListener widget) {
+        if (widget instanceof MenuRow row) return "row:" + row.getMessage().getString();
+        if (widget instanceof UiButton button) return "button:" + button.getMessage().getString();
+        return null;
+    }
+
+    @Override
+    protected <T extends GuiEventListener & Renderable & NarratableEntry> T addRenderableWidget(T widget) {
+        carry(widget);
+        builtScope = carryScope();
+        builtWidth = this.width;
+        builtHeight = this.height;
+        return super.addRenderableWidget(widget);
+    }
+
+    private void carry(GuiEventListener widget) {
+        String key = carryKey(widget);
+        GuiEventListener older = key == null ? null : carried.get(key);
+        if (older == null || older == widget) return;
+        if (widget instanceof MenuRow row && older instanceof MenuRow previous) row.adopt(previous);
+        if (widget instanceof UiButton button && older instanceof UiButton previous) button.adopt(previous);
+        carried(widget, older);
     }
 
     protected abstract void renderContent(GuiGraphics graphics, int mouseX, int mouseY, float partialTick);
@@ -80,38 +141,6 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
     protected float contentScale() {
         return 1.0f;
     }
-
-    public MenuKind presence() {
-        return MenuKind.MENU;
-    }
-
-    public MenuFace face() {
-        return MenuFace.of(presence(), getTitle());
-    }
-
-    // WHY: живой кадр окна уходит тиммейтам, и админские панели в него не попадают: там данные,
-    // WHY: которые сервер обычному игроку нарочно не отдаёт
-    public boolean broadcast() {
-        return presence() != MenuKind.ADMIN;
-    }
-
-    public boolean settled() {
-        return !leaving && !reveal.active() && shown() >= SETTLED;
-    }
-
-    protected Area frameArea() {
-        return new Area(0.0f, 0.0f, this.width, this.height);
-    }
-
-    public Area frame() {
-        Area local = frameArea();
-        float scale = entranceScale(1.0f);
-        float left = this.width / 2.0f + (local.x() - this.width / 2.0f) * scale;
-        float top = this.height / 2.0f + (local.y() - this.height / 2.0f) * scale;
-        return new Area(left, top, local.width() * scale, local.height() * scale);
-    }
-
-    public record Area(float x, float y, float width, float height) {}
 
     protected boolean worldAnchored() {
         return UiPlane.allowed() && this.minecraft != null && this.minecraft.level != null;

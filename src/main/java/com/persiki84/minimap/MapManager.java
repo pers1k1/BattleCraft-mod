@@ -31,38 +31,38 @@ public class MapManager {
                 new MapWorldMarkerSyncPacket(new ArrayList<>(worldMarkers.values())));
     }
 
+    private static double surfaceY(ServerPlayer player, double x, double z) {
+        net.minecraft.core.BlockPos column = net.minecraft.core.BlockPos.containing(x, player.getY(), z);
+        if (!player.level().hasChunkAt(column)) return player.getY();
+
+        return player.level().getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE,
+                column.getX(), column.getZ());
+    }
+
     public static void handleMarkerUpdate(ServerPlayer player, double x, double z, boolean remove, boolean isTeam) {
-        if (isTeam) {
-            if (remove) {
-                activeTeamMarkers.remove(player.getUUID());
-            } else {
-                double y = player.level().getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, (int) x, (int) z);
-                activeTeamMarkers.put(player.getUUID(), new MapMarkerSyncPacket.MarkerData(
-                        player.getUUID(), player.getName().getString(), x, y, z, true,
-                        player.level().dimension().location()
-                ));
-            }
-            net.minecraft.world.scores.Team team = player.getTeam();
-            if (team != null) {
-                for (ServerPlayer member : player.server.getPlayerList().getPlayers()) {
-                    if (team.isAlliedTo(member.getTeam())) {
-                        syncMarkers(member);
-                    }
-                }
-            } else {
-                syncMarkers(player);
-            }
+        Map<UUID, MapMarkerSyncPacket.MarkerData> markers = isTeam ? activeTeamMarkers : activePrivateMarkers;
+        if (remove) {
+            markers.remove(player.getUUID());
         } else {
-            if (remove) {
-                activePrivateMarkers.remove(player.getUUID());
-            } else {
-                double y = player.level().getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, (int) x, (int) z);
-                activePrivateMarkers.put(player.getUUID(), new MapMarkerSyncPacket.MarkerData(
-                        player.getUUID(), player.getName().getString(), x, y, z, false,
-                        player.level().dimension().location()
-                ));
-            }
+            markers.put(player.getUUID(), new MapMarkerSyncPacket.MarkerData(player.getUUID(),
+                    player.getName().getString(), x, surfaceY(player, x, z), z, isTeam,
+                    player.level().dimension().location()));
+        }
+        if (isTeam) {
+            syncTeam(player);
+        } else {
             syncMarkers(player);
+        }
+    }
+
+    private static void syncTeam(ServerPlayer player) {
+        net.minecraft.world.scores.Team team = player.getTeam();
+        if (team == null) {
+            syncMarkers(player);
+            return;
+        }
+        for (ServerPlayer member : player.server.getPlayerList().getPlayers()) {
+            if (team.isAlliedTo(member.getTeam())) syncMarkers(member);
         }
     }
 
@@ -103,53 +103,36 @@ public class MapManager {
     public static void tick(net.minecraft.server.MinecraftServer server) {
         if (server.getTickCount() % 10 != 0) return;
 
-        if (worldDirty) {
-            worldDirty = false;
-            PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(),
-                    new MapWorldMarkerSyncPacket(new ArrayList<>(worldMarkers.values())));
-        }
-
+        broadcastWorldMarkers();
         Map<String, List<ServerPlayer>> teams = new HashMap<>();
-        List<ServerPlayer> noTeamPlayers = new ArrayList<>();
-
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             net.minecraft.world.scores.Team team = player.getTeam();
-            if (team != null) {
-                teams.computeIfAbsent(team.getName(), k -> new ArrayList<>()).add(player);
+            if (team == null) {
+                sendPositions(List.of(player));
             } else {
-                noTeamPlayers.add(player);
+                teams.computeIfAbsent(team.getName(), key -> new ArrayList<>()).add(player);
             }
         }
+        teams.values().forEach(MapManager::sendPositions);
+    }
 
-        for (List<ServerPlayer> members : teams.values()) {
-            List<PlayerPositionSyncPacket.PlayerPos> positions = new ArrayList<>(members.size());
-            for (ServerPlayer member : members) {
-                positions.add(new PlayerPositionSyncPacket.PlayerPos(
-                        member.getUUID(),
-                        member.getName().getString(),
-                        member.getX(),
-                        member.getZ(),
-                        member.getYRot(),
-                        member.level().dimension().location()
-                ));
-            }
-            PlayerPositionSyncPacket packet = new PlayerPositionSyncPacket(positions);
-            for (ServerPlayer member : members) {
-                PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> member), packet);
-            }
+    private static void broadcastWorldMarkers() {
+        if (!worldDirty) return;
+
+        worldDirty = false;
+        PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(),
+                new MapWorldMarkerSyncPacket(new ArrayList<>(worldMarkers.values())));
+    }
+
+    private static void sendPositions(List<ServerPlayer> members) {
+        List<PlayerPositionSyncPacket.PlayerPos> positions = new ArrayList<>(members.size());
+        for (ServerPlayer member : members) {
+            positions.add(new PlayerPositionSyncPacket.PlayerPos(member.getUUID(), member.getName().getString(),
+                    member.getX(), member.getZ(), member.getYRot(), member.level().dimension().location()));
         }
-
-        for (ServerPlayer player : noTeamPlayers) {
-            List<PlayerPositionSyncPacket.PlayerPos> positions = new ArrayList<>(1);
-            positions.add(new PlayerPositionSyncPacket.PlayerPos(
-                    player.getUUID(),
-                    player.getName().getString(),
-                    player.getX(),
-                    player.getZ(),
-                    player.getYRot(),
-                    player.level().dimension().location()
-            ));
-            PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), new PlayerPositionSyncPacket(positions));
+        PlayerPositionSyncPacket packet = new PlayerPositionSyncPacket(positions);
+        for (ServerPlayer member : members) {
+            PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> member), packet);
         }
     }
 }

@@ -6,6 +6,7 @@ import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiTheme;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -32,12 +33,17 @@ public final class MenuField {
     private final EditBox box;
 
     public MenuField(int x, int y, int width, Component label, String value, Consumer<String> apply) {
+        this(x, y, width, label, value, apply, SharedConstants.MAX_CHAT_LENGTH);
+    }
+
+    public MenuField(int x, int y, int width, Component label, String value, Consumer<String> apply, int limit) {
         this.label = label;
         this.box = new EditBox(Minecraft.getInstance().font, x + INSET, y + LABEL_HEIGHT + LABEL_GAP,
                 width - INSET * 2, FIELD_HEIGHT, label);
         // WHY: свой отступ у поля уже есть в плашке, а ванильный бордер добавлял бы к нему ещё
         // WHY: четыре пикселя, и строка вставала правее подписи над ней
         this.box.setBordered(false);
+        this.box.setMaxLength(limit);
         this.box.setValue(value);
         this.box.setResponder(apply);
     }

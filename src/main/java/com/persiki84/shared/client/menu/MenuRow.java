@@ -1,5 +1,6 @@
 package com.persiki84.shared.client.menu;
 
+import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.Spring;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
@@ -52,9 +53,11 @@ public abstract class MenuRow extends AbstractWidget implements GlidingRow {
 
     private static final float APPEAR_MS = 190.0f;
     private static final float STAGGER_MS = 20.0f;
+    private static final float DRIFT_SPEED = 16.0f;
 
     private final Spring hover = new Spring(HOVER_RESPONSE, HOVER_DAMPING, 0.0f);
     private final Spring press = new Spring(PRESS_RESPONSE, PRESS_DAMPING, 0.0f);
+    private final Smooth drift = new Smooth(0.0f, DRIFT_SPEED);
     private boolean announced;
     private boolean held;
     private Component blockedReason;
@@ -79,6 +82,19 @@ public abstract class MenuRow extends AbstractWidget implements GlidingRow {
     // WHY: без передачи состояния новой строке движение обрывалось на первом же кадре и
     // WHY: переключение значения выглядело мгновенной подменой
     public void adopt(MenuRow previous) {
+        hover.take(previous.hover);
+        press.take(previous.press);
+        announced = previous.announced;
+        held = previous.held;
+        shownAt = previous.shownAt;
+        staggerMs = previous.staggerMs;
+        slideFrom = previous.slideFrom;
+        drift.take(previous.drift);
+    }
+
+    public void drift(MenuRow previous) {
+        if (!anchor.placed() || !previous.anchor.placed()) return;
+        drift.snap(previous.anchor.anchored() + previous.drift.get() - anchor.anchored());
     }
 
     public MenuRow note(Component text) {
@@ -162,9 +178,10 @@ public abstract class MenuRow extends AbstractWidget implements GlidingRow {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        if (anchor.gone(getY(), height)) return;
+        int shownY = getY() + Math.round(drift.to(0.0f, UiFrame.delta()));
+        if (anchor.gone(shownY, height)) return;
 
-        anchor.draw(graphics, getX(), width, getY(), height,
+        anchor.draw(graphics, getX(), width, shownY, height,
                 () -> super.render(graphics, mouseX, anchor.pointer(mouseY), partialTick));
     }
 
@@ -213,7 +230,7 @@ public abstract class MenuRow extends AbstractWidget implements GlidingRow {
         float appear = appear();
         float squash = pushed * PRESS_SQUASH;
         boolean rawScale = UiRender.rawScale(false);
-        pushSquash(graphics, squash, (1.0f - appear) * slideFrom);
+        pushSquash(graphics, squash, (1.0f - appear) * slideFrom + drift.get());
         boolean quantized = UiRender.rawScale(rawScale || Math.abs(squash) > SMOOTH_THRESHOLD);
 
         try {

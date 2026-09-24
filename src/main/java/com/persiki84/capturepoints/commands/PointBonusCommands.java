@@ -17,6 +17,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.item.ItemArgument;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.registries.ForgeRegistries;
 
@@ -89,6 +90,7 @@ public final class PointBonusCommands {
     private static LiteralArgumentBuilder<CommandSourceStack> addCommandBranch(
             SuggestionProvider<CommandSourceStack> points, Function<String, CapturePoint> lookup) {
         return Commands.literal("addcommand")
+                .requires(source -> source.hasPermission(CaptureCommandRunner.OPERATOR_LEVEL))
                 .then(named(points)
                         .then(Commands.argument("command", StringArgumentType.greedyString())
                                 .executes(context -> addCommand(context, lookup))));
@@ -105,6 +107,7 @@ public final class PointBonusCommands {
     private static LiteralArgumentBuilder<CommandSourceStack> commandBranch(
             SuggestionProvider<CommandSourceStack> points, Function<String, CapturePoint> lookup) {
         return Commands.literal("setcommand")
+                .requires(source -> source.hasPermission(CaptureCommandRunner.OPERATOR_LEVEL))
                 .then(named(points)
                         .then(Commands.argument("command", StringArgumentType.greedyString())
                                 .executes(context -> setCommand(context, lookup))));
@@ -167,7 +170,14 @@ public final class PointBonusCommands {
         CapturePoint point = resolve(context, lookup);
         if (point == null) return 0;
 
-        point.setBuffEffect(StringArgumentType.getString(context, "effect"));
+        String effect = StringArgumentType.getString(context, "effect");
+        ResourceLocation id = ResourceLocation.tryParse(effect);
+        if (id == null || !ForgeRegistries.MOB_EFFECTS.containsKey(id)) {
+            context.getSource().sendFailure(Component.translatable("capturepoints.error.unknown_effect", effect)
+                    .withStyle(ChatFormatting.RED));
+            return 0;
+        }
+        point.setBuffEffect(id.toString());
         point.setBuffAmplifier(IntegerArgumentType.getInteger(context, "amplifier"));
         return confirm(context, "capturepoints.success.buff_updated", point);
     }

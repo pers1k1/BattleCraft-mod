@@ -130,7 +130,8 @@ public class CapturePointManager {
         if (point.getBuffEffect() == null || point.getBuffEffect().isEmpty()) return;
         if (ticks % BUFF_REFRESH_TICKS != 0) return;
 
-        MobEffect effect = ForgeRegistries.MOB_EFFECTS.getValue(new ResourceLocation(point.getBuffEffect()));
+        ResourceLocation id = ResourceLocation.tryParse(point.getBuffEffect());
+        MobEffect effect = id == null ? null : ForgeRegistries.MOB_EFFECTS.getValue(id);
         if (effect == null) return;
 
         for (ServerPlayer player : getTeamPlayersInside(owner, point)) {

@@ -22,7 +22,6 @@ import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTitle;
 import com.persiki84.shared.gunsmith.GunSmith;
-import com.persiki84.shared.menu.MenuKind;
 import com.persiki84.zones.client.menu.ItemTurntable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -119,11 +118,6 @@ public class LootEditorScreen extends GlassScreen {
         this.parent = parent;
         MenuData.invalidate(ModuleMenuStates.LOOT);
         MenuData.request(ModuleMenuStates.LOOT);
-    }
-
-    @Override
-    public MenuKind presence() {
-        return MenuKind.ADMIN;
     }
 
     @Override
@@ -224,12 +218,6 @@ public class LootEditorScreen extends GlassScreen {
 
     private int statsLeft() {
         return (this.width - (STATS_WIDTH + HEADER_BUTTON * 2 + GAP * 2)) / 2;
-    }
-
-    @Override
-    protected Area frameArea() {
-        float top = TITLE_TOP - 8.0f;
-        return new Area(contentLeft() - 8.0f, top, contentWidth() + 16.0f, contentTop() + panelHeight() + 8.0f - top);
     }
 
     @Override

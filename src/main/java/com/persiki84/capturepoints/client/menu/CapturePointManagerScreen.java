@@ -23,7 +23,6 @@ import com.persiki84.shared.client.menu.ToggleRow;
 import com.persiki84.shared.client.menu.pick.ItemPickerScreen;
 import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.zone.ZoneShape;
-import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.nbt.CompoundTag;
@@ -69,11 +68,6 @@ public class CapturePointManagerScreen extends ManagerScreen {
 
     public CapturePointManagerScreen() {
         super(Component.translatable("capturepoints.menu.title"));
-    }
-
-    @Override
-    public MenuKind presence() {
-        return MenuKind.ADMIN;
     }
 
     @Override

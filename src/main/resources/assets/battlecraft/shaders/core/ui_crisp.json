@@ -72,6 +72,28 @@
             ]
         },
         {
+            "name": "UpperTint",
+            "type": "float",
+            "count": 4,
+            "values": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "name": "LowerTint",
+            "type": "float",
+            "count": 4,
+            "values": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
             "name": "BottomTint",
             "type": "float",
             "count": 4,

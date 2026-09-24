@@ -36,7 +36,6 @@ import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.client.ui.UiMotionSet;
 import com.persiki84.shared.client.menu.SliderRow;
 import com.persiki84.shared.client.menu.ToggleRow;
-import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -94,11 +93,6 @@ public final class CustomizeScreen extends ManagerScreen {
 
     public static void open() {
         Minecraft.getInstance().setScreen(new CustomizeScreen());
-    }
-
-    @Override
-    public MenuKind presence() {
-        return MenuKind.CUSTOM;
     }
 
     @Override

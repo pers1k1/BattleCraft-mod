@@ -19,6 +19,7 @@ public class KillEventHandler {
 
         if (!(event.getEntity() instanceof Player victim)) return;
         if (!(event.getSource().getEntity() instanceof ServerPlayer killer)) return;
+        if (killer == victim) return;
 
         if (!KillRewardMod.rewardTeamKills) {
             Team killerTeam = killer.getTeam();
