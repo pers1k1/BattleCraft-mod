@@ -12,10 +12,12 @@ uniform mat4 ProjMat;
 
 out vec4 vertexColor;
 out vec2 texCoord0;
+out float bandX;
 
 void main() {
     gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);
 
     vertexColor = Color * texelFetch(Sampler2, UV2 / 16, 0);
     texCoord0 = UV0;
+    bandX = Position.x;
 }

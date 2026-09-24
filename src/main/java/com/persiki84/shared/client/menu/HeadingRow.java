@@ -46,12 +46,8 @@ public final class HeadingRow extends AbstractWidget implements GlidingRow {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (anchor.gone(getY(), height)) return;
 
-        boolean clipped = anchor.clip(graphics, getX(), width, getY(), height);
-        try {
-            super.render(graphics, mouseX, anchor.pointer(mouseY), partialTick);
-        } finally {
-            if (clipped) graphics.disableScissor();
-        }
+        anchor.draw(graphics, getX(), width, getY(), height,
+                () -> super.render(graphics, mouseX, anchor.pointer(mouseY), partialTick));
     }
 
     @Override

@@ -29,13 +29,14 @@ import com.persiki84.shared.client.menu.GlidingRow;
 import com.persiki84.shared.client.menu.ManagerScreen;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.MenuField;
-import com.persiki84.shared.client.menu.PaletteStack;
+import com.persiki84.shared.client.menu.PaletteWindow;
 import com.persiki84.shared.client.menu.MenuRow;
 import com.persiki84.shared.client.menu.PickRow;
 import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.client.ui.UiMotionSet;
 import com.persiki84.shared.client.menu.SliderRow;
 import com.persiki84.shared.client.menu.ToggleRow;
+import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -73,7 +74,6 @@ public final class CustomizeScreen extends ManagerScreen {
     private static final int MINE_ROWS = MenuField.ROW_EQUIVALENT + ConfigSection.ALL.size() + 4;
 
     private final PreviewPane preview = new PreviewPane();
-    private final PaletteStack windows = new PaletteStack();
 
     private final Map<Integer, List<AbstractWidget>> cached = new HashMap<>();
     private final Map<MenuRow, GlassKey> glassRowKeys = new HashMap<>();
@@ -97,6 +97,11 @@ public final class CustomizeScreen extends ManagerScreen {
     }
 
     @Override
+    public MenuKind presence() {
+        return MenuKind.CUSTOM;
+    }
+
+    @Override
     protected List<Component> tabs() {
         return List.of(
                 Component.translatable("battlecraft.custom.tab.glass"),
@@ -116,7 +121,6 @@ public final class CustomizeScreen extends ManagerScreen {
         tab = index;
         rowScroll = 0;
         listScroll = 0;
-        windows.closeAll();
         if (tab == TAB_MINE) PresetLibrary.refresh();
     }
 
@@ -202,6 +206,7 @@ public final class CustomizeScreen extends ManagerScreen {
             built.addAll(groupHead(group));
             built.addAll(groupSliders(group));
         }
+        built.add(heading("battlecraft.custom.group.reset"));
         built.add(action("battlecraft.custom.reset.glass", "battlecraft.custom.reset", () -> {
             Customization.resetGlass();
             Customization.save();
@@ -254,13 +259,14 @@ public final class CustomizeScreen extends ManagerScreen {
     private List<AbstractWidget> colorRows() {
         List<AbstractWidget> built = new ArrayList<>(inkRows());
         for (PaletteKey.Group group : PaletteKey.Group.values()) {
-            if (group.onGlassTab()) continue;
+            if (group.onGlassTab() || group.onInterfaceTab()) continue;
 
             built.add(heading("battlecraft.custom.group." + group.id()));
             for (PaletteKey key : PaletteKey.values()) {
                 if (key.group() == group) built.add(colorRow(key));
             }
         }
+        built.add(heading("battlecraft.custom.group.reset"));
         built.add(action("battlecraft.custom.follow_theme", "battlecraft.custom.apply", () -> {
             Customization.followTheme();
             Customization.save();
@@ -313,7 +319,7 @@ public final class CustomizeScreen extends ManagerScreen {
     }
 
     private void openPicker(PaletteKey key) {
-        windows.toggle(this.width, this.height, key.id(), Component.translatable(key.translationKey()),
+        palette(key.id(), PaletteWindow.Kind.LOCAL, Component.translatable(key.translationKey()),
                 Customization.color(key), argb -> {
                     Customization.color(key, argb);
                     Customization.save();
@@ -342,9 +348,15 @@ public final class CustomizeScreen extends ManagerScreen {
         }));
         built.add(markerRow());
         built.add(pointsKeyRow());
+        addDamageRows(built);
         addIslandRows(built);
         addVoiceRows(built);
         addRadioRows(built);
+        addElementRows(built);
+        return built;
+    }
+
+    private void addElementRows(List<AbstractWidget> built) {
         built.add(heading("battlecraft.custom.group.elements"));
         built.add(heading("battlecraft.custom.hud.in_chat"));
         for (HudSlot slot : HudSlot.values()) {
@@ -355,7 +367,6 @@ public final class CustomizeScreen extends ManagerScreen {
             Customization.save();
             rebuild();
         }));
-        return built;
     }
 
     // WHY: без мода строк нет вовсе: пустой раздел с мёртвыми списками устройств хуже отсутствия раздела
@@ -426,9 +437,9 @@ public final class CustomizeScreen extends ManagerScreen {
     }
 
     private void addIslandRows(List<AbstractWidget> built) {
+        built.add(heading("battlecraft.custom.group.island"));
         built.add(toggle("battlecraft.custom.island", HudConfig::island, HudConfig::island));
         built.add(toggle("battlecraft.custom.island_media", HudConfig::islandMedia, HudConfig::islandMedia));
-        built.add(heading("battlecraft.custom.group.island"));
         built.add(toggle("battlecraft.custom.island.avatar", HudConfig::islandAvatar, HudConfig::islandAvatar));
         built.add(toggle("battlecraft.custom.island.nick", HudConfig::islandNick, HudConfig::islandNick));
         built.add(toggle("battlecraft.custom.island.fps", HudConfig::islandFps, HudConfig::islandFps));
@@ -446,6 +457,29 @@ public final class CustomizeScreen extends ManagerScreen {
         built.add(dial("battlecraft.custom.visualizer_color", HudConfig::visualizerColor, HudConfig::visualizerColor));
         built.add(dial("battlecraft.custom.visualizer_attack", HudConfig::visualizerAttack, HudConfig::visualizerAttack));
         built.add(dial("battlecraft.custom.island_flip", HudConfig::islandFlipSpeed, HudConfig::islandFlipSpeed));
+    }
+
+    // WHY: у индикатора урона нет своей вкладки: выключатели, размер, время и оба цвета стоят
+    // WHY: одной группой здесь, а цвета не дублируются во вкладке «Цвета»
+    private void addDamageRows(List<AbstractWidget> built) {
+        built.add(heading("battlecraft.custom.group.damage"));
+        built.add(toggle("battlecraft.custom.damage_numbers", HudConfig::damageNumbers, HudConfig::damageNumbers));
+        built.add(toggle("battlecraft.custom.damage_stack", HudConfig::damageStack, HudConfig::damageStack));
+        built.add(damageDial("battlecraft.custom.damage_scale", HudConfig::damageScale, HudConfig::damageScale,
+                HudConfig.DAMAGE_SCALE_LEAST, HudConfig.DAMAGE_SCALE_MOST));
+        built.add(damageDial("battlecraft.custom.damage_time", HudConfig::damageTime, HudConfig::damageTime,
+                HudConfig.DAMAGE_TIME_LEAST, HudConfig.DAMAGE_TIME_MOST));
+        for (PaletteKey key : PaletteKey.values()) {
+            if (key.group().onInterfaceTab()) built.add(colorRow(key));
+        }
+    }
+
+    private SliderRow damageDial(String key, java.util.function.Supplier<Float> value,
+                                 java.util.function.Consumer<Float> apply, float least, float most) {
+        SliderRow row = new SliderRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, Component.translatable(key),
+                value, apply, least, most, DIAL_STEP);
+        row.hint(key + HINT_SUFFIX);
+        return row.readout(0, 100.0f, "%");
     }
 
     private SliderRow markerRow() {
@@ -743,37 +777,12 @@ public final class CustomizeScreen extends ManagerScreen {
     }
 
     @Override
-    protected void renderOverlay(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        windows.render(graphics, this.width, this.height, mouseX, mouseY);
-    }
-
-    @Override
-    protected boolean inputCaptured() {
-        return windows.covering(cursorX(), cursorY());
-    }
-
-    @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (windows.mouseClicked(mouseX, mouseY)) return true;
+        if (paletteCovering(mouseX, mouseY)) return super.mouseClicked(mouseX, mouseY, button);
         for (KeyRow row : listeningRows()) {
             if (row.takeButton(button)) return true;
         }
-
-        boolean handled = super.mouseClicked(mouseX, mouseY, button);
-        if (windows.any()) setFocused(null);
-        return handled;
-    }
-
-    @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (windows.mouseDragged(mouseX, mouseY)) return true;
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
-    }
-
-    @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (windows.mouseReleased()) return true;
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
@@ -781,19 +790,12 @@ public final class CustomizeScreen extends ManagerScreen {
         for (KeyRow row : listeningRows()) {
             if (row.take(key, scanCode)) return true;
         }
-        if (windows.keyPressed(key)) return true;
         return super.keyPressed(key, scanCode, modifiers);
     }
 
     @Override
-    public boolean charTyped(char symbol, int modifiers) {
-        if (windows.charTyped(symbol)) return true;
-        return super.charTyped(symbol, modifiers);
-    }
-
-    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
-        if (leaving() || windows.covering(mouseX, mouseY)) return true;
+        if (leaving() || paletteCovering(mouseX, mouseY)) return true;
 
         int step = amount > 0 ? -1 : 1;
         if (tab == TAB_MINE && localX(mouseX) < contentLeft() + PANEL_PAD + LIST_WIDTH) {

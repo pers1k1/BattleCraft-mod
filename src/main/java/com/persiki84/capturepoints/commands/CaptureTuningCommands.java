@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.persiki84.battlecraft.rules.MarkerRange;
 import com.persiki84.capturepoints.capture.CaptureMode;
 import com.persiki84.capturepoints.capture.CapturePoint;
 import com.persiki84.capturepoints.capture.CapturePointManager;
@@ -50,7 +51,10 @@ public final class CaptureTuningCommands {
                 .then(numberBranch("setownedrollback", points, lookup, 1, MAX_PERCENT, CapturePoint::setOwnedRollbackSpeed))
                 .then(numberBranch("setteamcooldown", points, lookup, 0, MAX_COOLDOWN, CapturePoint::setTeamCooldown))
                 .then(flagBranch("setrequired", points, lookup, CapturePoint::setRequired))
-                .then(flagBranch("sethud", points, lookup, CapturePoint::setShownInHud));
+                .then(numberBranch("setmarkerrange", points, lookup, CapturePoint.KIND_RANGE,
+                        MarkerRange.MAX_BLOCKS, CapturePoint::setMarkerRange))
+                .then(flagBranch("sethud", points, lookup, CapturePoint::setShownInHud))
+                .then(flagBranch("sethideinside", points, lookup, CapturePoint::setHiddenInside));
     }
 
     // WHY: обязательность и показ в HUD живут в общей ветке обоих корней, как бонусы точки:

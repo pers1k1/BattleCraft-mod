@@ -16,9 +16,9 @@ public final class MenuData {
 
     private MenuData() {}
 
-    public static void accept(String menuId, CompoundTag state, boolean opening) {
+    public static void accept(String menuId, CompoundTag state, boolean opening, int tab) {
         states.put(menuId, state == null ? new CompoundTag() : state);
-        if (opening) MenuScreens.open(menuId);
+        if (opening) MenuScreens.open(menuId, tab);
     }
 
     public static CompoundTag state(String menuId) {

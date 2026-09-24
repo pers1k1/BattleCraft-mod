@@ -11,6 +11,7 @@ public final class PanelScreens {
 
     public static void register() {
         MenuScreens.register(ModuleMenuStates.AIRDROP, AirDropScreen::new);
+        MenuScreens.register(ModuleMenuStates.LOOT, () -> new com.persiki84.battlecraft.client.menu.panel.loot.LootEditorScreen(null, null));
         MenuScreens.register(ModuleMenuStates.QUARRY, QuarryScreen::new);
         MenuScreens.register(ModuleMenuStates.KILL_REWARD, KillRewardScreen::new);
         MenuScreens.register(ModuleMenuStates.IMMORTALITY, ImmortalityScreen::new);

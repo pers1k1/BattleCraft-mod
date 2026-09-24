@@ -4,6 +4,10 @@ uniform sampler2D Sampler0;
 uniform vec4 ColorModulator;
 uniform float TextWeight;
 
+uniform vec4 RevealBand;
+uniform vec4 RevealShade;
+
+in float bandX;
 in vec4 vertexColor;
 in vec2 texCoord0;
 
@@ -44,10 +48,23 @@ float sharpCoverage(vec2 uv) {
     return smoothstep(threshold - edge, threshold + edge, ink);
 }
 
+const float REVEAL_OPAQUE_AT = 0.7;
+
+// WHY: бегущая строка гаснет у края коробки по пикселю, а не буквой целиком: край проявляется
+// WHY: как свет по надписи, а подмес тёмного тона у самой кромки даёт тень на стыке букв
+vec4 revealed(vec4 color) {
+    float fromLeft = (bandX - RevealBand.x) / max(RevealBand.z, 0.0001);
+    float fromRight = (RevealBand.y - bandX) / max(RevealBand.w, 0.0001);
+    float reach = clamp(min(fromLeft, fromRight), 0.0, 1.0);
+    float light = smoothstep(0.0, REVEAL_OPAQUE_AT, reach);
+    float shade = (1.0 - reach) * RevealShade.a;
+    return vec4(mix(color.rgb, RevealShade.rgb, shade), color.a * light);
+}
+
 void main() {
     vec4 color = vertexColor * ColorModulator;
     float coverage = sharpCoverage(texCoord0);
-    fragColor = vec4(color.rgb, color.a * coverage);
+    fragColor = revealed(vec4(color.rgb, color.a * coverage));
 
     if (fragColor.a < 0.008) {
         discard;

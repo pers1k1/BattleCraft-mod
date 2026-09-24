@@ -82,6 +82,9 @@ public final class UiAssemble {
         Matrix4f matrix = graphics.pose().last().pose();
         BufferBuilder builder = Tesselator.getInstance().getBuilder();
 
+        // WHY: догорающая панель висит в мире, и к ней можно зайти со спины: с отсечением задних
+        // WHY: граней её квад со спины срезался целиком, и панель пропадала посреди горения
+        RenderSystem.disableCull();
         UiRender.ignoreDepth();
         RenderSystem.enableBlend();
         RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
@@ -101,6 +104,7 @@ public final class UiAssemble {
         builder.vertex(matrix, left, top, 0.0f).uv(leftU, topV).endVertex();
         Tesselator.getInstance().end();
 
+        RenderSystem.enableCull();
         UiRender.resumeDepth();
         UiRender.standardBlend();
     }

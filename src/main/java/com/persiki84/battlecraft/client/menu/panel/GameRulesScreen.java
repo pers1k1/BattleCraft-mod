@@ -74,6 +74,8 @@ public class GameRulesScreen extends PanelScreen {
         return ModuleMenuStates.GAME_RULES;
     }
 
+    // WHY: вкладка меток идёт под номером ModuleMenuStates.GAME_RULES_MARKERS_TAB: по этому номеру
+    // WHY: команда /bc markers открывает экран сразу на ней
     @Override
     protected List<Page> pages() {
         return List.of(

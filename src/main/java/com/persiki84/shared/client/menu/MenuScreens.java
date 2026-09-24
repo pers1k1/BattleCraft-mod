@@ -17,7 +17,19 @@ public final class MenuScreens {
     }
 
     public static void open(String menuId) {
-        open(menuId, null);
+        open(menuId, (Screen) null);
+    }
+
+    // WHY: команда умеет открыть экран на своей вкладке, и вкладка ставится до init: экран
+    // WHY: строит содержимое один раз, а переключение после показа мигнуло бы первой вкладкой
+    public static void open(String menuId, int tab) {
+        Supplier<Screen> factory = factories.get(menuId);
+        if (factory == null) return;
+
+        MenuFeedback.clear();
+        Screen screen = factory.get();
+        if (tab >= 0 && screen instanceof PanelScreen panel) panel.openOn(tab);
+        Minecraft.getInstance().setScreen(screen);
     }
 
     public static void open(String menuId, Screen parent) {

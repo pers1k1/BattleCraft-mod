@@ -10,6 +10,7 @@
     "ServerLevelSoundMixin"
   ],
   "client": [
+    "AbstractSelectionListMixin",
     "AbstractWidgetMixin",
     "ChatComponentMixin",
     "ChatScreenMixin",
@@ -31,6 +32,7 @@
     "LocalPlayerMixin",
     "MinecraftOverlayMixin",
     "NameTagMixin",
+    "PlayerModelMixin",
     "PostChainAccessor",
     "ProgressScreenAccessor",
     "ScreenMixin",

@@ -15,6 +15,8 @@ import com.persiki84.shared.client.ui.UiStage;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiMotion;
 import com.persiki84.shared.client.ui.UiMotionSet;
+import com.persiki84.shared.menu.MenuFace;
+import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -78,6 +80,38 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
     protected float contentScale() {
         return 1.0f;
     }
+
+    public MenuKind presence() {
+        return MenuKind.MENU;
+    }
+
+    public MenuFace face() {
+        return MenuFace.of(presence(), getTitle());
+    }
+
+    // WHY: живой кадр окна уходит тиммейтам, и админские панели в него не попадают: там данные,
+    // WHY: которые сервер обычному игроку нарочно не отдаёт
+    public boolean broadcast() {
+        return presence() != MenuKind.ADMIN;
+    }
+
+    public boolean settled() {
+        return !leaving && !reveal.active() && shown() >= SETTLED;
+    }
+
+    protected Area frameArea() {
+        return new Area(0.0f, 0.0f, this.width, this.height);
+    }
+
+    public Area frame() {
+        Area local = frameArea();
+        float scale = entranceScale(1.0f);
+        float left = this.width / 2.0f + (local.x() - this.width / 2.0f) * scale;
+        float top = this.height / 2.0f + (local.y() - this.height / 2.0f) * scale;
+        return new Area(left, top, local.width() * scale, local.height() * scale);
+    }
+
+    public record Area(float x, float y, float width, float height) {}
 
     protected boolean worldAnchored() {
         return UiPlane.allowed() && this.minecraft != null && this.minecraft.level != null;

@@ -19,7 +19,6 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.joml.Matrix4f;
 
-import java.util.List;
 
 @Mod.EventBusSubscriber(modid = ZonesMod.MOD_ID, value = Dist.CLIENT)
 public final class ZoneRenderer {
@@ -27,6 +26,7 @@ public final class ZoneRenderer {
     private static final float RING_ALPHA = 0.95f;
     private static final float FRESNEL_POWER = 1.6f;
     private static final double WALL_DISTANCE = 64.0;
+    private static final double WALL_FADE = 14.0;
     private static final float PULSE_SECONDS = 2.5f;
     private static final float TAU = (float) (Math.PI * 2.0);
     private static final long ANIMATION_CYCLE_MILLIS = 3600000L;
@@ -60,31 +60,38 @@ public final class ZoneRenderer {
         Matrix4f projection = event.getProjectionMatrix();
         ZoneMarkers.project(camera, modelView, projection);
 
-        List<Zone> zones = VisibleZones.current();
-        if (zones.isEmpty() || !ZoneShaders.ready()) return;
-
-        drawVolumes(zones, event.getFrustum(), camera, modelView, projection);
-    }
-
-    private static void drawVolumes(List<Zone> zones, Frustum frustum, Vec3 camera,
-                                    Matrix4f modelView, Matrix4f projection) {
         long now = System.currentTimeMillis();
         long elapsed = now - lastFrameTime;
         lastFrameTime = now;
 
-        Minecraft minecraft = Minecraft.getInstance();
+        ZonePresence.begin(Minecraft.getInstance().level);
+        ZonePresence.want(VisibleZones.current());
+        ZonePresence.want(VisibleZones.markVolumes());
+        ZonePresence.advance(elapsed / 1000.0f);
+        if (ZonePresence.idle() || !ZoneShaders.ready()) return;
+
+        drawVolumes(event.getFrustum(), camera, modelView, projection, now, elapsed);
+    }
+
+    private static void drawVolumes(Frustum frustum, Vec3 camera, Matrix4f modelView, Matrix4f projection,
+                                    long now, long elapsed) {
         float pulsePhase = (now % (long) (PULSE_SECONDS * 1000.0f)) / (PULSE_SECONDS * 1000.0f) * TAU;
         animationTime = (float) ((now % ANIMATION_CYCLE_MILLIS) / 1000.0);
 
+        Minecraft minecraft = Minecraft.getInstance();
         beginState();
-        for (Zone zone : zones) {
-            if (!frustum.isVisible(zone.area().bounds())) continue;
-            drawZone(zone, minecraft, camera, modelView, projection, pulsePhase, elapsed);
+        try {
+            for (int index = 0; index < ZonePresence.size(); index++) {
+                ZonePresence.Entry entry = ZonePresence.get(index);
+                if (!frustum.isVisible(entry.zone().area().bounds())) continue;
+                drawZone(entry.zone(), entry.alpha(), minecraft, camera, modelView, projection, pulsePhase, elapsed);
+            }
+        } finally {
+            endState();
         }
-        endState();
     }
 
-    private static void drawZone(Zone zone, Minecraft minecraft, Vec3 camera, Matrix4f modelView,
+    private static void drawZone(Zone zone, float presence, Minecraft minecraft, Vec3 camera, Matrix4f modelView,
                                  Matrix4f projection, float pulsePhase, long elapsed) {
         ZoneArea area = zone.area();
         float progress = captureProgress(zone);
@@ -94,24 +101,29 @@ public final class ZoneRenderer {
         double originY = area.center().getY() - camera.y;
         double originZ = area.centerZ() - camera.z;
 
-        double distanceSquared = originX * originX + originZ * originZ;
-        if (distanceSquared < WALL_DISTANCE * WALL_DISTANCE) {
-            drawWall(zone, area, minecraft, originX, originY, originZ, color, progress, pulsePhase,
-                    modelView, projection);
+        float wall = presence * wallFade(Math.sqrt(originX * originX + originZ * originZ));
+        if (wall > 0.0f) {
+            drawWall(zone, area, minecraft, originX, originY, originZ, color, WALL_ALPHA * wall, progress,
+                    pulsePhase, modelView, projection);
         }
-        drawRing(zone, area, minecraft, originX, originY, originZ, color, progress, pulsePhase, modelView, projection);
+        drawRing(zone, area, minecraft, originX, originY, originZ, color, RING_ALPHA * presence, progress,
+                pulsePhase, modelView, projection);
+    }
+
+    private static float wallFade(double distance) {
+        return (float) Math.max(0.0, Math.min(1.0, (WALL_DISTANCE - distance) / WALL_FADE));
     }
 
     private static void drawWall(Zone zone, ZoneArea area, Minecraft minecraft,
                                  double originX, double originY, double originZ,
-                                 float[] color, float progress, float pulsePhase,
+                                 float[] color, float alpha, float progress, float pulsePhase,
                                  Matrix4f modelView, Matrix4f projection) {
         ShaderInstance shader = ZoneShaders.volume();
         applyUniforms(shader, originX, originY, originZ, 1.0f, 1.0f, 1.0f,
-                color, WALL_ALPHA, progress, pulsePhase, 0.0f);
+                color, alpha, progress, pulsePhase, 0.0f);
 
         RenderSystem.disableCull();
-        VertexBuffer wall = ZoneMeshes.wall(minecraft.level, zone.id(), area);
+        VertexBuffer wall = ZoneMeshes.wall(minecraft.level, zone.cacheKey(), area);
         wall.bind();
         wall.drawWithShader(modelView, projection, shader);
         VertexBuffer.unbind();
@@ -120,16 +132,16 @@ public final class ZoneRenderer {
 
     private static void drawRing(Zone zone, ZoneArea area, Minecraft minecraft,
                                  double originX, double originY, double originZ,
-                                 float[] color, float progress, float pulsePhase,
+                                 float[] color, float alpha, float progress, float pulsePhase,
                                  Matrix4f modelView, Matrix4f projection) {
         ShaderInstance shader = ZoneShaders.ring();
         applyUniforms(shader, originX, originY, originZ, 1.0f, 1.0f, 1.0f,
-                color, RING_ALPHA, progress, pulsePhase, 1.0f);
+                color, alpha, progress, pulsePhase, 1.0f);
 
         RenderSystem.polygonOffset(-1.0f, -6.0f);
         RenderSystem.enablePolygonOffset();
 
-        VertexBuffer ring = ZoneMeshes.ring(minecraft.level, zone.id(), area);
+        VertexBuffer ring = ZoneMeshes.ring(minecraft.level, zone.cacheKey(), area);
         ring.bind();
         ring.drawWithShader(modelView, projection, shader);
         VertexBuffer.unbind();

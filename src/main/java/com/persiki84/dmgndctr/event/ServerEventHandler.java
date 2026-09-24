@@ -1,38 +1,48 @@
 package com.persiki84.dmgndctr.event;
 
-import com.persiki84.dmgndctr.network.DamagePacket;
-import com.persiki84.dmgndctr.network.PacketHandler;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
+import net.minecraftforge.event.entity.player.CriticalHitEvent;
+import net.minecraftforge.eventbus.api.Event;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.network.PacketDistributor;
 
 public class ServerEventHandler {
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void onCriticalHit(CriticalHitEvent event) {
+        if (event.getEntity().level().isClientSide || !strikes(event)) return;
+        CriticalMarks.mark(event.getEntity(), event.getTarget());
+    }
+
+    // WHY: крит решает итог события, а не ванильный признак: ForgeHooks.getCriticalHit пропускает
+    // WHY: ALLOW всегда, а DEFAULT только при ванильном крите
+    private static boolean strikes(CriticalHitEvent event) {
+        Event.Result result = event.getResult();
+        return result == Event.Result.ALLOW || (result == Event.Result.DEFAULT && event.isVanillaCritical());
+    }
+
+    // WHY: читается последним, когда урон уже поправлен и не отменён другими обработчиками:
+    // WHY: на обычном приоритете цифра показывалась и за удар, который потом отменили
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onDamage(LivingDamageEvent event) {
-        if (event.getEntity().level().isClientSide) return;
+        LivingEntity target = event.getEntity();
+        if (target.level().isClientSide) return;
         if (!ModuleSwitches.allows(ModuleId.DAMAGE_INDICATOR)) return;
+        if (!(event.getSource().getEntity() instanceof ServerPlayer attacker) || attacker == target) return;
 
-        Entity attacker = event.getSource().getEntity();
+        float amount = event.getAmount();
+        if (!(amount > 0.0f) || Float.isInfinite(amount)) return;
 
-        if (attacker instanceof ServerPlayer player) {
-            float damage = event.getAmount();
-            if (damage <= 0) return;
+        DamageLedger.record(attacker, target, amount, CriticalMarks.marked(attacker, target));
+    }
 
-            double x = event.getEntity().getX() + (Math.random() - 0.5) * 0.5;
-            double y = event.getEntity().getY() + event.getEntity().getBbHeight() + (Math.random() * 0.5);
-            double z = event.getEntity().getZ() + (Math.random() - 0.5) * 0.5;
-
-            boolean isCrit = damage > 10;
-
-            PacketHandler.INSTANCE.send(
-                    PacketDistributor.PLAYER.with(() -> player),
-                    new DamagePacket(damage, x, y, z, isCrit)
-            );
-        }
+    @SubscribeEvent
+    public void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) DamageLedger.flush();
     }
 }

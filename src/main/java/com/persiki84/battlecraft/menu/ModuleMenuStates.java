@@ -1,7 +1,5 @@
 package com.persiki84.battlecraft.menu;
 
-import com.persiki84.airdrop.config.AirDropConfig;
-import com.persiki84.airdrop.loot.AirDropLootManager;
 import com.persiki84.combattimer.CombatTimerMod;
 import com.persiki84.immortality.event.ImmortalityHandler;
 import com.persiki84.itemmodifiers.ModifierConfig;
@@ -17,7 +15,6 @@ import com.persiki84.battlecraft.rules.GameRule;
 import com.persiki84.battlecraft.rules.GameRules;
 import com.persiki84.battlecraft.rules.MarkerRange;
 import com.persiki84.battlecraft.rules.MarkerRanges;
-import com.persiki84.shared.gunsmith.GunSmith;
 import com.persiki84.shared.menu.MenuStates;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -25,15 +22,14 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.ItemStack;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class ModuleMenuStates {
     public static final String AIRDROP = "airdrop";
+    public static final String LOOT = "airdrop_loot";
     public static final String QUARRY = "quarry";
     public static final String KILL_REWARD = "killreward";
     public static final String IMMORTALITY = "immortality";
@@ -45,23 +41,22 @@ public final class ModuleMenuStates {
     public static final String GAME_RULES = "gamerules";
     public static final String IFF_AVAILABLE = "iffAvailable";
     public static final String MARKER_RANGE = "markerRange.";
+    public static final int GAME_RULES_MARKERS_TAB = 3;
     public static final String TEAMS = "teams";
     public static final String MAP = "map";
 
-    private static final ResourceLocation GLOBAL_TABLE = new ResourceLocation("airdrop", "global");
     public static final String TRACKED_ITEMS = "trackedItems";
     public static final String QUARRY_RULES = "quarryRules";
     public static final String QUARRY_BLOCKS = "quarryBlocks";
     public static final String IMMORTAL_PLAYERS = "immortalPlayers";
 
-    private static final int PERCENT = 100;
-    private static final int TICKS_PER_SECOND = 20;
     private static final int LISTED_BLOCKS = 200;
 
     private ModuleMenuStates() {}
 
     public static void register() {
-        MenuStates.register(AIRDROP, 2, player -> airdrop());
+        MenuStates.register(AIRDROP, 2, player -> AirDropMenuState.airdrop());
+        MenuStates.register(LOOT, 2, player -> AirDropMenuState.loot());
         MenuStates.register(QUARRY, 2, player -> quarry());
         MenuStates.register(KILL_REWARD, 2, player -> killReward());
         MenuStates.register(IMMORTALITY, 2, ModuleMenuStates::immortality);
@@ -73,50 +68,6 @@ public final class ModuleMenuStates {
         MenuStates.register(GAME_RULES, 2, player -> gameRules());
         MenuStates.register(TEAMS, 2, ModuleMenuStates::teams);
         MenuStates.register(MAP, 2, ModuleMenuStates::map);
-    }
-
-    private static CompoundTag airdrop() {
-        AirDropConfig.Server config = AirDropConfig.SERVER;
-        CompoundTag tag = new CompoundTag();
-
-        tag.putBoolean("modEnabled", config.modEnabled.get());
-        tag.putBoolean("autoSpawnEnabled", config.autoSpawnEnabled.get());
-        tag.putBoolean("centerAtWorldSpawn", config.centerAtWorldSpawn.get());
-        tag.putInt("centerX", (int) Math.round(config.centerX.get()));
-        tag.putInt("centerZ", (int) Math.round(config.centerZ.get()));
-        tag.putInt("spawnRadius", config.spawnRadius.get());
-        tag.putInt("intervalSeconds", config.intervalSeconds.get());
-        tag.putInt("chancePercent", (int) Math.round(config.intervalSpawnChance.get() * PERCENT));
-        tag.putInt("flightSeconds", config.flyingAnimTicks.get() / TICKS_PER_SECOND);
-        tag.putInt("openDelaySeconds", config.autoOpenDelayTicks.get() / TICKS_PER_SECOND);
-        tag.putInt("despawnEmptySeconds", config.despawnEmptySeconds.get());
-        tag.putInt("despawnFilledSeconds", config.despawnFilledSeconds.get());
-        tag.putInt("warnSeconds", config.notificationSecondsBeforeDespawn.get());
-        tag.put("loot", lootEntries());
-        return tag;
-    }
-
-    private static ListTag lootEntries() {
-        ListTag list = new ListTag();
-        int index = 0;
-        for (AirDropLootManager.LootEntry entry : AirDropLootManager.getTable(GLOBAL_TABLE)) {
-            list.add(lootEntry(entry, index++));
-        }
-        return list;
-    }
-
-    private static CompoundTag lootEntry(AirDropLootManager.LootEntry entry, int index) {
-        CompoundTag stored = new CompoundTag();
-        stored.putInt("index", index);
-        stored.putString("item", entry.itemId().toString());
-        stored.putInt("min", entry.min());
-        stored.putInt("max", entry.max());
-        stored.putInt("chance", Math.round(entry.chance() * PERCENT));
-
-        ItemStack stack = AirDropLootManager.stackOf(entry, 1);
-        stored.putBoolean("gun", GunSmith.isGun(stack));
-        stored.put("stack", stack.save(new CompoundTag()));
-        return stored;
     }
 
     private static CompoundTag teams(ServerPlayer player) {
@@ -189,6 +140,7 @@ public final class ModuleMenuStates {
         entry.putInt("y", pos.getY());
         entry.putInt("z", pos.getZ());
         entry.putInt("cooldown", (int) manager.getCustomCooldown(pos, block.getDimension()));
+        entry.putInt("left", (int) manager.getRemainingCooldown(pos, block.getDimension()));
         return entry;
     }
 

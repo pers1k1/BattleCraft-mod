@@ -481,7 +481,7 @@ public class CaptureHudOverlay {
     private static void renderMarker(GuiGraphics graphics, Minecraft mc, ProjectedMarker marker,
                                      float x, float y, float focus, float delta, boolean points) {
         MarkerState state = stateOf(marker);
-        float presence = state.presence(points && marker.inRange(), delta);
+        float presence = state.presence(points && marker.kept(), delta);
         if (presence <= MARKER_GONE) return;
 
         if (marker.name() == null) {

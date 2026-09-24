@@ -30,19 +30,16 @@ public final class MapActionMenu {
     private static final float OPEN_RISE = 6.0f;
     private static final float ROW_STAGGER = 0.11f;
     private static final float SHOWN = 0.995f;
+    private static final float GONE = 0.004f;
 
     public record Item(Component label, int swatch, Runnable run) {
         public static Item of(String key, Runnable run) {
             return new Item(Component.translatable(key), 0, run);
         }
-
-        public static Item colored(Component label, int swatch, Runnable run) {
-            return new Item(label, swatch, run);
-        }
     }
 
     private final List<Item> items = new ArrayList<>();
-    private final Smooth entrance = new Smooth(0.0f, OPEN_SPEED);
+    private final Smooth presence = new Smooth(0.0f, OPEN_SPEED);
     private float x;
     private float y;
     private float width;
@@ -52,9 +49,10 @@ public final class MapActionMenu {
         return open;
     }
 
+    // WHY: строки остаются до конца ухода: окно сворачивается той же лесенкой в обратную
+    // WHY: сторону, и без строк от него осталось бы пустое стекло
     public void close() {
         open = false;
-        items.clear();
     }
 
     public void show(Font font, double pointerX, double pointerY, int screenWidth, int screenHeight,
@@ -67,7 +65,7 @@ public final class MapActionMenu {
         x = (float) Math.min(pointerX, screenWidth - width - EDGE);
         y = (float) Math.min(pointerY, screenHeight - height() - EDGE);
         open = true;
-        entrance.snap(0.0f);
+        presence.snap(0.0f);
         UiSound.press();
     }
 
@@ -86,9 +84,13 @@ public final class MapActionMenu {
     // WHY: строки въезжают лесенкой от своего номера, а не одним куском: окно открывается на
     // WHY: щелчок посреди карты, и мгновенная плашка читается как скачок кадра
     public void render(GuiGraphics graphics, Font font, double mouseX, double mouseY) {
-        if (!open) return;
+        float shown = presence.to(open ? 1.0f : 0.0f, UiFrame.delta());
+        if (!open && shown <= GONE) {
+            items.clear();
+            return;
+        }
+        if (items.isEmpty()) return;
 
-        float shown = entrance.to(1.0f, UiFrame.delta());
         float total = height();
         UiGlass.panel(graphics, x, y + (1.0f - shown) * OPEN_RISE, width, total,
                 UiMetrics.radius(ROW_HEIGHT), shown);
@@ -98,7 +100,7 @@ public final class MapActionMenu {
         for (Item item : items) {
             float step = UiAnim.clamp01((shown - index * ROW_STAGGER) / (1.0f - ROW_STAGGER));
             renderRow(graphics, font, item, rowY + (1.0f - step) * OPEN_RISE, step,
-                    shown > SHOWN && inside(mouseX, mouseY, rowY));
+                    open && shown > SHOWN && inside(mouseX, mouseY, rowY));
             rowY += ROW_HEIGHT + ROW_GAP;
             index++;
         }

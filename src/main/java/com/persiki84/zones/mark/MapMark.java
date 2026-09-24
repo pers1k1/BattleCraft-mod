@@ -1,5 +1,6 @@
 package com.persiki84.zones.mark;
 
+import com.persiki84.battlecraft.rules.MarkerRange;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
@@ -12,11 +13,13 @@ import java.util.Set;
 
 public final class MapMark {
     public static final int DEFAULT_COLOR = 0xFFE7E9F4;
+    private static final int OPAQUE = 0xFF000000;
     public static final int MAX_LINES = 6;
     public static final int LINE_LIMIT = 64;
     public static final int SCALE_FULL = 100;
     public static final int SCALE_MIN = 25;
     public static final int SCALE_MAX = 400;
+    public static final int KIND_RANGE = 0;
 
     private final String id;
     private BlockPos position;
@@ -26,13 +29,15 @@ public final class MapMark {
     private boolean inWorld = true;
     private MarkKind kind = MarkKind.DEFAULT;
     private int scalePercent = SCALE_FULL;
+    private int markerRange = KIND_RANGE;
+    private MarkHideZone hideZone = MarkHideZone.NONE;
     private final Set<String> teams = new LinkedHashSet<>();
 
     public MapMark(String id, BlockPos position, ResourceLocation dimension, String label, int color) {
         this.id = id;
         this.position = position;
         this.dimension = dimension;
-        this.color = color;
+        this.color = color | OPAQUE;
         setLabel(label);
     }
 
@@ -43,6 +48,8 @@ public final class MapMark {
     public boolean inWorld() { return inWorld; }
     public MarkKind kind() { return kind; }
     public int scalePercent() { return scalePercent; }
+    public int markerRange() { return markerRange; }
+    public MarkHideZone hideZone() { return hideZone; }
     public Set<String> teams() { return teams; }
 
     // WHY: подпись это первая строка надписи: у метки-точки она одна, и весь прежний код,
@@ -58,11 +65,20 @@ public final class MapMark {
 
     public void setPosition(BlockPos value) { this.position = value; }
     public void setDimension(ResourceLocation value) { this.dimension = value; }
-    public void setColor(int value) { this.color = value; }
+    // WHY: подпись на карте умножает альфу цвета, и цвет без неё из команды делал надпись невидимой
+    public void setColor(int value) { this.color = value | OPAQUE; }
     public void setInWorld(boolean value) { this.inWorld = value; }
 
     public void setScalePercent(int value) {
         this.scalePercent = Math.max(SCALE_MIN, Math.min(SCALE_MAX, value));
+    }
+
+    public void setMarkerRange(int blocks) {
+        this.markerRange = MarkerRange.normalize(blocks);
+    }
+
+    public void setHideZone(MarkHideZone value) {
+        this.hideZone = value == null ? MarkHideZone.NONE : value;
     }
 
     // WHY: надпись на карте живёт своим текстом и по умолчанию не лезет в мир: точка над
@@ -149,6 +165,8 @@ public final class MapMark {
         buf.writeBoolean(inWorld);
         buf.writeUtf(kind.id());
         buf.writeVarInt(scalePercent);
+        buf.writeVarInt(markerRange);
+        hideZone.write(buf);
         buf.writeVarInt(teams.size());
         for (String team : teams) {
             buf.writeUtf(team);
@@ -171,6 +189,8 @@ public final class MapMark {
         mark.setInWorld(buf.readBoolean());
         mark.setKind(MarkKind.byId(buf.readUtf()));
         mark.setScalePercent(buf.readVarInt());
+        mark.setMarkerRange(buf.readVarInt());
+        mark.setHideZone(MarkHideZone.read(buf));
 
         int count = buf.readVarInt();
         for (int index = 0; index < count; index++) {

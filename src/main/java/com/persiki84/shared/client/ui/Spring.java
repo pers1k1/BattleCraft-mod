@@ -55,6 +55,12 @@ public final class Spring {
         return velocity;
     }
 
+    public void take(Spring older) {
+        value = older.value;
+        velocity = older.velocity;
+        primed = older.primed;
+    }
+
     public void snap(float target) {
         value = target;
         velocity = 0.0f;

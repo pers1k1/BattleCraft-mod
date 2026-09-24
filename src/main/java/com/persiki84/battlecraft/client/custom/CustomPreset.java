@@ -21,6 +21,7 @@ public enum CustomPreset {
     PLAIN("plain", UiQuality.Mode.PLAIN, false);
 
     private static final float DIM_BRIGHTNESS = 0.72f;
+    private static final float CLEAR_DIM_BRIGHTNESS = 0.55f;
 
     private final String id;
     private final UiQuality.Mode mode;
@@ -163,7 +164,7 @@ public enum CustomPreset {
 
     private static void clearDim(Map<GlassKey, Float> tuned) {
         clear(tuned);
-        tuned.put(GlassKey.BRIGHTNESS, DIM_BRIGHTNESS);
+        tuned.put(GlassKey.BRIGHTNESS, CLEAR_DIM_BRIGHTNESS);
     }
 
     private static void prism(Map<GlassKey, Float> tuned) {

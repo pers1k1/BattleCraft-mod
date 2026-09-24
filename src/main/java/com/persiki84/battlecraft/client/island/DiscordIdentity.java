@@ -19,6 +19,7 @@ public final class DiscordIdentity {
     private static final int OP_CLOSE = 2;
     private static final int HEADER = 8;
     private static final int PAYLOAD_LIMIT = 1 << 16;
+    private static final long RETRY_MS = 30_000L;
 
     private static boolean asked;
 
@@ -37,18 +38,40 @@ public final class DiscordIdentity {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
 
+    // WHY: Discord часто запускают уже после игры, а CDN бывает недоступен на старте: одна попытка
+    // WHY: оставляла вместо аватара голову скина до перезапуска игры
     private static void probe(String clientId) {
+        while (!settled(clientId)) {
+            try {
+                Thread.sleep(RETRY_MS);
+            } catch (InterruptedException stopped) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    private static boolean settled(String clientId) {
+        JsonObject user = answer(clientId);
+        if (user == null) return false;
+
+        String id = string(user, "id");
+        String avatar = string(user, "avatar");
+        BattleCraftMod.LOGGER.info("[battlecraft] discord identity: id={} avatar={}", id, avatar);
+        if (avatar.isEmpty()) return true;
+        if (!DiscordAvatar.acceptable(id, avatar)) {
+            BattleCraftMod.LOGGER.warn("[battlecraft] discord identity rejected: malformed id or avatar");
+            return true;
+        }
+        return DiscordAvatar.fetch(id, avatar);
+    }
+
+    private static JsonObject answer(String clientId) {
         for (int index = 0; index < PIPES; index++) {
             JsonObject user = greet(PIPE + index, clientId);
-            if (user == null) continue;
-
-            String id = string(user, "id");
-            String avatar = string(user, "avatar");
-            BattleCraftMod.LOGGER.info("[battlecraft] discord identity: id={} avatar={}", id, avatar);
-            DiscordAvatar.remember(id, avatar);
-            return;
+            if (user != null) return user;
         }
-        BattleCraftMod.LOGGER.info("[battlecraft] discord ipc did not answer on any pipe");
+        return null;
     }
 
     private static JsonObject greet(String pipe, String clientId) {
@@ -94,6 +117,6 @@ public final class DiscordIdentity {
     }
 
     private static String string(JsonObject holder, String key) {
-        return holder.has(key) && !holder.get(key).isJsonNull() ? holder.get(key).getAsString() : "";
+        return holder.has(key) && holder.get(key).isJsonPrimitive() ? holder.get(key).getAsString() : "";
     }
 }

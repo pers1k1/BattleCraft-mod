@@ -144,11 +144,15 @@ public class QuarryScreen extends PanelScreen {
         return row;
     }
 
+    // WHY: в списке важнее всего, живой блок или выработка: остаток отката идёт первой строкой,
+    // WHY: а свой кулдаун блока приписывается к нему, иначе состояние карьера читается только в мире
     private static Component blockNote(CompoundTag block) {
         Component dimension = dimensionLabel(block.getString("dimension"));
         int cooldown = block.getInt("cooldown");
-        if (cooldown <= 0) return dimension;
+        int left = block.getInt("left");
 
+        if (left > 0) return Component.translatable("quarrymod.menu.list.left", dimension, left);
+        if (cooldown <= 0) return dimension;
         return Component.translatable("quarrymod.menu.list.custom", dimension, cooldown);
     }
 

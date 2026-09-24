@@ -9,8 +9,12 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.persiki84.battlecraft.BattleCraftCommands;
 import com.persiki84.zones.ZonesMod;
+import com.persiki84.battlecraft.rules.MarkerRange;
+import com.persiki84.shared.zone.ZoneShape;
 import com.persiki84.zones.mark.MapMark;
+import com.persiki84.zones.mark.MarkHideZone;
 import com.persiki84.zones.mark.MarkKind;
+import com.persiki84.zones.mark.MarkPalette;
 import com.persiki84.zones.mark.MarkRegistry;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -18,16 +22,24 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+
+import java.util.function.UnaryOperator;
 
 public final class MarkCommand {
     public static final String MENU_ID = "marks";
 
     private static final SuggestionProvider<CommandSourceStack> MARK_IDS = (context, builder) ->
             SharedSuggestionProvider.suggest(MarkRegistry.ids(), builder);
+
+    private static final SuggestionProvider<CommandSourceStack> PALETTE = (context, builder) ->
+            SharedSuggestionProvider.suggest(MarkPalette.suggestions(), builder);
 
     private static final SuggestionProvider<CommandSourceStack> TEAMS = (context, builder) ->
             SharedSuggestionProvider.suggest(context.getSource().getServer().getScoreboard().getTeamNames(), builder);
@@ -95,6 +107,8 @@ public final class MarkCommand {
                         .then(labelEdit())
                         .then(kindEdit())
                         .then(scaleEdit())
+                        .then(markerRangeEdit())
+                        .then(hideZoneEdit())
                         .then(lineEdit())
                         .then(colorEdit())
                         .then(Commands.literal("here").executes(MarkCommand::moveHere))
@@ -123,6 +137,70 @@ public final class MarkCommand {
                 .then(Commands.argument("percent",
                                 IntegerArgumentType.integer(MapMark.SCALE_MIN, MapMark.SCALE_MAX))
                         .executes(MarkCommand::editScale));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> markerRangeEdit() {
+        return Commands.literal("markerrange")
+                .then(Commands.argument("blocks",
+                                IntegerArgumentType.integer(MapMark.KIND_RANGE, MarkerRange.MAX_BLOCKS))
+                        .executes(MarkCommand::editMarkerRange));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> hideZoneEdit() {
+        return Commands.literal("hidezone")
+                .then(Commands.literal("radius")
+                        .then(Commands.argument("blocks",
+                                        IntegerArgumentType.integer(MarkHideZone.OFF, MarkHideZone.MAX_RADIUS))
+                                .executes(context -> editHideZone(context, zone ->
+                                        zone.withRadius(IntegerArgumentType.getInteger(context, "blocks"))))))
+                .then(hideShapeEdit())
+                .then(Commands.literal("height")
+                        .then(Commands.argument("blocks",
+                                        IntegerArgumentType.integer(MarkHideZone.WHOLE_COLUMN, MarkHideZone.MAX_HEIGHT))
+                                .executes(context -> editHideZone(context, zone ->
+                                        zone.withHeight(IntegerArgumentType.getInteger(context, "blocks"))))))
+                .then(Commands.literal("show")
+                        .then(Commands.argument("shown", BoolArgumentType.bool())
+                                .executes(context -> editHideZone(context, zone ->
+                                        zone.withShown(BoolArgumentType.getBool(context, "shown"))))))
+                .then(hideColorEdit())
+                .then(Commands.literal("off")
+                        .executes(context -> editHideZone(context, zone -> zone.withRadius(MarkHideZone.OFF))));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> hideColorEdit() {
+        return Commands.literal("color")
+                .then(Commands.literal("mark")
+                        .executes(context -> editHideZone(context, zone -> zone.withColor(MarkHideZone.MARK_COLOR))))
+                .then(Commands.argument("value", IntegerArgumentType.integer())
+                        .suggests(PALETTE)
+                        .executes(context -> editHideZone(context, zone ->
+                                zone.withColor(IntegerArgumentType.getInteger(context, "value")))));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> hideShapeEdit() {
+        LiteralArgumentBuilder<CommandSourceStack> branch = Commands.literal("shape");
+        for (ZoneShape shape : ZoneShape.values()) {
+            branch.then(Commands.literal(shape.id())
+                    .executes(context -> editHideZone(context, zone -> zone.withShape(shape))));
+        }
+        return branch;
+    }
+
+    private static int editHideZone(CommandContext<CommandSourceStack> context, UnaryOperator<MarkHideZone> change) {
+        MapMark mark = require(context);
+        if (mark == null) return 0;
+
+        mark.setHideZone(change.apply(mark.hideZone()));
+        return apply(context, mark);
+    }
+
+    private static int editMarkerRange(CommandContext<CommandSourceStack> context) {
+        MapMark mark = require(context);
+        if (mark == null) return 0;
+
+        mark.setMarkerRange(IntegerArgumentType.getInteger(context, "blocks"));
+        return apply(context, mark);
     }
 
     private static int editScale(CommandContext<CommandSourceStack> context) {
@@ -187,6 +265,7 @@ public final class MarkCommand {
     private static LiteralArgumentBuilder<CommandSourceStack> colorEdit() {
         return Commands.literal("color")
                 .then(Commands.argument("value", IntegerArgumentType.integer())
+                        .suggests(PALETTE)
                         .executes(MarkCommand::editColor));
     }
 
@@ -256,7 +335,10 @@ public final class MarkCommand {
         if (mark == null) return 0;
 
         ServerPlayer player = context.getSource().getPlayerOrException();
-        player.teleportTo(player.serverLevel(), mark.position().getX() + 0.5, mark.position().getY(),
+        ServerLevel level = player.server.getLevel(ResourceKey.create(Registries.DIMENSION, mark.dimension()));
+        if (level == null) return fail(context, "zones.mark.error.no_world", mark.dimension().toString());
+
+        player.teleportTo(level, mark.position().getX() + 0.5, mark.position().getY(),
                 mark.position().getZ() + 0.5, player.getYRot(), player.getXRot());
         return succeed(context, "zones.mark.success.teleported", mark.id());
     }

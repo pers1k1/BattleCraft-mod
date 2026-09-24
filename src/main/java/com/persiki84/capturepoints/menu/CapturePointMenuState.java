@@ -63,6 +63,8 @@ public final class CapturePointMenuState {
         tag.putString("owner", point.getOwnerTeam() == null ? "" : point.getOwnerTeam());
         tag.putBoolean("required", point.isRequired());
         tag.putBoolean("shownInHud", point.isShownInHud());
+        tag.putBoolean("hiddenInside", point.isHiddenInside());
+        tag.putInt("markerRange", point.getMarkerRange());
         putRewards(tag, point);
         putTuning(tag, point);
         return tag;

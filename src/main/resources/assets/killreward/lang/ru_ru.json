@@ -25,11 +25,9 @@
   "killreward.menu.tab.reward": "Награда",
   "killreward.menu.enabled": "Мод включён",
   "killreward.menu.item": "Предмет",
-  "killreward.menu.held": "Предмет в руке",
-  "killreward.menu.pick": "Назначить наградой",
-  "killreward.menu.action.pick": "Назначить",
-  "killreward.menu.empty_hand": "Рука пуста",
   "killreward.menu.amount": "Количество",
   "killreward.menu.team_kills": "За союзников",
-  "killreward.unknown_item": "Нет такого предмета: %s"
+  "killreward.unknown_item": "Нет такого предмета: %s",
+  "killreward.menu.item.hint": "Щелчок открывает выбор предмета: инвентарь или все предметы, с количеством",
+  "killreward.menu.pick.title": "НАГРАДА ЗА УБИЙСТВО"
 }

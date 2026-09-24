@@ -8,6 +8,7 @@ import com.mojang.logging.LogUtils;
 import com.persiki84.shared.zone.ZoneArea;
 import com.persiki84.shared.zone.ZoneShape;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import org.slf4j.Logger;
 
@@ -89,6 +90,9 @@ public final class ZoneStorage {
         private int color;
         private int[] spawnAnchor;
         private Map<String, Boolean> rules;
+        private String dimension;
+        private int markerRange;
+        private Boolean hiddenInside;
 
         private static StoredZone of(Zone zone) {
             ZoneArea area = zone.area();
@@ -108,6 +112,9 @@ public final class ZoneStorage {
             if (anchor != null) entry.spawnAnchor = new int[] { anchor.getX(), anchor.getY(), anchor.getZ() };
             Map<String, Boolean> overrides = zone.rules().overrides();
             if (!overrides.isEmpty()) entry.rules = overrides;
+            if (zone.dimension() != null) entry.dimension = zone.dimension().toString();
+            entry.markerRange = zone.markerRange();
+            entry.hiddenInside = zone.hiddenInside();
             return entry;
         }
 
@@ -129,6 +136,9 @@ public final class ZoneStorage {
                 zone.setSpawnAnchor(new BlockPos(spawnAnchor[0], spawnAnchor[1], spawnAnchor[2]));
             }
             zone.setRules(ZoneRules.ofOverrides(rules));
+            zone.setDimension(dimension == null ? null : ResourceLocation.tryParse(dimension));
+            zone.setMarkerRange(markerRange);
+            zone.setHiddenInside(hiddenInside == null || hiddenInside);
             return zone;
         }
     }

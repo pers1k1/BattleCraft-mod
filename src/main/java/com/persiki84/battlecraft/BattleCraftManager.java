@@ -104,6 +104,12 @@ public class BattleCraftManager {
         return softDisabled;
     }
 
+    // WHY: при выключенном ядре матча нет вовсе, и модули, живущие только в матче, обязаны
+    // WHY: работать всегда, а не никогда: иначе без режима матча точки и тайники мертвы
+    public boolean matchRunning() {
+        return softDisabled || phase == GamePhase.ACTIVE;
+    }
+
     public void setSoftDisabled(boolean disabled) {
         this.softDisabled = disabled;
         config.modEnabled = !disabled;
@@ -328,6 +334,7 @@ public class BattleCraftManager {
 
         persistMatch(server);
         syncToAll(server);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new MatchEvent.Started(server));
         return true;
     }
 
@@ -392,6 +399,7 @@ public class BattleCraftManager {
          resetState();
          persistMatch(server);
          syncToAll(server);
+         net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new MatchEvent.Ended(server));
     }
 
     private void executeConsoleCommands(MinecraftServer server, List<String> commands) {

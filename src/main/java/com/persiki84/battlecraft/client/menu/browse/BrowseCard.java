@@ -38,9 +38,9 @@ public abstract class BrowseCard extends AbstractWidget implements GlidingRow {
     private static final float BASE_LIFT = 0.06f;
     private static final float HOVER_LIFT = 0.22f;
     private static final float PICKED_LIFT = 0.30f;
-    private static final float MARK_WIDTH = 2.2f;
-    private static final float MARK_INSET = 3.5f;
-    private static final float MARK_FADE = 0.02f;
+    private static final float PICK_RESPONSE = 0.34f;
+    private static final float PICK_DAMPING = 0.86f;
+    private static final float PICKED_TITLE = 0.5f;
     private static final float APPEAR_MS = 190.0f;
     private static final float STAGGER_MS = 22.0f;
     private static final float APPEAR_SLIDE = 6.0f;
@@ -50,6 +50,7 @@ public abstract class BrowseCard extends AbstractWidget implements GlidingRow {
     private final BrowseScreen owner;
     private final Spring hover = new Spring(HOVER_RESPONSE, HOVER_DAMPING, 0.0f);
     private final Spring press = new Spring(PRESS_RESPONSE, PRESS_DAMPING, 0.0f);
+    private final Spring chosen = new Spring(PICK_RESPONSE, PICK_DAMPING, 0.0f);
     private final RowAnchor anchor = new RowAnchor();
     private boolean announced;
     private boolean held;
@@ -57,6 +58,7 @@ public abstract class BrowseCard extends AbstractWidget implements GlidingRow {
     private long shownAt = System.currentTimeMillis();
     private float staggerMs;
     private long lastClick;
+    private float slide;
 
     protected BrowseCard(BrowseScreen owner, int width, int height, Component label) {
         super(0, 0, width, height, label);
@@ -83,6 +85,20 @@ public abstract class BrowseCard extends AbstractWidget implements GlidingRow {
     public void close() {
     }
 
+    // WHY: поиск пересоздаёт карточки, и выбранная, найденная заново по ключу, не имеет права
+    // WHY: заново въезжать в выбор на каждой набранной букве
+    public void settle() {
+        chosen.snap(picked() ? 1.0f : 0.0f);
+    }
+
+    public float shownTop() {
+        return getY() + anchor.residue() + slide;
+    }
+
+    public boolean hidden() {
+        return !anchor.placed() || anchor.gone(getY(), height);
+    }
+
     @Override
     public void anchor(int y, Lane lane) {
         anchor.set(y, lane);
@@ -101,12 +117,8 @@ public abstract class BrowseCard extends AbstractWidget implements GlidingRow {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (anchor.gone(getY(), height)) return;
 
-        boolean clipped = anchor.clip(graphics, getX(), width, getY(), height);
-        try {
-            super.render(graphics, mouseX, anchor.pointer(mouseY), partialTick);
-        } finally {
-            if (clipped) graphics.disableScissor();
-        }
+        anchor.draw(graphics, getX(), width, getY(), height,
+                () -> super.render(graphics, mouseX, anchor.pointer(mouseY), partialTick));
     }
 
     @Override
@@ -160,54 +172,50 @@ public abstract class BrowseCard extends AbstractWidget implements GlidingRow {
 
         float delta = UiFrame.delta();
         float focus = hover.to(focused ? 1.0f : 0.0f, delta);
+        float pick = chosen.to(picked() ? 1.0f : 0.0f, delta);
         press.to(held ? 1.0f : 0.0f, delta);
 
         float appear = UiAnim.easeOut((System.currentTimeMillis() - shownAt - staggerMs) / APPEAR_MS);
+        slide = (1.0f - appear) * APPEAR_SLIDE;
         graphics.pose().pushPose();
-        graphics.pose().translate(0.0f, (1.0f - appear) * APPEAR_SLIDE, 0.0f);
+        graphics.pose().translate(0.0f, slide, 0.0f);
         try {
-            paintBody(graphics, focus);
+            paintBody(graphics, focus, pick);
         } finally {
             graphics.pose().popPose();
         }
     }
 
-    private void paintBody(GuiGraphics graphics, float focus) {
+    private void paintBody(GuiGraphics graphics, float focus, float pick) {
         float radius = UiMetrics.radius(ICON);
-        UiGlass.panel(graphics, getX(), getY(), width, height, radius, 1.0f, lift(focus));
-        if (picked()) mark(graphics);
+        UiGlass.panel(graphics, getX(), getY(), width, height, radius, 1.0f, lift(focus, pick));
 
         float iconY = getY() + (height - ICON) / 2.0f;
         paintIcon(graphics, getX() + PAD, iconY, ICON);
-        paintText(graphics, focus);
+        paintText(graphics, focus, pick);
         paintTrailing(graphics, getX() + width - PAD, focus);
     }
 
-    private float lift(float focus) {
-        return BASE_LIFT + focus * HOVER_LIFT + (picked() ? PICKED_LIFT : 0.0f);
+    private static float lift(float focus, float pick) {
+        return BASE_LIFT + focus * HOVER_LIFT + Math.max(0.0f, pick) * PICKED_LIFT;
     }
 
-    private void mark(GuiGraphics graphics) {
-        UiRender.panel(graphics, getX() + MARK_INSET, getY() + MARK_INSET, MARK_WIDTH,
-                height - MARK_INSET * 2.0f, MARK_WIDTH / 2.0f,
-                UiTheme.alpha(UiAccent.color(), 1.0f - MARK_FADE));
-    }
-
-    private void paintText(GuiGraphics graphics, float focus) {
+    private void paintText(GuiGraphics graphics, float focus, float pick) {
         float left = getX() + PAD + ICON + TEXT_GAP;
         float boxWidth = getX() + width - PAD - trailingWidth() - TEXT_GAP - left;
         if (boxWidth <= 0.0f) return;
 
         float split = height * TITLE_SPLIT;
         UiRender.textTrackedBox(graphics, font(), titleLine(), left, getY() + PAD * 0.4f, split,
-                boxWidth, TITLE_SCALE, TRACKING, titleColor(focus), false, 0.0f);
+                boxWidth, TITLE_SCALE, TRACKING, titleColor(focus, pick), false, 0.0f);
         UiRender.textTrackedBox(graphics, font(), noteLine(), left, getY() + split, height - split - PAD * 0.4f,
                 boxWidth, NOTE_SCALE, 0.0f, UiAccent.textFaint(), false, 0.0f);
     }
 
-    private int titleColor(float focus) {
+    private int titleColor(float focus, float pick) {
         if (!this.active) return UiAccent.textFaint();
-        return UiTheme.mix(UiAccent.text(), UiTheme.WHITE, Math.max(focus, picked() ? 0.5f : 0.0f));
+        float lit = Math.max(focus, UiAnim.clamp01(pick) * PICKED_TITLE);
+        return UiTheme.mix(UiAccent.text(), UiTheme.WHITE, lit);
     }
 
     protected static void blitSquare(GuiGraphics graphics, ResourceLocation texture,

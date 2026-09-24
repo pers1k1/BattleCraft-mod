@@ -4,7 +4,6 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.persiki84.battlecraft.BattleCraftMod;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
 
 import java.io.InputStream;
@@ -93,20 +92,22 @@ public final class IslandArt {
         }
 
         NativeImage decoded = null;
-        NativeImage shaped = null;
+        NativeImage squared = null;
+        NativeImage[] levels = null;
         try (InputStream stream = Files.newInputStream(file)) {
             decoded = NativeImage.read(stream);
-            shaped = IslandImage.squared(decoded);
-            IslandTone.read(shaped);
-            IslandImage.round(shaped, IslandImage.CORNER_SHARE);
-            NativeImage carriedShaped = shaped;
-            Minecraft.getInstance().execute(() -> hold(stamp, carriedShaped));
+            squared = IslandImage.squared(decoded);
+            IslandTone.read(squared);
+            levels = IslandScale.chain(squared, IslandImage.CORNER_SHARE);
+            NativeImage[] carriedLevels = levels;
+            Minecraft.getInstance().execute(() -> hold(stamp, carriedLevels));
         } catch (Exception error) {
-            if (shaped != null) shaped.close();
+            IslandPicture.discard(levels);
             missed(stamp);
             BattleCraftMod.LOGGER.warn("[battlecraft] cover art rejected: {}", error.toString());
         } finally {
             if (decoded != null) decoded.close();
+            if (squared != null) squared.close();
         }
     }
 
@@ -114,18 +115,28 @@ public final class IslandArt {
     // WHY: стороне, а запись новой по тому же адресу закрыла бы её текстуру прямо посреди хода.
     // WHY: снимок, устаревший за время подготовки, выбрасывается: фоновые загрузки могут прийти
     // WHY: не в том порядке, в каком их просили
-    private static void hold(long stamp, NativeImage shaped) {
+    private static void hold(long stamp, NativeImage[] levels) {
         if (stamp != wantedStamp) {
-            shaped.close();
+            IslandPicture.discard(levels);
+            return;
+        }
+
+        IslandPicture picture;
+        try {
+            picture = IslandPicture.upload(levels);
+        } catch (Exception error) {
+            IslandPicture.discard(levels);
+            missed(stamp);
+            BattleCraftMod.LOGGER.warn("[battlecraft] cover art upload failed: {}", error.toString());
             return;
         }
 
         int next = ready ? slot ^ 1 : slot;
-        Minecraft.getInstance().getTextureManager().register(SLOTS[next], new DynamicTexture(shaped));
+        Minecraft.getInstance().getTextureManager().register(SLOTS[next], picture);
         carried = ready;
         carriedEdge = edge;
         slot = next;
-        edge = shaped.getWidth();
+        edge = picture.edge();
         ready = true;
         if (carried) IslandFlip.begin(IslandOrder.pending());
     }

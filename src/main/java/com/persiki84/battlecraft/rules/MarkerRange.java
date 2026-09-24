@@ -28,6 +28,13 @@ public enum MarkerRange {
         return "battlecraft.markers." + id + ".hint";
     }
 
+    // WHY: ноль это «как у вида», поэтому он живёт рядом с пределами, а не зажимается к минимуму:
+    // WHY: иначе снять свою дальность у метки было бы нечем
+    public static int normalize(int blocks) {
+        if (blocks <= 0) return 0;
+        return Math.max(MIN_BLOCKS, Math.min(MAX_BLOCKS, blocks));
+    }
+
     public static MarkerRange byId(String id) {
         for (MarkerRange range : values()) {
             if (range.id.equals(id)) return range;

@@ -1,6 +1,7 @@
 package com.persiki84.zones.client.menu;
 
 import com.persiki84.shared.client.menu.ActionRow;
+import com.persiki84.shared.client.menu.ColorRow;
 import com.persiki84.shared.client.menu.FieldRow;
 import com.persiki84.shared.client.menu.GlidingRow;
 import com.persiki84.shared.client.menu.ManagerScreen;
@@ -9,13 +10,17 @@ import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.MenuField;
 import com.persiki84.shared.client.menu.NumberRow;
+import com.persiki84.shared.client.menu.PaletteWindow;
 import com.persiki84.shared.client.menu.PickRow;
 import com.persiki84.shared.client.menu.ToggleRow;
 import com.persiki84.shared.client.ui.UiButton;
+import com.persiki84.battlecraft.rules.MarkerRange;
+import com.persiki84.shared.zone.ZoneShape;
 import com.persiki84.zones.mark.MapMark;
+import com.persiki84.zones.mark.MarkHideZone;
 import com.persiki84.zones.mark.MarkKind;
 import com.persiki84.zones.mark.MarkMenuState;
-import com.persiki84.zones.mark.MarkPalette;
+import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -37,6 +42,9 @@ public class MarkManagerScreen extends ManagerScreen {
     private static final int MAX_HEIGHT = 320;
     private static final int CREATE_ROWS = 4 + MenuField.ROW_EQUIVALENT * 2;
     private static final int LABEL_LIMIT = 48;
+    private static final int RANGE_STEP = 50;
+    private static final int HIDE_RADIUS_STEP = 2;
+    private static final int HIDE_HEIGHT_STEP = 1;
     private static final Pattern ID_PATTERN = Pattern.compile("[A-Za-z0-9_.+-]+");
 
     private int tab;
@@ -56,6 +64,11 @@ public class MarkManagerScreen extends ManagerScreen {
 
     public MarkManagerScreen() {
         super(Component.translatable("zones.mark.menu.title"));
+    }
+
+    @Override
+    public MenuKind presence() {
+        return MenuKind.ADMIN;
     }
 
     @Override
@@ -157,6 +170,8 @@ public class MarkManagerScreen extends ManagerScreen {
         rows.add(action("zones.mark.menu.rename", "zones.mark.menu.action.apply", () -> applyLabel(id)));
         rows.add(kindRow(id));
         rows.add(scaleRow(id));
+        rows.add(markerRangeRow(id));
+        addHideZoneRows(rows, id);
         addLineRows(rows, id);
         rows.add(colorRow(id));
         rows.add(new ToggleRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
@@ -176,6 +191,97 @@ public class MarkManagerScreen extends ManagerScreen {
                 value -> send("edit " + id + " scale " + value),
                 MapMark.SCALE_MIN, MapMark.SCALE_MAX, 5);
         row.hint("zones.mark.menu.scale" + HINT_SUFFIX);
+        return row;
+    }
+
+    // WHY: ноль значит «как у вида»: у метки нет своего предела, и она берёт общий из настроек
+    private NumberRow markerRangeRow(String id) {
+        NumberRow row = new NumberRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.mark.menu.marker_range"),
+                () -> live(id).getInt("markerRange"),
+                value -> send("edit " + id + " markerrange " + value),
+                MapMark.KIND_RANGE, MarkerRange.MAX_BLOCKS, RANGE_STEP);
+        row.floorLabel(Component.translatable("battlecraft.markers.kind"));
+        row.hint("zones.mark.menu.marker_range" + HINT_SUFFIX);
+        return row;
+    }
+
+    // WHY: форма и высота без радиуса ничего не значат, поэтому появляются вместе с зоной;
+    // WHY: подпись снимка держит признак «зона есть», и экран пересобирается на его смене
+    private void addHideZoneRows(List<AbstractWidget> rows, String id) {
+        rows.add(hideRadiusRow(id));
+        if (live(id).getInt("hideRadius") <= MarkHideZone.OFF) return;
+
+        rows.add(hideShapeRow(id));
+        rows.add(hideHeightRow(id));
+        rows.add(hideShownRow(id));
+        if (live(id).getBoolean("hideShown")) rows.add(hideColorRow(id));
+    }
+
+    private ToggleRow hideShownRow(String id) {
+        ToggleRow row = new ToggleRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.mark.menu.hide_shown"),
+                () -> live(id).getBoolean("hideShown"),
+                value -> send("edit " + id + " hidezone show " + value));
+        row.hint("zones.mark.menu.hide_shown" + HINT_SUFFIX);
+        return row;
+    }
+
+    // WHY: сброс возвращает зону к цвету метки: пока свой не выбран, она перекрашивается вместе с ней
+    private ColorRow hideColorRow(String id) {
+        Component label = Component.translatable("zones.mark.menu.hide_color");
+        ColorRow row = new ColorRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, label,
+                () -> hideColor(live(id)),
+                () -> live(id).getInt("hideColor") != MarkHideZone.MARK_COLOR,
+                () -> palette("mark:" + id + ":hide", PaletteWindow.Kind.SERVER, label, hideColor(live(id)),
+                        argb -> send("edit " + id + " hidezone color " + argb),
+                        () -> send("edit " + id + " hidezone color mark")));
+        row.hint("zones.mark.menu.hide_color" + HINT_SUFFIX);
+        return row;
+    }
+
+    private static int hideColor(CompoundTag mark) {
+        int own = mark.getInt("hideColor");
+        return own == MarkHideZone.MARK_COLOR ? mark.getInt("color") : own;
+    }
+
+    private NumberRow hideRadiusRow(String id) {
+        NumberRow row = new NumberRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.mark.menu.hide_radius"),
+                () -> live(id).getInt("hideRadius"),
+                value -> send("edit " + id + " hidezone radius " + value),
+                MarkHideZone.OFF, MarkHideZone.MAX_RADIUS, HIDE_RADIUS_STEP);
+        row.floorLabel(Component.translatable("zones.mark.menu.hide_radius.off"));
+        row.hint("zones.mark.menu.hide_radius" + HINT_SUFFIX);
+        return row;
+    }
+
+    private PickRow hideShapeRow(String id) {
+        List<Component> options = new ArrayList<>();
+        for (ZoneShape shape : ZoneShape.values()) {
+            options.add(Component.translatable("zones.shape." + shape.id()));
+        }
+        PickRow row = new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.mark.menu.hide_shape"), options,
+                () -> hideShape(id).ordinal(),
+                picked -> send("edit " + id + " hidezone shape " + ZoneShape.values()[picked].id()));
+        row.hint("zones.mark.menu.hide_shape" + HINT_SUFFIX);
+        return row;
+    }
+
+    private ZoneShape hideShape(String id) {
+        ZoneShape shape = ZoneShape.byId(live(id).getString("hideShape"));
+        return shape == null ? ZoneShape.CIRCLE : shape;
+    }
+
+    private NumberRow hideHeightRow(String id) {
+        NumberRow row = new NumberRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.mark.menu.hide_height"),
+                () -> live(id).getInt("hideHeight"),
+                value -> send("edit " + id + " hidezone height " + value),
+                MarkHideZone.WHOLE_COLUMN, MarkHideZone.MAX_HEIGHT, HIDE_HEIGHT_STEP);
+        row.floorLabel(Component.translatable("zones.mark.menu.hide_height.all"));
+        row.hint("zones.mark.menu.hide_height" + HINT_SUFFIX);
         return row;
     }
 
@@ -291,15 +397,14 @@ public class MarkManagerScreen extends ManagerScreen {
         return teams.isEmpty() ? null : teams.get(0);
     }
 
-    private PickRow colorRow(String id) {
-        List<Component> options = new ArrayList<>();
-        for (int index = 0; index < MarkPalette.COLORS.length; index++) {
-            options.add(MarkPalette.name(index));
-        }
-        return new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
-                Component.translatable("zones.mark.menu.color"), options,
-                () -> MarkPalette.indexOf(live(id).getInt("color")),
-                picked -> send("edit " + id + " color " + MarkPalette.COLORS[picked]));
+    private ColorRow colorRow(String id) {
+        Component label = Component.translatable("zones.mark.menu.color");
+        return new ColorRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, label,
+                () -> live(id).getInt("color"),
+                () -> live(id).getInt("color") != MapMark.DEFAULT_COLOR,
+                () -> palette("mark:" + id + ":color", PaletteWindow.Kind.SERVER, label, live(id).getInt("color"),
+                        argb -> send("edit " + id + " color " + argb),
+                        () -> send("edit " + id + " color " + MapMark.DEFAULT_COLOR)));
     }
 
     private List<AbstractWidget> teamRows() {
@@ -464,6 +569,8 @@ public class MarkManagerScreen extends ManagerScreen {
         for (CompoundTag entry : marks()) {
             mark.append(entry.getString("id")).append(entry.getString("label")).append(entry.getInt("color"))
                     .append(entry.getBoolean("everyone")).append(entry.getBoolean("inWorld"))
+                    .append(entry.getString("kind")).append(entry.getList("lines", Tag.TAG_STRING))
+                    .append(entry.getInt("hideRadius") > MarkHideZone.OFF).append(entry.getBoolean("hideShown"))
                     .append(entry.getList("teams", Tag.TAG_STRING)).append('\n');
         }
         return mark.toString();

@@ -95,5 +95,8 @@
   "itemmodifiers.menu.lore.placeholder": "Line text",
   "itemmodifiers.menu.lore.add": "Add line",
   "itemmodifiers.menu.lore.clear": "Clear lore",
-  "itemmodifiers.menu.lore.error_empty": "The line is empty"
+  "itemmodifiers.menu.lore.error_empty": "The line is empty",
+  "itemmodifiers.menu.item.pick": "Another item",
+  "itemmodifiers.menu.action.pick": "Pick",
+  "itemmodifiers.menu.pick.title": "ITEM TO CONFIGURE"
 }

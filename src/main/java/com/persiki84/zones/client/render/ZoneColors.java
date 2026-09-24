@@ -20,10 +20,10 @@ public final class ZoneColors {
 
     public static float[] resolve(Zone zone, float captureProgress, long elapsedMillis) {
         int target = targetColor(zone, captureProgress);
-        float[] current = tweened.get(zone.id());
+        float[] current = tweened.get(zone.cacheKey());
         if (current == null) {
             current = new float[] { red(target), green(target), blue(target) };
-            tweened.put(zone.id(), current);
+            tweened.put(zone.cacheKey(), current);
             return current;
         }
 
@@ -35,7 +35,7 @@ public final class ZoneColors {
     }
 
     public static int packed(Zone zone) {
-        float[] color = tweened.get(zone.id());
+        float[] color = tweened.get(zone.cacheKey());
         if (color == null) return targetColor(zone, 0.0f);
         return ((int) (color[0] * 255.0f) << 16) | ((int) (color[1] * 255.0f) << 8) | (int) (color[2] * 255.0f);
     }

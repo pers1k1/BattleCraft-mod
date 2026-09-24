@@ -26,6 +26,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.registries.ForgeRegistries;
 
 public final class ShopCommand {
+    private static final int INVENTORY_SLOTS = 41;
 
     private static final SuggestionProvider<CommandSourceStack> SECTIONS = (context, builder) ->
             SharedSuggestionProvider.suggest(ShopCatalog.sectionIds(), builder);
@@ -294,6 +295,7 @@ public final class ShopCommand {
     private static LiteralArgumentBuilder<CommandSourceStack> itemBranch() {
         return Commands.literal("item")
                 .then(handBranch())
+                .then(slotBranch())
                 .then(byIdBranch())
                 .then(Commands.literal("remove")
                         .then(sectionNode(entryNode().executes(ShopCommand::removeEntry))))
@@ -372,6 +374,19 @@ public final class ShopCommand {
                                         .suggests(CHILDREN)
                                         .executes(context -> addFromHand(context,
                                                 StringArgumentType.getString(context, "subsection"))))));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> slotBranch() {
+        return Commands.literal("slot")
+                .then(Commands.argument("section", StringArgumentType.word())
+                        .suggests(SECTIONS)
+                        .then(Commands.argument("slot", IntegerArgumentType.integer(0, INVENTORY_SLOTS - 1))
+                                .then(Commands.argument("price", IntegerArgumentType.integer(0))
+                                        .executes(context -> addFromSlot(context, null))
+                                        .then(Commands.argument("subsection", StringArgumentType.word())
+                                                .suggests(CHILDREN)
+                                                .executes(context -> addFromSlot(context,
+                                                        StringArgumentType.getString(context, "subsection")))))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> byIdBranch() {
@@ -567,6 +582,19 @@ public final class ShopCommand {
         if (held.isEmpty()) return fail(context, "zones.shop.error.empty_hand");
 
         return storeEntry(context, target, held.copy(), IntegerArgumentType.getInteger(context, "price"));
+    }
+
+    // WHY: редактор называет слот инвентаря, а сам стак сервер берёт у себя: присланный клиентом
+    // WHY: предмет с NBT был бы заявкой, которой верить нельзя
+    private static int addFromSlot(CommandContext<CommandSourceStack> context, String childId) throws CommandSyntaxException {
+        ShopSection target = targetSection(context, childId);
+        if (target == null) return 0;
+
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        ItemStack stack = player.getInventory().getItem(IntegerArgumentType.getInteger(context, "slot"));
+        if (stack.isEmpty()) return fail(context, "zones.shop.error.empty_hand");
+
+        return storeEntry(context, target, stack.copy(), IntegerArgumentType.getInteger(context, "price"));
     }
 
     private static int addById(CommandContext<CommandSourceStack> context, String childId) {

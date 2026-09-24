@@ -29,13 +29,13 @@ public final class IslandFace {
                                  boolean allowArt, boolean allowFace) {
         if (allowArt && IslandArt.ready()) {
             if (!IslandCover.turning(graphics, centerX, centerY, size, alpha)) {
-                stretch(graphics, IslandArt.texture(), IslandArt.edge(), centerX, centerY, size, alpha);
+                stretch(graphics, IslandArt.texture(), centerX, centerY, size, alpha);
             }
             return true;
         }
         if (!allowFace || awaited()) return false;
         if (DiscordAvatar.ready()) {
-            stretch(graphics, DiscordAvatar.texture(), DiscordAvatar.edge(), centerX, centerY, size, alpha);
+            stretch(graphics, DiscordAvatar.texture(), centerX, centerY, size, alpha);
             return true;
         }
 
@@ -43,15 +43,13 @@ public final class IslandFace {
         return skin != null && head(graphics, skin, centerX, centerY, size, alpha);
     }
 
-    private static void stretch(GuiGraphics graphics, ResourceLocation texture, int source,
+    // WHY: картинка кладётся дробными координатами на физическую сетку, а не целыми единицами
+    // WHY: интерфейса: ванильный blit на морфинге пилюля-карточка дёргал её шагом в целую единицу,
+    // WHY: то есть в два-четыре экранных пикселя, отдельно от плавно едущей пилюли
+    private static void stretch(GuiGraphics graphics, ResourceLocation texture,
                                 float centerX, float centerY, float size, float alpha) {
-        int edge = Math.max(1, Math.round(size));
-        int left = Math.round(centerX - size / 2.0f);
-        int top = Math.round(centerY - size / 2.0f);
-
-        graphics.setColor(1.0f, 1.0f, 1.0f, alpha);
-        graphics.blit(texture, left, top, edge, edge, 0.0f, 0.0f, source, source, source, source);
-        graphics.setColor(1.0f, 1.0f, 1.0f, 1.0f);
+        float half = size / 2.0f;
+        UiRender.image(graphics, texture, centerX - half, centerY - half, size, size, alpha);
     }
 
     private static boolean head(GuiGraphics graphics, ResourceLocation skin, float centerX, float centerY,

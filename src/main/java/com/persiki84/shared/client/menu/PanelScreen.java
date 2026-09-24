@@ -24,6 +24,11 @@ public abstract class PanelScreen extends ManagerScreen {
 
     protected abstract String menuId();
 
+    @Override
+    public boolean broadcast() {
+        return false;
+    }
+
     protected abstract List<Page> pages();
 
     @Override
@@ -38,6 +43,10 @@ public abstract class PanelScreen extends ManagerScreen {
     @Override
     protected int activeTab() {
         return tab;
+    }
+
+    public void openOn(int index) {
+        tab = Math.max(0, index);
     }
 
     @Override

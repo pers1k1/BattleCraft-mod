@@ -46,6 +46,12 @@ public final class UiField {
         return owned.containsKey(box);
     }
 
+    // WHY: поле в своём окне гаснет вместе с ним, а строка без этого оставалась непрозрачной
+    // WHY: поверх тающего стекла: альфу виджета ваниль наружу не отдаёт
+    public static void fade(EditBox box, float alpha) {
+        states.computeIfAbsent(box, key -> new State()).fade = UiAnim.clamp01(alpha);
+    }
+
     public static float focus(EditBox box) {
         State state = states.get(box);
         return state == null ? 0.0f : UiAnim.easeOut(state.focus.get());
@@ -72,13 +78,13 @@ public final class UiField {
                 left, room, UiRender.centerY(box.getY(), box.getHeight(), scale), scale);
 
         state.follow(value, cursorPos);
-        float alpha = focus * state.blink();
+        float alpha = focus * state.blink() * state.fade;
         float caret = window.caretX(state, cursorPos, delta);
 
         UiRender.clip(graphics, left, box.getY(), room, box.getHeight());
         try {
-            paint(graphics, box, window, cursorPos, highlightPos, textColor, editable, suggestion,
-                    hint, formatter);
+            paint(graphics, box, window, cursorPos, highlightPos,
+                    UiTheme.alpha(ink(textColor, editable), state.fade), suggestion, hint, formatter);
         } finally {
             graphics.flush();
             graphics.disableScissor();
@@ -90,12 +96,13 @@ public final class UiField {
     }
 
     private static void paint(GuiGraphics graphics, EditBox box, Window window, int cursorPos,
-                              int highlightPos, int textColor, boolean editable, String suggestion,
-                              Component hint, BiFunction<String, Integer, FormattedCharSequence> formatter) {
+                              int highlightPos, int ink, String suggestion, Component hint,
+                              BiFunction<String, Integer, FormattedCharSequence> formatter) {
         Font font = Minecraft.getInstance().font;
-        int ink = ink(textColor, editable);
 
-        if (highlightPos != cursorPos) paintSelection(graphics, window, cursorPos, highlightPos);
+        if (highlightPos != cursorPos) {
+            paintSelection(graphics, window, cursorPos, highlightPos, (ink >>> 24) / 255.0f);
+        }
 
         String shown = window.text();
         float pen = window.left;
@@ -122,7 +129,8 @@ public final class UiField {
         return FormattedCharSequence.forward(value, Style.EMPTY);
     }
 
-    private static void paintSelection(GuiGraphics graphics, Window window, int cursorPos, int highlightPos) {
+    private static void paintSelection(GuiGraphics graphics, Window window, int cursorPos, int highlightPos,
+                                       float fade) {
         int from = Math.max(window.start, Math.min(cursorPos, highlightPos));
         int to = Math.min(window.end, Math.max(cursorPos, highlightPos));
         if (to <= from) return;
@@ -130,7 +138,7 @@ public final class UiField {
         float height = window.lineHeight() + CARET_MARGIN * 2.0f;
         UiRender.panel(graphics, window.left + window.width(window.start, from), window.lineTop(),
                 window.width(from, to), height, height / 2.0f,
-                UiTheme.alpha(UiAccent.color(), SELECT_ALPHA));
+                UiTheme.alpha(UiAccent.color(), SELECT_ALPHA * fade));
     }
 
     // WHY: полоска мерится строкой, а не коробкой поля: у поиска в магазине и в списках коробка
@@ -236,6 +244,7 @@ public final class UiField {
         private float measuredScale;
         private int shownCursor;
         private long typedAt = System.currentTimeMillis();
+        private float fade = 1.0f;
 
         private float[] widths(GuiGraphics graphics, String value, float scale) {
             if (value.equals(measured) && Math.abs(scale - measuredScale) < 0.001f) return widths;

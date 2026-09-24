@@ -26,7 +26,8 @@ public final class MarkerRangeCommand {
     public static LiteralArgumentBuilder<CommandSourceStack> build() {
         return Commands.literal("markers")
                 .requires(source -> source.hasPermission(2))
-                .executes(context -> BattleCraftCommands.openMenu(context, ModuleMenuStates.GAME_RULES))
+                .executes(context -> BattleCraftCommands.openMenu(context, ModuleMenuStates.GAME_RULES,
+                        ModuleMenuStates.GAME_RULES_MARKERS_TAB))
                 .then(Commands.literal("list").executes(MarkerRangeCommand::list))
                 .then(Commands.literal("reset").executes(MarkerRangeCommand::reset))
                 .then(Commands.literal("range")

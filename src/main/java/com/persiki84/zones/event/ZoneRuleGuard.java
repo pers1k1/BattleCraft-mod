@@ -6,6 +6,8 @@ import com.persiki84.zones.ZoneRule;
 import com.persiki84.zones.ZonesMod;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -47,7 +49,7 @@ public final class ZoneRuleGuard {
         Player player = event.getPlayer();
         if (player != null && player.isCreative()) return;
 
-        Zone zone = zoneBarring(ZoneRule.BLOCK_BREAK, player, event.getPos());
+        Zone zone = zoneBarring(ZoneRule.BLOCK_BREAK, player, event.getLevel(), event.getPos());
         if (zone == null) return;
 
         event.setCanceled(true);
@@ -61,7 +63,7 @@ public final class ZoneRuleGuard {
         Entity placer = event.getEntity();
         if (placer instanceof Player player && player.isCreative()) return;
 
-        Zone zone = zoneBarring(ZoneRule.BLOCK_PLACE, placer, event.getPos());
+        Zone zone = zoneBarring(ZoneRule.BLOCK_PLACE, placer, event.getLevel(), event.getPos());
         if (zone == null) return;
 
         event.setCanceled(true);
@@ -75,7 +77,7 @@ public final class ZoneRuleGuard {
         Player player = event.getEntity();
         if (player.isCreative()) return;
 
-        Zone zone = zoneForbiddingAt(ZoneRule.INTERACT, event.getPos());
+        Zone zone = zoneForbiddingAt(ZoneRule.INTERACT, event.getLevel(), event.getPos());
         if (zone == null) return;
 
         event.setCanceled(true);
@@ -87,7 +89,8 @@ public final class ZoneRuleGuard {
         Player player = event.getPlayer();
         if (player.level().isClientSide || player.isCreative() || muted()) return;
 
-        Zone zone = ZoneLookup.forbidding(ZoneRule.ITEM_DROP, player.getX(), player.getY(), player.getZ());
+        Zone zone = ZoneLookup.forbidding(ZoneLookup.dimensionOf(player), ZoneRule.ITEM_DROP,
+                player.getX(), player.getY(), player.getZ());
         if (zone == null) return;
 
         event.setCanceled(true);
@@ -105,7 +108,8 @@ public final class ZoneRuleGuard {
     public static void onMobSpawn(MobSpawnEvent.FinalizeSpawn event) {
         if (muted()) return;
 
-        if (ZoneLookup.forbids(ZoneRule.MOB_SPAWN, event.getX(), event.getY(), event.getZ())) {
+        if (ZoneLookup.forbids(ZoneLookup.dimensionOf(event.getLevel()), ZoneRule.MOB_SPAWN,
+                event.getX(), event.getY(), event.getZ())) {
             event.setSpawnCancelled(true);
         }
     }
@@ -114,17 +118,18 @@ public final class ZoneRuleGuard {
     public static void onExplosion(ExplosionEvent.Detonate event) {
         if (event.getLevel().isClientSide || muted()) return;
 
-        stripShieldedBlocks(event.getAffectedBlocks());
-        stripShieldedEntities(event.getAffectedEntities());
+        ResourceLocation here = ZoneLookup.dimensionOf(event.getLevel());
+        stripShieldedBlocks(here, event.getAffectedBlocks());
+        stripShieldedEntities(here, event.getAffectedEntities());
     }
 
-    private static void stripShieldedBlocks(List<BlockPos> affected) {
-        affected.removeIf(pos -> ZoneLookup.forbids(ZoneRule.EXPLOSIONS,
+    private static void stripShieldedBlocks(ResourceLocation here, List<BlockPos> affected) {
+        affected.removeIf(pos -> ZoneLookup.forbids(here, ZoneRule.EXPLOSIONS,
                 pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5));
     }
 
-    private static void stripShieldedEntities(List<Entity> affected) {
-        affected.removeIf(entity -> ZoneLookup.forbids(ZoneRule.EXPLOSIONS,
+    private static void stripShieldedEntities(ResourceLocation here, List<Entity> affected) {
+        affected.removeIf(entity -> ZoneLookup.forbids(here, ZoneRule.EXPLOSIONS,
                 entity.getX(), entity.getY(), entity.getZ()));
     }
 
@@ -133,7 +138,8 @@ public final class ZoneRuleGuard {
         if (event.phase != TickEvent.Phase.END || muted()) return;
         if (!(event.player instanceof ServerPlayer player)) return;
 
-        if (ZoneLookup.forbids(ZoneRule.HUNGER, player.getX(), player.getY(), player.getZ())) {
+        if (ZoneLookup.forbids(ZoneLookup.dimensionOf(player), ZoneRule.HUNGER,
+                player.getX(), player.getY(), player.getZ())) {
             player.getFoodData().setExhaustion(0.0f);
         }
     }
@@ -143,12 +149,14 @@ public final class ZoneRuleGuard {
         lastDenial.remove(event.getEntity().getUUID());
     }
 
-    private static Zone zoneForbiddingAt(ZoneRule rule, BlockPos pos) {
-        return ZoneLookup.forbidding(rule, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+    private static Zone zoneForbiddingAt(ZoneRule rule, LevelAccessor level, BlockPos pos) {
+        return ZoneLookup.forbidding(ZoneLookup.dimensionOf(level), rule,
+                pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
     }
 
-    private static Zone zoneBarring(ZoneRule rule, Entity actor, BlockPos pos) {
-        return ZoneLookup.barring(rule, actor, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+    private static Zone zoneBarring(ZoneRule rule, Entity actor, LevelAccessor level, BlockPos pos) {
+        return ZoneLookup.barring(rule, actor, ZoneLookup.dimensionOf(level),
+                pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
     }
 
     private static void refuse(Player player, Zone zone, String key) {

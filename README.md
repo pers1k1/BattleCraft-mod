@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.15v7` in files, `15.09.26v7 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.24v3` in files, `24.09.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -63,7 +63,7 @@ Everything the customization screen touches is stored in `battlecraft/customizat
 
 ## Modules Included
 
-1.  **Airdrop Mod** (`/airdrop`): Handles scheduled, localized loot drop events with customizable loot tables. An entry is added either by item argument or straight from the hand (`loot hand <min> <max> <percent>`), which carries the whole stack: enchantments, attribute modifiers and anything `/ie` has written. Guns take attachments in place with `loot attach <index> <attachment>`, completed from what the weapon actually accepts — TACZ attachments are checked against the gun's own compatibility rules and SuperbWarfare slots against the levels that gun declares, and a refusal says whether the item is not a gun, the attachment is unknown, or it simply does not fit.
+1.  **Airdrop Mod** (`/airdrop`): Handles scheduled loot drops and loot caches, both filled from named loot tables in `config/airdrop_loot/<name>.json`. Tables are edited in the loot editor (`/airdrop editor`, or from the airdrop panel): entries are tiles you drag into place, items come from your inventory or from the full item list, chance runs on a logarithmic slider from 0.1 % to 100 %, and a test roll fills a 27 slot box with the same code the server uses. By command an entry is added by item argument, from the hand (`loot <table> hand <min> <max> <percent>`) or from an inventory slot, carrying the whole stack: enchantments, attribute modifiers and anything `/ie` has written. Guns take attachments in place with `loot <table> <index> attach <attachment>`, completed from what the weapon actually accepts — TACZ attachments are checked against the gun's own compatibility rules and SuperbWarfare slots against the levels that gun declares, and a refusal says whether the item is not a gun, the attachment is unknown, or it simply does not fit.
 2.  **Capture Points** (`/capturepoint`, `/finalpoint`): Implements team-based spatial capture objective gameplay. While a point is being taken from its owner, every member of the owning team is warned once a second with the time left before the point flips. Regular and final points share the same zone geometry: a circular or square footprint picked at creation or later with `setshape`, sized with `setradius` and bounded vertically with `setheight` / `resetheight`. Points only run while a match is on: in the lobby nothing arms, nothing ticks and the key answers that the match has not started, so a team can no longer walk the objectives — and collect their income and buffs — before the round begins.
 
     Each point carries its own capture mode, set with `setmode` or from the point manager, and the classic one — a single attacker who presses the key inside the zone — remains the default. An automatic point needs no key at all: five seconds of standing in it arm the capture, the prompt naming the key is not drawn there, and leaving before those five seconds are up drops the arming back to nothing. Relay keeps the single attacker but hands the accumulated progress to a teammate standing in the zone the moment the attacker falls, and picks up a later arrival the same way instead of leaving the point dead. The squad modes make the whole attacking team the attacker: everyone in the zone glows in their team colour, anyone who walks in joins, and the capture only stops once the last of them is off the point. The contest modes open the point to every team at once — the side with the most players on the point drives it, every rival head subtracts from that lead in proportion (four against three moves at a quarter speed), and equal numbers freeze the capture until somebody dies. Both the squad and the contest modes come in a key-started and a walk-in variant.
@@ -78,13 +78,15 @@ Everything the customization screen touches is stored in `battlecraft/customizat
     Block protection covers a point's whole footprint and now carries two switches beside it, both in the point manager and under `capturepoint protection`. `breakplaced` lets anyone break what players have put down inside a zone while everything the map itself carries stays sealed: a block placed inside a point is remembered by position and dimension, saved with the points, and forgotten again the moment it is broken. `denyplace` goes the other way and refuses placement inside a zone at all. The two are exclusive, since remembering player blocks means nothing where none can be placed - turning one on drops the other, and the row of the one that lost says why it is dead.
 
 3.  **Combat Timer** (`/kt`): Implements PvP tagging, combat logging prevention, and safety timers.
-4.  **Damage Indicator** (`/dmgndctr`): Renders visual markers and damage output tracking.
+4.  **Damage Indicator** (`/dmgndctr`): Numbers for the damage you deal, drawn over the target by the interface layer. Hits on one target inside a server tick arrive as one number, a critical is a real vanilla crit or a TACZ headshot, and the look is set in the customization window.
 5.  **Immortality** (`/immortality`): Temporary invulnerability, safety, or spawn protection logic.
 6.  **Item Modifiers** (`/ie`): Command suite to dynamically modify or scale item properties. An attribute amount is a fractional figure rather than a whole one: the row in the `/ie` screen steps a tenth at a time and takes a typed value down to a thousandth, so an eighth of a heart or three hundredths of a point of speed is set from the screen instead of only from the command line, and what is sent to the command is the exact figure with its trailing zeros trimmed.
 7.  **Kill Reward** (`/killreward`, `/kr`): Grants custom items or currency configurations on player eliminations.
 8.  **Knockdown Mod**: Implements a downed state system for players, allowing revives, self-revive injectors, and surrender mechanics. Its block — the bleed-out timer, the revive and surrender prompts, the progress of whichever of them is running — is drawn after every other mod has finished with the frame, so the full-screen blur EnhancedVisuals runs on a dying player no longer smears the one panel he has to read. The rest of the HUD stays under that blur, which is the point of it.
 9.  **Minimap**: A custom client-side spatial radar and global map with team marker synchronization, fallback local scanning, spatial dithering, height scanning, offline-persistent caching, and server-driven live terrain updates shared inside a team. An operator can upload an explored map from the Map panel of `/bc` and hand it to everyone, to one team, or to a single player; a map uploaded for everyone is stored with the world and handed to every player who joins later. The same panel loads terrain rather than sharing it: `/bc map load <32..512>` and the Load tab walk the area around the player, and `/bc map cancel` stops a walk that is running. A walk is dropped when the player changes dimension or logs out, and the map panel reports how far it has got. The minimap settings, reached from the map screen, carry the other half of it: any player can pull the server's map down again - the shared one plus his own team's, never an enemy team's - or forget his own copy, which drops the chunks he has and deletes his cache file for that dimension. An operator sees two more rows there: hand his own map to everyone, wipe the shared map of the dimension, or wipe every team's map of it, files included. Each of those arms itself on the first click and acts on the second, since none of them can be undone. A wipe is a server-side one: nobody's client is told to forget what it walked itself. A marker landing on the map is announced by the map itself: the point swells and settles while two rings walk out of it and fade, on the minimap and on the full screen alike, and it does so for a personal marker, a team marker of one's own and a team marker somebody else has just dropped. The flash is driven off the marker moving rather than off the packet, since the server sends the whole list every time and a new marker is otherwise indistinguishable from one that has been standing there all round.
-10. **Quarry Mod** (`/quarry`): Automates localized resource extraction.
+10. **Quarry Mod** (`/quarry`): Automates localized resource extraction, and every node it owns is drawn by the pack instead of by the vanilla block renderer. A registered ore wears a faint light along its own edges that breathes slowly and fades out past twenty-six blocks. Mining one leaves a hole in the rock rather than a bedrock plug: the cell is held by an invisible, unbreakable, unpushable block of the mod, and inside that hole a small soft orb hangs over a thin progress ring, while a level of light rises up the walls as the cooldown runs down. The break and the return each send one soft wave of light through the cell, and every refusal - the wrong tool, a cell somebody else claimed a tick earlier, a knock on a hole that is still cooling - eases the cell to red and back. All of it is one procedural core shader over four static meshes: no geometry is built per frame and the whole animation rides uniforms. A plate shows up only within five blocks and only when the cell is in plain sight: over a cooling hole it counts the time left, over a live ore it states its drop multiplier, and both collapse into a dot once the crosshair leaves them.
+
+    The client is told only about ore it could already see: nodes within forty-eight blocks that have at least one face open, capped in count and re-sent only when the set around the player changes, so the visuals cannot be read as an x-ray of the map. The rest is guarded on the server. The cooldown is claimed atomically before the drop is handed out, so two break packets landing in one tick no longer pay twice. The tool is judged by the block's own vanilla requirement against the tool in hand instead of a hand-written list of pickaxes, which is what let a golden pickaxe take ancient debris. A drop that does not fit the inventory falls at the player's feet instead of disappearing. Mining a node wears the tool and costs hunger like any other block, and the quarry hears the break after the lobby, zone and capture point guards, so a protected point protects its ore too. Explosions drop quarry blocks out of their affected list and pistons refuse to move them, because either one used to take a node off the books entirely.
 11. **Sell Mod** (`/sell`): Integrated shop commands for item liquidations. The currency item is chosen with `/sell setcurrency <item>`, which completes over every registered item including modded ones, and prices with `/sell price set|remove`. Both are pushed to clients so the HUD can show a currency chip: the item icon, the balance carried in the inventory and the value of everything sellable currently held, each written as stacks plus remainder (`5×64+32`). A sale floats the gained amount above the chip.
 12. **BattleCraft** (`/battlecraft`, aliased to `/bc`): One command tree covers the mini-game, the zones and the shop; `/bc` is a Brigadier redirect onto the same root, so both names resolve to identical nodes, permissions and completions. Implements the complete game lifecycle of the "Battlecraft" mini-game. Features lobby phase, dynamic team selection via custom ESC menu, automated mod control (disabling sell, quarry, and killreward mods in lobby), capture point HUD filtering for spectators, late-joiners warning system, IP-based anti-abuse protection with UUID-only session reconnects, team surrender voting, execution commands on start/stop/surrender, asynchronous Discord RPC presence integration, and the shared HUD layer described above.
 
@@ -230,7 +232,7 @@ minimum with it instead of failing. Writing raw NBT into an entry stays a comman
 compound tag, and a text field that rejects most of what is typed into it is worse than no field.
 
 The quarry panel can set the cooldown of the block in the crosshair, not only the global one, and a
-List tab shows the registered blocks with their position, dimension and any custom cooldown. The list
+List tab shows the registered blocks with their position, dimension and any custom cooldown; a block that is cooling down shows the time left in that row instead, since the state of the quarry is otherwise readable only in the world. The list
 in the snapshot is capped and the panel says how many blocks it did not show, because the snapshot
 travels whole on every request and these blocks run into the thousands.
 
@@ -326,6 +328,17 @@ raises a soft aura in its colour, an armed label breathes, and both the action m
 arrive with an animation rather than appearing whole. Labels obey the same team visibility as marks,
 so a line can be shown to one team and hidden from the rest, and they sit in the mark panel with a
 kind row and the line list.
+
+
+
+The label text box is a real text field now, the same one every other field in the pack is drawn
+with: the caret glides to its new place and stretches on the way, blinking waits while you type,
+selection, arrows, Home and End, Ctrl+A, copy, cut and paste all work, a click puts the caret under
+the pointer, and the well lights its accent rim while focused. The box also leaves with an animation
+instead of vanishing: it sinks, shrinks slightly and fades together with its text, on Enter, on
+Escape and on a click outside it. The action menu leaves the same way it arrives: its rows fold back
+up in reverse order, bottom first, while the panel sinks and fades. The dimmed clear glass preset now darkens what shows through it to
+0.55 instead of 0.72.
 
 A capture point is required or optional. The final point opens once one team holds every required
 point; an optional one is taken for income, bonuses or a command and nobody waits for it. If a map
@@ -544,6 +557,266 @@ equal. Marker states of players who left are dropped as well instead of being ke
 
 Version 2026.09.15v7 - built but not played through; the marker ranges, the fade at the limit and the
 dimension filter want a look in game.
+
+Marker range is settable per object now, not only per kind: a capture point, a zone and a map mark each
+carry their own limit, and zero means the kind default from the game rules. Rows sit next to the other
+settings of that object - `Tag range` in the point, zone and mark screens - and the commands are
+`/bc point setmarkerrange "<name>" <blocks>` (the final point root takes it too),
+`/bc zone edit <id> markerrange <blocks>` and `/bc mark edit <id> markerrange <blocks>`.
+
+A zone belongs to a world now. Until today a zone was a box of coordinates with no dimension at all, so
+a base protected its coordinates in the nether too, its tag was drawn there, and it sat on the minimap
+whichever world the player was in. A zone remembers the world it was created in, `here` re-binds it, and
+every rule check, tag and map now asks the zone about the world it is being asked from. Zones written
+before this build have no world in the file; they are adopted into the main world the first time the
+server reads them, which is where they were made. Respawn into a team base now also crosses to the
+base's world instead of using the player's current one.
+
+`/bc markers` opens the game rules screen on its Markers tab instead of the first one. A menu opened by
+a command can now name the tab it wants.
+
+Version 2026.09.19 - built but not played through; the per-object ranges, the zone world and the tab a
+command opens want a look in game.
+
+## Menus you can see from outside, 19 September 2026
+
+A player standing in the shop or in `/bc` used to look like a player standing still. The screens are
+client side and nothing left his machine, so the only tell was a body that had stopped moving. The
+pack now states it in the world: while one of its screens is up, a panel hangs in front of the
+player's chest and he holds it with both hands.
+
+The panel is geometry, not a name tag. It is anchored to the body rather than to the camera, so it
+turns with the player instead of following the viewer, and it leans back twelve degrees the way
+something held at chest height does; blocks occlude it, because it is depth tested like anything else
+in the world. It carries the name of what is open - shop, menu, manage, theme, map - over a header
+rule, five content bars breathing under a slow wave, a scan band crossing the glass and a cursor
+drifting across the rows, all in the accent colour of the viewer's own theme. It unfolds from a line
+when the screen opens and folds back when it closes. Only the face turned toward the camera is drawn:
+the composite writes no depth, so a second face drawn behind the first would have laid mirrored text
+over it, and a viewer standing behind the player gets the same panel turned around rather than a
+mirror image. Past forty-two blocks it is gone, and the last twelve of those it fades.
+
+The pose is a mixin at the end of the player model's own animation: both arms come up to the panel,
+the hands tuck inward and a slow tap keeps them from freezing. The sleeves are copied off the arms a
+second time there, because the model copies them before the pose exists. Swimming, elytra flight,
+sleeping and the spin attack keep their own arms.
+
+One byte crosses the wire. The client reports which kind of screen it opened, the server holds the
+map and rebroadcasts to everyone tracking that player, which is also how a player who walks into
+range picks up a panel that was opened before he arrived. The report is a claim and not a fact:
+`ActionGate` holds it to one change every four server ticks, the stored state and the broadcast never
+move apart, and logging out, respawning or changing dimension clears it. The owner sees his own panel
+in third person only, since in first person he is looking at the screen itself.
+
+## Quarry scene, 23 September 2026
+
+The spin inside a cooling hole used to jump back now and then. The angle was accumulated per cell and
+wrapped at a full turn, but the ring took a fraction of it, so every wrap snapped the ring back by a
+third of a turn; a cell dropped from the field snapshot and sent again also started from zero. Every
+angle and every wave is now taken from one clock looped at four minutes, each with a whole number of
+turns per loop, so nothing jumps at the wrap. The lighting of the orb now turns with the orb instead of
+staying where the mesh started.
+
+The scene is quieter. The hexagonal grid on the walls and the shards on a break are gone: the walls
+carry a soft edge light and a level of light that rises with the cooldown, the ring is thin with a
+faint track, the orb breathes instead of flickering, and a refusal eases to red and back instead of
+switching. Colours are lifted slightly towards white.
+
+A hole stays a hole until the server says the ore is back. The client used to trust its own clock and
+showed the ore for a moment before the server tick restored it.
+
+Quarry plates appear within five blocks instead of fourteen and twenty-six, and only for a cell in
+plain sight: a ray from the camera through the blocks in between must reach it. Before this a plate was
+drawn over ore behind a wall.
+
+Fixes on the server: the time left is rounded up, so a hole no longer reads "0 seconds" while it is
+still cooling; mining a node wears the tool and adds hunger, where the cancelled break used to leave
+the pickaxe untouched forever; the quarry now listens to the break after the lobby, zone and point
+guards, so a protected capture point protects its ore as well; the field is collected from the
+player outwards, so the count cap cuts far cells instead of near ones; break and restore pulses reach
+the same 48 blocks as the field instead of 64.
+
+Version 2026.09.23 - built but not played through; the new look of the scene, the plate range and the
+line-of-sight check want a look in game.
+
+## Tags that step aside, and damage numbers, 23 September 2026 (v2)
+
+A world tag exists to lead you somewhere, so once you are there it gets out of the way. Standing inside a base or a shop fades that zone's tag from the HUD, standing inside a capture point fades the point's tag, and an operator mark can be given a hide zone of its own: a radius around the mark, circle or square, and optionally a height above and below it. The minimap and the full map keep showing all of them, and the objective bar is not touched. For zones and points this is on by default and can be switched off per object (`zone edit <id> hideinside <bool>`, `capturepoint sethideinside "<point>" <bool>` and the same under `finalpoint`); a mark has no hide zone until one is set (`mark edit <id> hidezone radius|shape|height|off`). Every one of these is also a row in its manager screen.
+
+Damage numbers no longer go through the vanilla particle engine and vanilla world text. The server collects every hit a player lands during a tick, adds up the hits on the same target, and sends one packet per player at the end of the tick; the client projects each number onto the screen with the same camera matrices the world tags use and draws it with the pack's own glyph pipeline under the crosshair. The number pops on every new hit, drifts up and fades, and shrinks with distance. What counted as a critical used to be any hit above ten points; now it is a vanilla critical, taken from the final result of `CriticalHitEvent`, or a headshot reported by TACZ. Damage is read at the lowest priority, so a hit that another handler cancels or reduces is shown as it actually landed, and hurting yourself no longer shows a number. In the customization window the Interface tab has a Damage numbers group: on or off, stacking hits into one number, size, how long a number stays, and the two colours, which follow the accent until you pick your own.
+
+Fixed along the way: `mark tp` and `zone tp` now move you into the world the mark or zone belongs to instead of the same coordinates in whatever world you stand in; a player who changes team gets the marks and the shop of the new team right away instead of after reconnecting; the shop catalog request is rate-limited on the server; removing a line from a map label rebuilds the mark screen; the zones, capture points and damage channels now carry a new protocol version, so a client with an older jar is turned away at login instead of failing on the first packet it cannot read.
+
+Settings that sat under someone else's heading are back where they belong. The island on/off and music switches showed up at the bottom of the Damage numbers group; they now open the Island group. The reset buttons of the Glass and Colours tabs sat under the last group of each tab and now have a Reset heading of their own, as the presets tab and the rules screen already did. In the match settings "Teams needed" was listed after the stamina group, so the Teams heading appeared twice and "Require teams to start" ended up under Lobby point; each group is now built from its own settings, and the switch sits right under "Teams needed".
+
+Scrolling no longer stutters as it settles. Rows kept their position in whole interface units, and at the usual interface scale one unit is two to four screen pixels, so the last part of the glide, where a row moves by a fraction of a unit per frame, came out as a few late jumps of a whole unit. Rows, headings, list buttons and world cards now draw at the exact fractional position; clicks and hover still use the whole one.
+
+## A mark's hide zone can be drawn, 23 September 2026 (v3)
+
+The hide zone of an operator mark can now be shown in the world the same way bases and capture points are: a translucent wall with a ring laid on the ground, running on the same shader. It is off by default and only exists while the zone has a radius. `mark edit <id> hidezone show <bool>` turns it on, `mark edit <id> hidezone color <value>` paints it with a colour of its own and `mark edit <id> hidezone color mark` makes it follow the mark's colour again, which is also the default; the colour argument suggests the mark palette. In the mark manager these are two rows under the zone height, and the colour row appears once the zone is shown. The zone is seen by exactly the teams that see the mark, and unlike bases it is drawn outside the match too, because an operator turned it on on purpose. A zone that covers the whole column gets a wall eight blocks high over the mark, sitting on the terrain below.
+
+Fixed along the way: the name of a capture point could match the id of a zone, and since the wall mesh and the colour fade were cached by name, the two would rebuild each other's mesh every frame; a regular and a final point with the same name had the same problem. Removing a zone no longer drops the drawn volume of a capture point that happens to share its name. The frustum check no longer allocates a bounding box per zone per frame, and the tick that gathers visible zones no longer allocates a list and a lambda per point. The zones channel moves to protocol version 3, since the mark packet carries two new fields.
+
+## A real window instead of a hologram, 23 September 2026 (v4)
+
+The panel a player holds while a screen is open used to be a sketch: a flat quad with five bars and the
+name of the screen. It is now a window built from the same parts as the screen itself. The title is the
+screen's own title set in the title face, the tabs under it are that screen's real tabs with the one
+the player is on lit in the accent, and the body is laid out by kind: rows for the menus and managers,
+a tile grid for the shop, a map for the map panel. The window is glass: it refracts and frosts what is
+behind it, and since the player stands behind their own window, a viewer in front sees the player
+through it, bent at the rim the way the pack's panels bend the world. A small cursor wanders over the
+content so the window does not read as a picture.
+
+The window is baked once per state into a small texture with mip levels (title, tabs, active tab,
+language) and reused; the accent colour catches up at most every sixth frame while it travels. Only the
+glass is drawn every frame: one copy of the finished frame at half resolution, then one quad per window,
+depth tested against the world. Windows are shown within 15 blocks, the last 3 fading, at most six at a
+time, nearest first. The arm pose stays at any distance.
+
+Nothing but translation keys crosses the wire. The client sends the kind of screen, the key of its
+title, up to eight tab keys and the index of the active tab; a tab whose label is not a translation key
+(a shop section, a player name) goes out as an empty pill. The server rejects anything that is not a
+well-formed key, and the viewer only shows keys its own language actually has, so a modified client
+cannot broadcast text of its own. The battlecraft channel moves to protocol version 2.
+
+Fixed along the way:
+
+*   A claim refused by the rate limit used to be thrown away. Opening and closing a screen within four
+    ticks left the window hanging for everyone around until the next screen. The server now keeps the
+    latest claim and settles it when the limit allows.
+*   A player who left tracking range never heard that the screen was closed, and walking back in showed
+    the old window. Starting to track now always sends the current state, closed included, and the
+    viewer drops the window of a player who is no longer in its world.
+*   When the server cleared the state on death or a change of world while the screen stayed open, the
+    client never reported it again, so the window was gone for everyone. The client now re-reports as
+    soon as the server announces its own window closed.
+*   A screen burning out in the world disappeared the moment you walked behind it: the composite of the
+    ember burn kept back-face culling on, so the quad was culled from behind. It now stays visible from
+    both sides, as the splinter burn already did.
+
+## The window shows what the player sees, 23 September 2026 (v5)
+
+Teammates standing near a player in a menu now see the real window on the glass, not the skeleton. The
+client photographs its own window, the region of the screen the panel occupies, scaled down to at most
+384 by 288 and sent as a JPEG under 30 KB. It is not a stream. Four times a second a 48 by 32
+thumbnail is compared with the previous one and with the last one sent: a frame goes out only when the
+window has changed and has stopped moving, and no sooner than 0.7 s after the last one. Scrolling, rows
+sliding in and the entrance of the screen never go out as frames; their final state does. Nothing is
+sampled or sent while no teammate is within 16 blocks. Scaling goes down by halves, so the text in the
+frame stays legible instead of breaking into noise.
+
+The server relays a frame only to players on the sender's team, in the same world, within 16 blocks,
+and only while the sender's screen is open; a teammate who walks up later gets the last frame, and one
+who walked off gets a fresh one when they come back. Frames are cut to 30 KB and one per ten ticks,
+and a frame that arrives too early waits for the next slot rather than being dropped, so the last state
+is never lost. Opening another screen drops the old frame at once; switching tabs keeps it until the
+new one arrives. On the viewing side the image size is read from its header before it is decoded, and
+anything over 512 pixels a side is ignored.
+
+Everyone else, rivals included, keeps seeing the skeleton window. Admin screens are never
+photographed: the managers, the module panels, the operator tabs of `/bc` and the shop in edit mode stay
+a skeleton even for teammates, because they show data the server does not give ordinary players. A
+modified client can still send any picture in place of its window; the server cannot check what an
+image shows, which is why it only reaches the sender's own team. The battlecraft channel moves to
+protocol version 3.
+
+## One palette for every colour, fading volumes and gliding selection, 23 September 2026
+
+Every colour you can pick now opens the palette window from the customization screen, with its
+entrance, burn and drag: the colour of a mark and of its hide zone in the mark manager, the colour of a
+zone in the zone manager, and the colour of a map label from its action menu. The rows used to step
+through a short list of names with arrows, never showed the colour itself and could not reach anything
+outside the list. The row now shows a swatch and the hex value, and the palette's reset button returns
+the zone to its team colour, the hide zone to the mark's colour and a mark to the default. Colours that
+live on the server have no alpha slider, and dragging across the field sends one command when the
+mouse is released rather than one per frame.
+
+Zone walls and rings no longer pop in and out. A base, shop, capture point or mark volume that enters
+the visible set (match start, a team change, chunks loading, coming within range) fades in over 0.7 s,
+and one that leaves it fades out from where it was last drawn. The wall no longer cuts off at 64 blocks
+but fades out over the last 14. Quarry cells that arrive with a new snapshot, because a neighbour was
+mined or you walked up to the field, fade in the same way; the burst of a break is not delayed.
+
+Picking a world or a server is animated. The accent mark slides from the old card to the new one,
+stretching on the way, and follows its card exactly while the list scrolls; the lift of the glass and
+the title tone of the chosen card ease in with a spring, and the preview column fades and rises into
+the new selection. A search that rebuilds the list keeps the selection settled instead of replaying it
+on every letter. Vanilla lists that remain in the menus (languages, resource packs, the mod list) no
+longer draw the white selection frame: an accent plate glides to the chosen row.
+
+Fixed along the way: black was not a possible zone colour, because zero marks "team colour" and black
+without alpha is zero; a colour without alpha sent by command made a map label invisible. Colours of
+marks, hide zones and zones are now stored opaque on the server, and zero still means team colour or
+mark colour.
+
+## Loot caches and the loot editor, 24 September 2026
+
+Any container in the world (chest, double chest, barrel, furnace, dispenser, shulker box) can become
+a **loot cache**: look at it and press "Container under the crosshair" in the airdrop panel, or run
+`/airdrop cache add <pos> [table]`. A cache takes its loot from a named table, is filled when a match
+starts, and can refill on its own - every N seconds, or N seconds after it was emptied. When the
+match ends it is emptied, and outside a match players cannot open it, so last match loot never waits
+in the lobby. Both are switches under the Caches tab.
+
+*   **Look.** A cache is marked by a quiet shader scene: a thin frame hugging the real block shape
+    (a double chest gets one frame for both halves), a light running along its edges, a soft pool of
+    light on the floor, a ring counting down to the next refill once it is empty, and one wave when it
+    fills. The colour is its tier - common, rare, epic, legendary; a hidden cache has no glow and is
+    never sent to players. The scene is depth tested and only caches within 48 blocks reach the
+    client, so it shows nothing the eye could not see.
+*   **Protection.** Only an operator in creative can break a cache, which also removes it from the list;
+    explosions skip it, and hoppers cannot be placed under it.
+*   **Filling** happens when the cache's chunk is loaded, not for the whole list at match start.
+
+**Loot tables** now have rules: a minimum and a maximum number of entries per fill. Entries are rolled
+in random order, guaranteed ones (100 %) survive the cap first, and a fill that comes up short is
+topped up by chance weight. Stacks larger than the item allows are split, and an item missing from
+the pack is skipped instead of taking a slot. Tables are written as UTF-8 through a temporary file,
+old array-only files still load, and one broken entry no longer loses the whole table.
+
+**Airdrop fixes.** Command and config ranges are now one set, so a value typed into the panel is no
+longer reset by Forge on the next config read. Setting a center turns off "center at world spawn",
+which silently overrode it. The fall time is the time the crate actually falls (it was doubled). A drop
+keeps its chunk loaded while it lives, so it lands and despawns far from players; its map marker is set
+on change instead of every tick and stays until the crate is looted. Timers run on game time, a crate
+whose ground was broken falls again, the window closes when you walk away or the crate disappears, and
+number keys can no longer put items into it. New switches: auto drop only during a match, remove
+drops when the match ends, announce coordinates or leave only the smoke, pick the loot table.
+
+## Attachment bench and editor fixes, 24 September 2026 (hotfix)
+
+*   **Attachment bench.** Attachments for loot guns and shop guns are edited on one screen: the gun
+    list on the left, the gun turning in 3D with its stats in the middle, slots as cards on the right
+    and the fitting attachments as tiles with icons; hovering a tile shows what it gives. SuperbWarfare
+    levels read "Level N" instead of a dot, and they no longer show a missing texture.
+*   **Loot editor.** Chance, counts and entry rules are typed numbers instead of sliders, tiles start at
+    the left edge, the table settings live in the right panel when nothing is selected, the test roll
+    fades out with its text and items, and the inventory no longer slides in after scrolling All items.
+    A new table stays selected while the server confirms it, deleting one selects its neighbour.
+*   **Buttons everywhere** now ease between enabled and disabled and swap their label with a short
+    lift instead of changing in one frame.
+*   **Caches.** A chest can no longer be placed next to a single-chest cache to merge into it.
+
+## Picking items by sight, 24 September 2026 (v3)
+
+*   **No more "take from hand".** Kill reward, capture point reward and income, sell prices and
+    currency, new shop items and the item to configure in modifiers all open one picker: your
+    inventory or every item with search, a 3D preview, the amount typed as a number, double click to
+    pick. Items taken from the inventory keep all their tags (the server copies them from the slot).
+*   **Attachments show on the gun.** SuperbWarfare draws attachments from the item in your hand, so
+    the preview now holds the previewed gun for the frame it is drawn.
+*   The attachment bench scrolls smoothly, and a pressed menu row no longer nudges its value sideways.
+
+## Sharper artwork and Discord picture on the island, 24 September 2026
+
+The cover and the Discord picture used to reach the screen through the game's plain dynamic texture, which is uploaded with nearest filtering and no mipmaps. A 300 pixel cover drawn at sixty or eighty physical pixels was therefore reduced by throwing pixels away: the artwork shimmered, fine detail broke into noise and the rounded corners came out stepped. Both pictures are now prepared off the render thread into a proper mip chain: the squared picture is reduced by area averaging to a power of two no larger than 256, its corners are rounded at that size, and it is halved down to a single pixel with alpha-weighted averaging, so a transparent corner never darkens the colour next to it. The texture is sampled with trilinear filtering, which keeps the picture clean at every size it passes through between the pill and the card, and through the turn between two covers as well. The picture is also laid on the physical pixel grid at fractional coordinates rather than in whole interface units, so it no longer jumps two to four screen pixels at a time while the island grows around it.
+
+The Discord picture is now requested at 256 pixels instead of 128. The cached copy carries its size in its name, so an old low-resolution file is not reused, and older copies are removed once the new one is written. The download checks the server's answer and refuses a truncated body, the cache is written through a temporary file and a cached file that no longer decodes is thrown away and fetched again - a broken write used to leave the island without a picture for good. The identity and picture hash read from the local Discord pipe are checked for shape before they go into a web address or a file name. The handshake is retried every thirty seconds until it succeeds, so starting Discord after the game, or a network that is not up yet, no longer leaves the skin head in place until the next launch.
+
+## Scrolling text that dissolves at the edge, 24 September 2026
+
+A label too long for its box - a tile name, a picker value, the track and the artist on the island - no longer seems to be made by the wall it slides past. The text shader masks every pixel against the edges of the box: a letter nearing the edge first darkens toward a deep shade of the accent and then fades out, so the line dissolves the way it does on iOS instead of being sliced glyph by glyph. The edges sit a little outside the box, so the first letter of a resting line is whole, and the band only exists on the side where text is hidden: it grows three times faster than the line moves, so the shade is there from the first frame of motion and stays until the line has fully arrived. The line moves at nine units a second with a pause at each end, starts from its beginning whenever it appears instead of joining a clock already halfway through the run, and is drawn off the pixel grid, so the slow end of the run glides instead of stepping. The island shares the same mechanism.
 
 ## Releases
 

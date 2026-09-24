@@ -14,6 +14,12 @@ public final class GunSmith {
         return TaczSmith.isGun(stack) || SuperbSmith.isGun(stack);
     }
 
+    // WHY: модели SuperbWarfare выбирают кости обвесов по предмету в главной руке игрока, а не по
+    // WHY: рисуемому стаку: предпросмотр такого оружия обязан на время отрисовки держать его в руке
+    public static boolean readsHeldItem(ItemStack stack) {
+        return SuperbSmith.isGun(stack);
+    }
+
     public static List<String> options(ItemStack gun) {
         if (TaczSmith.isGun(gun)) return TaczSmith.options(gun);
         return SuperbSmith.isGun(gun) ? SuperbSmith.options(gun) : List.of();

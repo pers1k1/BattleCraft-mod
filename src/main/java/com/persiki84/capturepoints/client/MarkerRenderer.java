@@ -7,10 +7,12 @@ import com.persiki84.battlecraft.rules.MarkerRange;
 import com.persiki84.capturepoints.CapturePointsMod;
 import com.persiki84.minimap.client.ClientMapData;
 import com.persiki84.minimap.network.MapMarkerSyncPacket;
+import com.persiki84.shared.zone.ZoneArea;
 import com.persiki84.shared.client.ui.UiAccent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
@@ -76,8 +78,7 @@ public final class MarkerRenderer {
 
     private static void projectPointRow(Vec3 camera, Matrix4f view, Matrix4f projection,
                                         Map<String, String> points, boolean isFinal) {
-        double range = ClientMarkerRanges.blocks(MarkerRange.POINTS);
-
+        Entity viewer = Minecraft.getInstance().getCameraEntity();
         for (Map.Entry<String, String> entry : points.entrySet()) {
             String name = entry.getKey();
             if (!ClientCaptureData.isPointShownInHud(name)) continue;
@@ -91,9 +92,21 @@ public final class MarkerRenderer {
                     camera, view, projection);
             if (distance < 0.0) continue;
 
-            visible.add(new ProjectedMarker(name, name, entry.getValue(), isFinal, distance <= range,
+            double range = ClientMarkerRanges.blocks(MarkerRange.POINTS,
+                    ClientCaptureData.getMarkerRange(name));
+            boolean kept = distance <= range && !standsInside(viewer, name, isFinal);
+            visible.add(new ProjectedMarker(name, name, entry.getValue(), isFinal, kept,
                     distance, screenX(), screenY(), null));
         }
+    }
+
+    // WHY: метка нужна, чтобы найти точку; стоящему на ней она только закрывает обзор, а ход
+    // WHY: захвата показывает своя карточка, поэтому внутри зоны точки метка гаснет присутствием
+    private static boolean standsInside(Entity viewer, String name, boolean isFinal) {
+        if (viewer == null || !ClientCaptureData.isPointHiddenInside(name)) return false;
+
+        ZoneArea area = isFinal ? ClientCaptureData.getFinalPointArea(name) : ClientCaptureData.getPointArea(name);
+        return area != null && area.contains(viewer.getX(), viewer.getY(), viewer.getZ());
     }
 
     private static void projectPlayerMarkers(Minecraft mc, Vec3 camera, Matrix4f view, Matrix4f projection) {

@@ -26,7 +26,9 @@ public enum InterfaceFlag {
     RADIO_HUD("radioHud", true, HudConfig::radioHud, HudConfig::radioHud),
     VOICE_TRACE("voiceTrace", true, HudConfig::voiceTrace, HudConfig::voiceTrace),
     RADIO_STATIC("radioStatic", true, HudConfig::radioStatic, HudConfig::radioStatic),
-    RADIO_CHIRP("radioChirp", true, HudConfig::radioChirp, HudConfig::radioChirp);
+    RADIO_CHIRP("radioChirp", true, HudConfig::radioChirp, HudConfig::radioChirp),
+    DAMAGE_NUMBERS("damageNumbers", true, HudConfig::damageNumbers, HudConfig::damageNumbers),
+    DAMAGE_STACK("damageStack", true, HudConfig::damageStack, HudConfig::damageStack);
 
     public interface Switch {
         void set(boolean value);

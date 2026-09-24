@@ -5,6 +5,7 @@ import com.persiki84.shared.WorldFiles;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.mojang.logging.LogUtils;
+import com.persiki84.shared.zone.ZoneShape;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -83,6 +84,12 @@ public final class MarkStorage {
         private List<String> lines;
         private String kind;
         private Integer scale;
+        private Integer markerRange;
+        private Integer hideRadius;
+        private String hideShape;
+        private Integer hideHeight;
+        private Boolean hideShown;
+        private Integer hideColor;
         private int color;
         private Boolean inWorld;
         private List<String> teams;
@@ -98,6 +105,12 @@ public final class MarkStorage {
             stored.lines = new ArrayList<>(mark.lines());
             stored.kind = mark.kind().id();
             stored.scale = mark.scalePercent();
+            stored.markerRange = mark.markerRange();
+            stored.hideRadius = mark.hideZone().radius();
+            stored.hideShape = mark.hideZone().shape().id();
+            stored.hideHeight = mark.hideZone().height();
+            stored.hideShown = mark.hideZone().shown();
+            stored.hideColor = mark.hideZone().color();
             stored.color = mark.color();
             stored.inWorld = mark.inWorld();
             stored.teams = new ArrayList<>(mark.teams());
@@ -117,6 +130,13 @@ public final class MarkStorage {
             if (lines != null && !lines.isEmpty()) mark.restoreLines(lines);
             mark.setKind(MarkKind.byId(kind == null ? MarkKind.DEFAULT.id() : kind));
             mark.setScalePercent(scale == null ? MapMark.SCALE_FULL : scale);
+            mark.setMarkerRange(markerRange == null ? MapMark.KIND_RANGE : markerRange);
+            mark.setHideZone(new MarkHideZone(
+                    hideRadius == null ? MarkHideZone.OFF : hideRadius,
+                    ZoneShape.byId(hideShape == null ? "" : hideShape),
+                    hideHeight == null ? MarkHideZone.WHOLE_COLUMN : hideHeight,
+                    hideShown != null && hideShown,
+                    hideColor == null ? MarkHideZone.MARK_COLOR : hideColor));
             mark.setInWorld(inWorld == null || inWorld);
             if (teams != null) {
                 for (String team : teams) {

@@ -16,7 +16,9 @@ import com.persiki84.zones.client.ClientZoneData;
 import com.persiki84.zones.mark.MapMark;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.LiteralContents;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
@@ -39,6 +41,8 @@ public final class ZoneMarkers {
     private static final Component SHOP_LABEL = Component.translatable("zones.marker.shop");
 
     private static final Map<String, Marker> known = new HashMap<>();
+    private static final Map<String, Component> markLabels = new HashMap<>();
+    private static final Map<String, String> markKeys = new HashMap<>();
     private static final List<Marker> live = new ArrayList<>();
     private static final Vector4f scratch = new Vector4f();
 
@@ -51,6 +55,8 @@ public final class ZoneMarkers {
     public static void reset() {
         live.clear();
         known.clear();
+        markLabels.clear();
+        markKeys.clear();
     }
 
     public static void forget(String zoneId) {
@@ -63,18 +69,20 @@ public final class ZoneMarkers {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return;
 
-        boolean sheltered = VisibleZones.sheltered(minecraft.getCameraEntity());
+        Entity viewer = minecraft.getCameraEntity();
+        boolean sheltered = VisibleZones.sheltered(viewer);
         float screenWidth = minecraft.getWindow().getGuiScaledWidth();
         float screenHeight = minecraft.getWindow().getGuiScaledHeight();
 
         boolean running = VisibleZones.matchRunning();
         boolean shown = !UiHud.rosterOpen();
+        ResourceLocation here = minecraft.level == null ? null : minecraft.level.dimension().location();
         for (Zone zone : ClientZoneData.all()) {
-            if (!listed(zone)) continue;
-            place(zone, shown && running && wanted(zone, sheltered), camera, view, projection,
-                    screenWidth, screenHeight);
+            if (!listed(zone) || !zone.inDimension(here)) continue;
+            boolean wanted = shown && running && wanted(zone, sheltered) && !standsInside(zone, viewer);
+            place(zone, wanted, camera, view, projection, screenWidth, screenHeight);
         }
-        placeMarks(shown, camera, view, projection, screenWidth, screenHeight);
+        placeMarks(shown, viewer, camera, view, projection, screenWidth, screenHeight);
         prune();
     }
 
@@ -82,12 +90,12 @@ public final class ZoneMarkers {
                               float screenWidth, float screenHeight) {
         ZoneArea area = zone.area();
         project(zone.id(), baseLabel(zone), area.centerX(), area.maxY() + LABEL_LIFT, area.centerZ(),
-                ZoneColors.packed(zone), range(MarkerRange.ZONES), wanted, camera, view, projection,
-                screenWidth, screenHeight);
+                ZoneColors.packed(zone), range(MarkerRange.ZONES, zone.markerRange()), wanted,
+                camera, view, projection, screenWidth, screenHeight);
     }
 
-    private static void placeMarks(boolean shown, Vec3 camera, Matrix4f view, Matrix4f projection,
-                                   float screenWidth, float screenHeight) {
+    private static void placeMarks(boolean shown, Entity viewer, Vec3 camera, Matrix4f view,
+                                   Matrix4f projection, float screenWidth, float screenHeight) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null) return;
 
@@ -95,11 +103,47 @@ public final class ZoneMarkers {
         for (MapMark mark : ClientMarkData.all()) {
             if (!here.equals(mark.dimension())) continue;
 
-            project(MARK_PREFIX + mark.id(), Component.literal(mark.label()),
+            project(markKey(mark), markLabel(mark),
                     mark.position().getX() + 0.5, mark.position().getY() + LABEL_LIFT,
-                    mark.position().getZ() + 0.5, markColor(mark), range(MarkerRange.MARKS),
-                    shown && mark.inWorld(), camera, view, projection, screenWidth, screenHeight);
+                    mark.position().getZ() + 0.5, markColor(mark),
+                    range(MarkerRange.MARKS, mark.markerRange()),
+                    shown && mark.inWorld() && !standsInside(mark, viewer),
+                    camera, view, projection, screenWidth, screenHeight);
         }
+    }
+
+    // WHY: метка ведёт к месту, и тому, кто уже пришёл, она только закрывает обзор: внутри своей
+    // WHY: зоны она гаснет присутствием в HUD, а на миникарте и полной карте остаётся
+    private static boolean standsInside(Zone zone, Entity viewer) {
+        if (viewer == null || !zone.hiddenInside()) return false;
+        return zone.area().contains(viewer.getX(), viewer.getY(), viewer.getZ());
+    }
+
+    private static boolean standsInside(MapMark mark, Entity viewer) {
+        if (viewer == null) return false;
+        return mark.hideZone().contains(mark.position(), viewer.getX(), viewer.getY(), viewer.getZ());
+    }
+
+    // WHY: ключ и подпись метки собираются раз на смену, а не в кадре: проекция идёт каждый кадр
+    // WHY: на каждую метку, и строка с компонентом на каждую были мусором в горячем пути
+    private static String markKey(MapMark mark) {
+        return markKeys.computeIfAbsent(mark.id(), ZoneMarkers::prefixed);
+    }
+
+    private static String prefixed(String id) {
+        return MARK_PREFIX + id;
+    }
+
+    private static Component markLabel(MapMark mark) {
+        String text = mark.label();
+        Component cached = markLabels.get(mark.id());
+        if (cached != null && cached.getContents() instanceof LiteralContents literal
+                && literal.text().equals(text)) {
+            return cached;
+        }
+        Component created = Component.literal(text);
+        markLabels.put(mark.id(), created);
+        return created;
     }
 
     private static int markColor(MapMark mark) {
@@ -140,8 +184,8 @@ public final class ZoneMarkers {
         return x < -MARGIN || y < -MARGIN || x > width + MARGIN || y > height + MARGIN;
     }
 
-    private static double range(MarkerRange kind) {
-        return ClientMarkerRanges.blocks(kind);
+    private static double range(MarkerRange kind, int own) {
+        return ClientMarkerRanges.blocks(kind, own);
     }
 
     // WHY: метка живёт по идентификатору зоны, а подпись зависит от типа: смена базы на магазин
@@ -162,6 +206,12 @@ public final class ZoneMarkers {
     // WHY: оставляли счёт прежним, и метка снятой зоны жила до следующего изменения набора
     private static void prune() {
         known.keySet().removeIf(ZoneMarkers::forgotten);
+        markLabels.keySet().removeIf(ZoneMarkers::markGone);
+        markKeys.keySet().removeIf(ZoneMarkers::markGone);
+    }
+
+    private static boolean markGone(String id) {
+        return ClientMarkData.byId(id) == null;
     }
 
     private static boolean forgotten(String key) {
@@ -206,7 +256,7 @@ public final class ZoneMarkers {
         }
 
         private void rename(Component value) {
-            if (name.getString().equals(value.getString())) return;
+            if (name == value || name.getString().equals(value.getString())) return;
             name = value;
         }
 

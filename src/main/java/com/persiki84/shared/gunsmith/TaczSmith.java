@@ -160,11 +160,14 @@ final class TaczSmith {
         }
     }
 
+    // WHY: значение обвеса SuperbWarfare выглядит как scope:1 и разбирается как идентификатор, а
+    // WHY: построитель TACZ собирал из него несуществующий обвес с розовой текстурой-заглушкой
     static ItemStack preview(String option) {
         ResourceLocation id = attachmentId(option);
         if (id == null) return ItemStack.EMPTY;
 
         try {
+            if (((Optional<?>) indexOf.invoke(null, id)).isEmpty()) return ItemStack.EMPTY;
             return attachmentStack(id);
         } catch (Throwable error) {
             SmithLog.trip(MOD_ID, error);

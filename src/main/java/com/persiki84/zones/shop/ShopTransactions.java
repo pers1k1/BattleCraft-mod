@@ -30,7 +30,8 @@ public final class ShopTransactions {
     }
 
     public static boolean canShopHere(ServerPlayer player) {
-        Zone zone = ZoneLookup.smallestOfTypeAt(ZoneType.SHOP, player.getX(), player.getY(), player.getZ());
+        Zone zone = ZoneLookup.smallestOfTypeAt(ZoneLookup.dimensionOf(player), ZoneType.SHOP,
+                player.getX(), player.getY(), player.getZ());
         return zone != null;
     }
 

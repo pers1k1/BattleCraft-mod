@@ -1,5 +1,6 @@
 package com.persiki84.dmgndctr;
 
+import com.persiki84.dmgndctr.compat.GunHeadshots;
 import com.persiki84.dmgndctr.event.ServerEventHandler;
 import com.persiki84.dmgndctr.network.PacketHandler;
 import net.minecraftforge.common.MinecraftForge;
@@ -21,5 +22,6 @@ public class DmgIndicatorMod {
 
     private void commonSetup(final FMLCommonSetupEvent event) {
         PacketHandler.register();
+        GunHeadshots.listen();
     }
 }

@@ -10,7 +10,8 @@ import com.persiki84.capturepoints.client.ClientCaptureData;
 import com.persiki84.minimap.network.MapMarkerSyncPacket;
 import com.persiki84.minimap.network.MapMarkerUpdatePacket;
 import com.persiki84.minimap.network.MapTeleportPacket;
-import com.persiki84.zones.mark.MarkPalette;
+import com.persiki84.shared.client.menu.PaletteStack;
+import com.persiki84.shared.client.menu.PaletteWindow;
 import com.persiki84.zones.network.MarkEditPacket;
 import com.persiki84.minimap.network.MapWorldMarkerSyncPacket;
 import com.persiki84.minimap.network.PacketHandler;
@@ -54,6 +55,7 @@ public class MapScreen extends Screen {
     private static final long DOUBLE_CLICK_MS = 400L;
 
     private final MapActionMenu actions = new MapActionMenu();
+    private final PaletteStack palettes = new PaletteStack();
     private final MapTextPrompt prompt = new MapTextPrompt();
     private String hoveredLabel;
     private String armedLabel;
@@ -110,6 +112,7 @@ public class MapScreen extends Screen {
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         actions.render(guiGraphics, this.font, mouseX, mouseY);
+        palettes.render(guiGraphics, this.width, this.height, mouseX, mouseY);
         prompt.render(guiGraphics, this.font, this.width, this.height);
     }
 
@@ -155,8 +158,10 @@ public class MapScreen extends Screen {
     }
 
     private void renderBases(GuiGraphics guiGraphics, int centerX, int centerY) {
+        Minecraft mc = Minecraft.getInstance();
         for (Zone zone : ClientZoneData.all()) {
             if (zone.type() != ZoneType.BASE || !ZoneColors.visibleToOwnTeam(zone)) continue;
+            if (mc.level == null || !zone.inDimension(mc.level.dimension().location())) continue;
 
             renderBaseMarker(guiGraphics, zone.area().centerX(), zone.area().centerZ(), centerX, centerY,
                     0xFF000000 | ZoneColors.packed(zone));
@@ -389,20 +394,22 @@ public class MapScreen extends Screen {
                     () -> send(MarkEditPacket.Action.REMOVE_LINE, id, 0, 0,
                             mark.lines().size() - 1, 0, "")));
         }
-        items.add(MapActionMenu.Item.of("minimap.map.action.color", () -> openColors(id, mouseX, mouseY)));
+        items.add(MapActionMenu.Item.of("minimap.map.action.color", () -> openColors(id)));
         items.add(MapActionMenu.Item.of("minimap.map.action.teams", () -> openTeams(id, mouseX, mouseY)));
         items.add(MapActionMenu.Item.of("minimap.map.action.delete",
                 () -> send(MarkEditPacket.Action.DELETE, id, 0, 0, 0, 0, "")));
     }
 
-    private void openColors(String id, double mouseX, double mouseY) {
-        List<MapActionMenu.Item> items = new ArrayList<>();
-        for (int index = 0; index < MarkPalette.COLORS.length; index++) {
-            int color = MarkPalette.COLORS[index];
-            items.add(MapActionMenu.Item.colored(MarkPalette.name(index), color,
-                    () -> send(MarkEditPacket.Action.COLOR, id, 0, 0, 0, color, "")));
-        }
-        actions.show(this.font, mouseX, mouseY, this.width, this.height, items);
+    // WHY: цвет надписи выбирается тем же окном палитры, что и в меню меток: список из девяти
+    // WHY: названий не показывал ни сам цвет, ни того, который уже стоит у надписи
+    private void openColors(String id) {
+        MapMark mark = ClientMarkData.byId(id);
+        if (mark == null) return;
+
+        palettes.toggle(this.width, this.height, "label:" + id, PaletteWindow.Kind.SERVER,
+                Component.translatable("minimap.map.action.color"), mark.color(),
+                argb -> send(MarkEditPacket.Action.COLOR, id, 0, 0, 0, argb, ""),
+                () -> send(MarkEditPacket.Action.COLOR, id, 0, 0, 0, MapMark.DEFAULT_COLOR, ""));
     }
 
     // WHY: набор команд читается из самой метки, а оператору её отдают целиком даже скрытую,
@@ -495,6 +502,7 @@ public class MapScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (palettes.mouseDragged(mouseX, mouseY)) return true;
         if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             if (sizingLabel) {
                 sizeLabel(mouseX, mouseY);
@@ -514,7 +522,7 @@ public class MapScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (actions.open() || prompt.open()) return true;
+        if (actions.open() || prompt.open() || palettes.covering(mouseX, mouseY)) return true;
 
         targetZoom = (float) Math.max(0.1, Math.min(10.0, targetZoom + delta * 0.15 * targetZoom));
         return true;
@@ -522,7 +530,8 @@ public class MapScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (prompt.open()) return true;
+        if (prompt.open()) return prompt.click(mouseX, mouseY, button);
+        if (palettes.mouseClicked(mouseX, mouseY)) return true;
         if (actions.open()) {
             actions.click(mouseX, mouseY);
             return true;
@@ -600,6 +609,7 @@ public class MapScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (palettes.mouseReleased()) return true;
         if (prompt.open() || actions.open()) return true;
 
         if (sizingLabel && button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
@@ -651,13 +661,15 @@ public class MapScreen extends Screen {
 
     @Override
     public boolean charTyped(char symbol, int modifiers) {
-        if (prompt.open()) return prompt.charTyped(symbol);
+        if (prompt.open()) return prompt.charTyped(symbol, modifiers);
+        if (palettes.charTyped(symbol)) return true;
         return super.charTyped(symbol, modifiers);
     }
 
     @Override
     public boolean keyPressed(int key, int scan, int modifiers) {
-        if (prompt.open()) return prompt.keyPressed(key);
+        if (prompt.open()) return prompt.keyPressed(key, scan, modifiers);
+        if (palettes.keyPressed(key)) return true;
         if (key != GLFW.GLFW_KEY_ESCAPE) return super.keyPressed(key, scan, modifiers);
 
         if (actions.open()) {

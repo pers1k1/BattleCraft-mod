@@ -28,6 +28,11 @@ public final class ClientMarkerRanges {
         return blocks[range.ordinal()];
     }
 
+    // WHY: ноль у метки значит «как у вида»: своя дальность это исключение, а не обязанность
+    public static int blocks(MarkerRange range, int own) {
+        return own <= 0 ? blocks(range) : clamp(own);
+    }
+
     private static int[] defaults() {
         int[] made = new int[MarkerRange.values().length];
         Arrays.fill(made, MarkerRange.DEFAULT_BLOCKS);

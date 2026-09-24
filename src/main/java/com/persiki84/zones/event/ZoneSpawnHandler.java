@@ -7,6 +7,8 @@ import com.persiki84.zones.ZoneRegistry;
 import com.persiki84.zones.ZoneType;
 import com.persiki84.zones.ZonesMod;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
@@ -31,11 +33,21 @@ public class ZoneSpawnHandler {
         Zone spawn = spawnZoneFor(player);
         if (spawn == null) return;
 
+        ServerLevel level = levelOf(player, spawn);
         BlockPos target = spawn.spawnsAtAnchor()
-                ? surfaceAt(player.serverLevel(), spawn.spawnAnchor())
-                : pickPlacement(player.serverLevel(), spawn.area());
-        player.teleportTo(player.serverLevel(), target.getX() + 0.5, target.getY(), target.getZ() + 0.5,
+                ? surfaceAt(level, spawn.spawnAnchor())
+                : pickPlacement(level, spawn.area());
+        player.teleportTo(level, target.getX() + 0.5, target.getY(), target.getZ() + 0.5,
                 player.getYRot(), player.getXRot());
+    }
+
+    // WHY: у базы есть свой мир, и возрождение обязано вести в него: иначе игрок, умерший в аду,
+    // WHY: вставал бы по координатам базы, но в аду
+    private static ServerLevel levelOf(ServerPlayer player, Zone spawn) {
+        if (spawn.dimension() == null) return player.serverLevel();
+
+        ServerLevel level = player.server.getLevel(ResourceKey.create(Registries.DIMENSION, spawn.dimension()));
+        return level == null ? player.serverLevel() : level;
     }
 
     private static Zone spawnZoneFor(ServerPlayer player) {

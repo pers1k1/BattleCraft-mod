@@ -12,6 +12,7 @@ import com.persiki84.shared.client.menu.ManagerScreen;
 import com.persiki84.shared.client.menu.MenuCommands;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.MenuFeedback;
+import com.persiki84.shared.client.menu.MenuRow;
 import com.persiki84.shared.client.menu.MenuScreens;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.ToggleRow;
@@ -39,6 +40,8 @@ public class BattleCraftMenuScreen extends ManagerScreen {
             "battlecraft.menu.group.stamina",
             "battlecraft.menu.group.place"
     };
+    private static final int TEAMS_GROUP = 1;
+    private static final int PLACE_GROUP = 4;
 
     private static final Setting[] SETTINGS = {
             new Setting("lobbyTimeLimit", 1, 3600, 5, 0),
@@ -50,6 +53,7 @@ public class BattleCraftMenuScreen extends ManagerScreen {
             new Setting("autoAssignSeconds", 5, 600, 5, 1),
             new Setting("matchJoinChoiceSeconds", 0, 300, 5, 1),
             new Setting("teamSwitchCooldownSeconds", 0, 600, 5, 1),
+            new Setting("teamsNeeded", 1, 16, 1, 1),
             new Setting("surrenderVoteTimeout", 1, 600, 5, 2),
             new Setting("voteCooldown", 1, 1800, 10, 2),
             new Setting("surrenderMinTime", 1, 3600, 10, 2),
@@ -57,7 +61,6 @@ public class BattleCraftMenuScreen extends ManagerScreen {
             new Setting("armedSprintStaminaDashPercent", 0, 300, 5, 3),
             new Setting("jumpStaminaPermille", 0, 500, 1, 3, 10),
             new Setting("armedJumpStaminaPermille", 0, 500, 1, 3, 10),
-            new Setting("teamsNeeded", 1, 16, 1, 1),
             new Setting("lobbyX", -30000000, 30000000, 1, 4),
             new Setting("lobbyY", -64, 320, 1, 4),
             new Setting("lobbyZ", -30000000, 30000000, 1, 4)
@@ -111,6 +114,11 @@ public class BattleCraftMenuScreen extends ManagerScreen {
     @Override
     protected int activeTab() {
         return tab;
+    }
+
+    @Override
+    public boolean broadcast() {
+        return tab == 0;
     }
 
     @Override
@@ -297,24 +305,31 @@ public class BattleCraftMenuScreen extends ManagerScreen {
 
     private List<AbstractWidget> settingRows() {
         List<AbstractWidget> rows = new ArrayList<>();
-        int group = -1;
-
-        for (Setting setting : SETTINGS) {
-            if (setting.group() != group) {
-                group = setting.group();
-                rows.add(heading(SETTING_GROUPS[group]));
+        for (int group = 0; group < SETTING_GROUPS.length; group++) {
+            rows.add(heading(SETTING_GROUPS[group]));
+            for (Setting setting : SETTINGS) {
+                if (setting.group() == group) rows.add(settingRow(setting));
             }
-            rows.add(settingRow(setting));
+            rows.addAll(groupExtras(group));
         }
+        return rows;
+    }
 
-        rows.add(new ToggleRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+    private List<AbstractWidget> groupExtras(int group) {
+        if (group == TEAMS_GROUP) return List.of(requireTeamsRow());
+        if (group == PLACE_GROUP) {
+            return List.of(action("battlecraft.menu.lobby_here", "battlecraft.menu.action.place",
+                    () -> send("config lobbyhere")));
+        }
+        return List.of();
+    }
+
+    private MenuRow requireTeamsRow() {
+        return new ToggleRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("battlecraft.menu.require_teams"),
                 () -> state().getBoolean("requireTeams"),
                 value -> send("config set requireTeams " + value))
-                .hint("battlecraft.menu.require_teams" + HINT_SUFFIX));
-        rows.add(action("battlecraft.menu.lobby_here", "battlecraft.menu.action.place",
-                () -> send("config lobbyhere")));
-        return rows;
+                .hint("battlecraft.menu.require_teams" + HINT_SUFFIX);
     }
 
     private HeadingRow heading(String label) {

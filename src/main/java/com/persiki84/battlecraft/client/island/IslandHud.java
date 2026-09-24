@@ -11,6 +11,7 @@ import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiCrisp;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
+import com.persiki84.shared.client.ui.UiMarquee;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiTheme;
@@ -69,9 +70,6 @@ public final class IslandHud {
     private static final float STAT_INSET = 8.0f;
     private static final float UNIT_GAP = 2.5f;
     private static final float PAIR_GAP = 7.0f;
-
-    private static final float MARQUEE_SPEED = 16.0f;
-    private static final float MARQUEE_DWELL = 1.6f;
 
     private static final Component FPS_UNIT = Component.literal("FPS");
     private static final Component PING_UNIT = Component.literal("Ping");
@@ -203,7 +201,8 @@ public final class IslandHud {
         float resting = lerp(UiRender.centerY(y, frame.height, scale), y + PILL_TITLE_TOP,
                 frame.media * (1.0f - frame.blind));
         float top = lerp(resting, y + CARD_TITLE_TOP, frame.expand);
-        UiRender.clip(graphics, textX, y, slot, frame.height);
+        float margin = UiMarquee.margin(slot, scale);
+        UiRender.clip(graphics, textX - margin, y, slot + margin * 2.0f, frame.height);
         try {
             if (HudConfig.islandNick()) {
                 line(graphics, font, IslandModel.nick(), textX, top, slot, scale,
@@ -223,7 +222,18 @@ public final class IslandHud {
         if ((color >>> 24) < 3) return;
 
         float span = UiRender.measure(graphics, font, value, scale);
-        UiRender.labelScaled(graphics, font, value, x + marquee(slot, span), y, scale, color);
+        if (span <= slot) {
+            UiRender.labelScaled(graphics, font, value, x, y, scale, color);
+            return;
+        }
+
+        float start = x - UiMarquee.shift(value.getString(), span - slot);
+        UiRender.marqueeFrom(graphics, x, slot, start, span, scale);
+        try {
+            UiRender.labelScaled(graphics, font, value, start, y, scale, color);
+        } finally {
+            UiRender.marqueeDone();
+        }
     }
 
     private static void drawArtist(GuiGraphics graphics, Font font, float x, float y, float alpha) {
@@ -234,7 +244,8 @@ public final class IslandHud {
         float slot = x + frame.width - PAD - frame.waveSlot - textX;
         if (slot <= 4.0f) return;
 
-        UiRender.clip(graphics, textX, y, slot, frame.height);
+        float margin = UiMarquee.margin(slot, ARTIST_SCALE);
+        UiRender.clip(graphics, textX - margin, y, slot + margin * 2.0f, frame.height);
         try {
             line(graphics, font, artist.value(), textX, y + CARD_ARTIST_TOP, slot, ARTIST_SCALE,
                     UiTheme.alpha(inked(), fade));
@@ -400,22 +411,6 @@ public final class IslandHud {
         float quality = IslandModel.quality();
         if (quality >= 0.66f) return ink();
         return quality >= 0.33f ? 0xFFE0A33C : 0xFFD9503F;
-    }
-
-    private static float marquee(float slot, float span) {
-        float overflow = span - slot;
-        if (overflow <= 0.5f) return 0.0f;
-
-        float travel = overflow / MARQUEE_SPEED;
-        float period = (travel + MARQUEE_DWELL) * 2.0f;
-        float phase = System.currentTimeMillis() % (long) (period * 1000.0f) / 1000.0f;
-
-        if (phase < MARQUEE_DWELL) return 0.0f;
-        if (phase < MARQUEE_DWELL + travel) {
-            return -overflow * UiAnim.smoothstep(0.0f, travel, phase - MARQUEE_DWELL);
-        }
-        if (phase < MARQUEE_DWELL * 2.0f + travel) return -overflow;
-        return -overflow * (1.0f - UiAnim.smoothstep(0.0f, travel, phase - MARQUEE_DWELL * 2.0f - travel));
     }
 
     private static float lerp(float from, float to, float weight) {

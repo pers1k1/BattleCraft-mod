@@ -1,5 +1,6 @@
 package com.persiki84.battlecraft.client.menu.browse;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.persiki84.battlecraft.client.menu.MenuBackground;
 import com.persiki84.shared.client.menu.GlassScreen;
 import com.persiki84.shared.client.menu.GlidingRow;
@@ -10,6 +11,7 @@ import com.persiki84.shared.client.ui.Ambient;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAmbience;
+import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiBackdrop;
 import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.client.ui.UiFarewell;
@@ -53,12 +55,17 @@ public abstract class BrowseScreen extends GlassScreen implements Ambient {
     private static final float GLIDE_SPEED = 11.0f;
     private static final float GLIDE_MAX_CARDS = 3.0f;
     private static final float ENTER_SECONDS = 0.85f;
+    private static final float PREVIEW_SPEED = 9.0f;
+    private static final float PREVIEW_SLIDE = 5.0f;
 
     protected final List<BrowseCard> cards = new ArrayList<>();
 
     private final List<BrowseCard> placed = new ArrayList<>();
     private final Smooth glide = new Smooth(0.0f, GLIDE_SPEED);
     private final ScrollLanes lanes = new ScrollLanes();
+    private final PickMark mark = new PickMark();
+    private final Smooth previewIn = new Smooth(1.0f, PREVIEW_SPEED);
+    private BrowseCard previewed;
     private final ScrollHint above = new ScrollHint();
     private final ScrollHint below = new ScrollHint();
     private final Screen parent;
@@ -122,12 +129,24 @@ public abstract class BrowseScreen extends GlassScreen implements Ambient {
     }
 
     protected void refill() {
+        BrowseCard before = picked;
         String kept = picked == null ? null : picked.identity();
         for (BrowseCard card : cards) card.close();
         cards.clear();
         fill(search == null ? "" : search.getValue());
         picked = kept == null ? null : matching(kept);
+        carry(before);
         rebuild();
+    }
+
+    // WHY: та же запись в новой карточке это не новый выбор: без переноса метка и предпросмотр
+    // WHY: переигрывали бы смену выбора на каждое обновление списка серверов и каждую букву поиска
+    private void carry(BrowseCard before) {
+        if (picked == null) return;
+
+        picked.settle();
+        mark.carry(before, picked);
+        if (previewed == before) previewed = picked;
     }
 
     private BrowseCard matching(String identity) {
@@ -277,8 +296,7 @@ public abstract class BrowseScreen extends GlassScreen implements Ambient {
         UiGlass.window(graphics, previewLeft(), top, PREVIEW_WIDTH, height, PANEL_RADIUS, 1.0f);
         UiGlass.layer(graphics);
 
-        paintPreview(graphics, previewLeft() + PANEL_PAD, top + PANEL_PAD,
-                PREVIEW_WIDTH - PANEL_PAD * 2, actionsTop() - top - PANEL_PAD * 2);
+        paintPreviewShown(graphics, top);
         paintList(graphics, mouseX, mouseY, partialTick, top, height);
         renderWidgets(graphics, mouseX, mouseY, partialTick);
         MenuFeedback.render(graphics, centerX(), footerTop() + ACTION_HEIGHT + PANEL_GAP);
@@ -295,11 +313,46 @@ public abstract class BrowseScreen extends GlassScreen implements Ambient {
         try {
             glideCards();
             for (BrowseCard card : placed) card.render(graphics, mouseX, mouseY, partialTick);
+            mark.render(graphics, markTarget(), contentLeft() + PANEL_PAD, CARD_HEIGHT,
+                    top + PANEL_PAD, top + height - PANEL_PAD);
             graphics.flush();
         } finally {
             graphics.disableScissor();
         }
         hints(graphics, top, height);
+    }
+
+    private BrowseCard markTarget() {
+        if (picked == null || picked.hidden() || !placed.contains(picked)) return null;
+        return picked;
+    }
+
+    // WHY: предпросмотр меняет содержимое вместе с выбором, и без проявления строки менялись кадром
+    // WHY: под едущей меткой; альфа идёт через модулятор цвета, его уважают и текст, и стекло
+    private void paintPreviewShown(GuiGraphics graphics, int top) {
+        if (picked != previewed) {
+            previewed = picked;
+            previewIn.snap(0.0f);
+        }
+        float shown = UiAnim.easeOut(previewIn.to(1.0f, UiFrame.delta()));
+        float[] tone = RenderSystem.getShaderColor();
+        float red = tone[0];
+        float green = tone[1];
+        float blue = tone[2];
+        float alpha = tone[3];
+
+        graphics.flush();
+        RenderSystem.setShaderColor(red, green, blue, alpha * shown);
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0f, (1.0f - shown) * PREVIEW_SLIDE, 0.0f);
+        try {
+            paintPreview(graphics, previewLeft() + PANEL_PAD, top + PANEL_PAD,
+                    PREVIEW_WIDTH - PANEL_PAD * 2, actionsTop() - top - PANEL_PAD * 2);
+            graphics.flush();
+        } finally {
+            graphics.pose().popPose();
+            RenderSystem.setShaderColor(red, green, blue, alpha);
+        }
     }
 
     private void hints(GuiGraphics graphics, int top, int height) {

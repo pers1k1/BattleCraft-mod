@@ -1,19 +1,25 @@
 package com.persiki84.zones.client.menu;
 
 import com.persiki84.shared.client.menu.ActionRow;
+import com.persiki84.shared.client.menu.ColorRow;
 import com.persiki84.shared.client.menu.GlidingRow;
 import com.persiki84.shared.client.menu.ManagerScreen;
 import com.persiki84.shared.client.menu.MenuCommands;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.MenuField;
 import com.persiki84.shared.client.menu.NumberRow;
+import com.persiki84.shared.client.menu.PaletteWindow;
 import com.persiki84.shared.client.menu.PickRow;
+import com.persiki84.shared.client.menu.ToggleRow;
 import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.zone.ZoneShape;
+import com.persiki84.battlecraft.rules.MarkerRange;
 import com.persiki84.zones.Zone;
 import com.persiki84.zones.ZoneRule;
 import com.persiki84.zones.ZoneType;
 import com.persiki84.zones.client.ClientZoneData;
+import com.persiki84.zones.client.render.ZoneColors;
+import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -22,7 +28,6 @@ import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.function.ToIntFunction;
 import java.util.regex.Pattern;
 
@@ -33,14 +38,10 @@ public class ZoneManagerScreen extends ManagerScreen {
     private static final int CREATE_ROWS = 5 + MenuField.ROW_EQUIVALENT;
     private static final int MIN_SIZE = 1;
     private static final int MAX_SIZE = 512;
+    private static final int RANGE_STEP = 50;
     private static final int MAX_HEIGHT = 256;
     private static final int DEFAULT_SIZE = 24;
     private static final Pattern ID_PATTERN = Pattern.compile("[A-Za-z0-9_.+-]+");
-
-    private static final int[] COLORS = {
-            0xE7E9F4, 0xCE2A22, 0x3F7BD8, 0x3FA75A,
-            0xE0B33C, 0xD9772E, 0x9B59B6, 0x34C6C6
-    };
 
     private int tab;
     private String zoneId;
@@ -53,6 +54,11 @@ public class ZoneManagerScreen extends ManagerScreen {
 
     public ZoneManagerScreen() {
         super(Component.translatable("zones.menu.title"));
+    }
+
+    @Override
+    public MenuKind presence() {
+        return MenuKind.ADMIN;
     }
 
     @Override
@@ -146,11 +152,34 @@ public class ZoneManagerScreen extends ManagerScreen {
         rows.add(heightRow(id, false));
         rows.add(ownerRow(id));
         rows.add(colorRow(id));
+        rows.add(markerRangeRow(id));
+        rows.add(hideInsideRow(id));
         rows.add(spawnRow(id));
         rows.add(actionRow("zones.menu.teleport", "zones.menu.action.go", () -> send("tp " + id)));
         rows.add(actionRow("zones.menu.move", "zones.menu.action.here", () -> edit(id, "here")));
         rows.add(deleteRow(id));
         place(rows);
+    }
+
+    // WHY: ноль значит «как у вида»: у зоны нет своего предела, и она берёт общий из настроек
+    private NumberRow markerRangeRow(String id) {
+        NumberRow row = new NumberRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.menu.marker_range"),
+                () -> read(id, Zone::markerRange),
+                value -> edit(id, "markerrange " + value),
+                Zone.KIND_RANGE, MarkerRange.MAX_BLOCKS, RANGE_STEP);
+        row.floorLabel(Component.translatable("battlecraft.markers.kind"));
+        row.hint("zones.menu.marker_range" + HINT_SUFFIX);
+        return row;
+    }
+
+    private ToggleRow hideInsideRow(String id) {
+        ToggleRow row = new ToggleRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("zones.menu.hide_inside"),
+                () -> read(id, zone -> zone.hiddenInside() ? 1 : 0) != 0,
+                value -> edit(id, "hideinside " + value));
+        row.hint("zones.menu.hide_inside" + HINT_SUFFIX);
+        return row;
     }
 
     private static int read(String id, ToIntFunction<Zone> reader) {
@@ -240,52 +269,22 @@ public class ZoneManagerScreen extends ManagerScreen {
         edit(id, "clearowner");
     }
 
-    private PickRow colorRow(String id) {
-        int shown = read(id, Zone::color);
-        boolean own = shown != Zone.TEAM_COLOR && presetIndex(shown) < 0;
-        return new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
-                Component.translatable("zones.menu.color"), colorOptions(own, shown),
-                () -> colorChoice(read(id, Zone::color), own),
-                picked -> applyColor(id, picked, shown));
+    // WHY: сброс возвращает зоне цвет команды владельца, поэтому образец без своего цвета показывает
+    // WHY: тот цвет, которым зона сейчас нарисована в мире
+    private ColorRow colorRow(String id) {
+        Component label = Component.translatable("zones.menu.color");
+        return new ColorRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, label,
+                () -> drawnColor(id),
+                () -> read(id, zone -> zone.hasCustomColor() ? 1 : 0) == 1,
+                () -> palette("zone:" + id, PaletteWindow.Kind.SERVER, label, drawnColor(id),
+                        argb -> edit(id, "color " + argb),
+                        () -> edit(id, "clearcolor")));
     }
 
-    private static List<Component> colorOptions(boolean own, int shown) {
-        List<Component> options = new ArrayList<>();
-        options.add(Component.translatable("zones.menu.color.team"));
-        for (int index = 0; index < COLORS.length; index++) {
-            options.add(Component.translatable("zones.menu.color." + index));
-        }
-        if (own) options.add(Component.translatable("zones.menu.color.own", hex(shown)));
-        return options;
-    }
-
-    private static String hex(int color) {
-        return String.format(Locale.ROOT, "#%06X", color & 0xFFFFFF);
-    }
-
-    // WHY: свой цвет зоны отличается от первого пресета: без отдельного пункта строка показывала бы
-    // WHY: белый на любом заданном командой цвете и стирала бы его первым же щелчком
-    private static int colorChoice(int color, boolean own) {
-        if (color == Zone.TEAM_COLOR) return 0;
-
-        int preset = presetIndex(color);
-        if (preset >= 0) return preset + 1;
-        return own ? COLORS.length + 1 : 0;
-    }
-
-    private static int presetIndex(int color) {
-        for (int index = 0; index < COLORS.length; index++) {
-            if (COLORS[index] == color) return index;
-        }
-        return -1;
-    }
-
-    private void applyColor(String id, int picked, int shown) {
-        if (picked == 0) {
-            edit(id, "clearcolor");
-            return;
-        }
-        edit(id, "color " + (picked <= COLORS.length ? COLORS[picked - 1] : shown));
+    private static int drawnColor(String id) {
+        Zone zone = ClientZoneData.byId(id);
+        if (zone == null) return 0;
+        return zone.hasCustomColor() ? zone.color() : ZoneColors.packed(zone);
     }
 
     private PickRow spawnRow(String id) {

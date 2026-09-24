@@ -25,11 +25,9 @@
   "killreward.menu.tab.reward": "Reward",
   "killreward.menu.enabled": "Mod enabled",
   "killreward.menu.item": "Item",
-  "killreward.menu.held": "Item in hand",
-  "killreward.menu.pick": "Use as reward",
-  "killreward.menu.action.pick": "Apply",
-  "killreward.menu.empty_hand": "Hand is empty",
   "killreward.menu.amount": "Amount",
   "killreward.menu.team_kills": "Team kills",
-  "killreward.unknown_item": "No such item: %s"
+  "killreward.unknown_item": "No such item: %s",
+  "killreward.menu.item.hint": "Click to pick the item from your inventory or all items, with the amount",
+  "killreward.menu.pick.title": "KILL REWARD"
 }

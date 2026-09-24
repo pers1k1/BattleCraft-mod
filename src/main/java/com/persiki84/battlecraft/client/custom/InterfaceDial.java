@@ -9,7 +9,11 @@ public enum InterfaceDial {
     VISUALIZER_GAIN("visualizerGain", 1.0f, 0.25f, 2.0f, HudConfig::visualizerGain, HudConfig::visualizerGain),
     VISUALIZER_SPEED("visualizerSpeed", 1.0f, 0.25f, 2.0f, HudConfig::visualizerSpeed, HudConfig::visualizerSpeed),
     MARKER_SCALE("markerScale", 1.0f, 0.5f, 1.5f, HudConfig::markerScale, HudConfig::markerScale),
-    RADIO_NOISE("radioNoise", 1.0f, 0.0f, 2.0f, HudConfig::radioNoise, HudConfig::radioNoise);
+    RADIO_NOISE("radioNoise", 1.0f, 0.0f, 2.0f, HudConfig::radioNoise, HudConfig::radioNoise),
+    DAMAGE_SCALE("damageScale", 1.0f, HudConfig.DAMAGE_SCALE_LEAST, HudConfig.DAMAGE_SCALE_MOST,
+            HudConfig::damageScale, HudConfig::damageScale),
+    DAMAGE_TIME("damageTime", 1.0f, HudConfig.DAMAGE_TIME_LEAST, HudConfig.DAMAGE_TIME_MOST,
+            HudConfig::damageTime, HudConfig::damageTime);
 
     public interface Setter {
         void set(float value);

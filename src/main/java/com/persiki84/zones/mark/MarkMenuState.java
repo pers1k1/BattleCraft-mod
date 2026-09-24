@@ -39,6 +39,12 @@ public final class MarkMenuState {
         tag.putBoolean("inWorld", mark.inWorld());
         tag.putString("kind", mark.kind().id());
         tag.putInt("scale", mark.scalePercent());
+        tag.putInt("markerRange", mark.markerRange());
+        tag.putInt("hideRadius", mark.hideZone().radius());
+        tag.putString("hideShape", mark.hideZone().shape().id());
+        tag.putInt("hideHeight", mark.hideZone().height());
+        tag.putBoolean("hideShown", mark.hideZone().shown());
+        tag.putInt("hideColor", mark.hideZone().color());
 
         ListTag lines = new ListTag();
         for (String line : mark.lines()) {

@@ -1,5 +1,6 @@
 package com.persiki84.zones.command;
 
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -10,6 +11,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.persiki84.battlecraft.BattleCraftCommands;
 import com.persiki84.shared.zone.ZoneArea;
 import com.persiki84.shared.zone.ZoneShape;
+import com.persiki84.battlecraft.rules.MarkerRange;
 import com.persiki84.zones.Zone;
 import com.persiki84.zones.ZoneRegistry;
 import com.persiki84.zones.ZoneRule;
@@ -21,9 +23,12 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.Arrays;
@@ -106,6 +111,8 @@ public final class ZoneCommand {
                         .then(clearOwnerEdit())
                         .then(colorEdits())
                         .then(clearColorEdit())
+                        .then(markerRangeEdits())
+                        .then(hideInsideEdit())
                         .then(placementEdits())
                         .then(spawnEdits())
                         .then(ruleEdits()));
@@ -150,6 +157,19 @@ public final class ZoneCommand {
 
     private static LiteralArgumentBuilder<CommandSourceStack> clearColorEdit() {
         return Commands.literal("clearcolor").executes(ZoneCommand::clearColor);
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> markerRangeEdits() {
+        return Commands.literal("markerrange")
+                .then(Commands.argument("blocks", IntegerArgumentType
+                                .integer(Zone.KIND_RANGE, MarkerRange.MAX_BLOCKS))
+                        .executes(ZoneCommand::editMarkerRange));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> hideInsideEdit() {
+        return Commands.literal("hideinside")
+                .then(Commands.argument("value", BoolArgumentType.bool())
+                        .executes(ZoneCommand::editHideInside));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> heightEdits() {
@@ -205,6 +225,7 @@ public final class ZoneCommand {
         }
 
         Zone zone = new Zone(id, area, type, owner, Zone.TEAM_COLOR, ZoneSource.STORED);
+        zone.setDimension(player.level().dimension().location());
 
         ZoneRegistry.upsert(zone);
         ZonesMod.broadcastUpsert(zone);
@@ -251,9 +272,18 @@ public final class ZoneCommand {
         if (zone == null) return 0;
 
         ServerPlayer player = context.getSource().getPlayerOrException();
-        player.teleportTo(player.serverLevel(), zone.area().centerX(), zone.area().center().getY(),
+        player.teleportTo(levelOf(zone, player), zone.area().centerX(), zone.area().center().getY(),
                 zone.area().centerZ(), player.getYRot(), player.getXRot());
         return succeed(context, "zones.success.teleported", zone.id());
+    }
+
+    // WHY: зона помнит свой мир, и перенос в текущий ставил игрока на те же координаты в чужом
+    // WHY: измерении; зона старого формата без мира остаётся там, где стоит игрок
+    private static ServerLevel levelOf(Zone zone, ServerPlayer player) {
+        if (zone.dimension() == null) return player.serverLevel();
+
+        ServerLevel level = player.server.getLevel(ResourceKey.create(Registries.DIMENSION, zone.dimension()));
+        return level == null ? player.serverLevel() : level;
     }
 
     private static int editSize(CommandContext<CommandSourceStack> context) {
@@ -315,6 +345,23 @@ public final class ZoneCommand {
         return applyEdit(context, zone);
     }
 
+    // WHY: ноль значит «как у вида»: у зоны нет своего предела, и она берёт общий из настроек
+    private static int editHideInside(CommandContext<CommandSourceStack> context) {
+        Zone zone = requireZone(context);
+        if (zone == null) return 0;
+
+        zone.setHiddenInside(BoolArgumentType.getBool(context, "value"));
+        return applyEdit(context, zone);
+    }
+
+    private static int editMarkerRange(CommandContext<CommandSourceStack> context) {
+        Zone zone = requireZone(context);
+        if (zone == null) return 0;
+
+        zone.setMarkerRange(IntegerArgumentType.getInteger(context, "blocks"));
+        return applyEdit(context, zone);
+    }
+
     private static int clearColor(CommandContext<CommandSourceStack> context) {
         Zone zone = requireZone(context);
         if (zone == null) return 0;
@@ -339,6 +386,7 @@ public final class ZoneCommand {
 
         ServerPlayer player = context.getSource().getPlayerOrException();
         zone.setArea(zone.area().withCenter(player.blockPosition()));
+        zone.setDimension(player.level().dimension().location());
         return applyEdit(context, zone);
     }
 

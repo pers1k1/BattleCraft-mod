@@ -1,7 +1,10 @@
 package com.persiki84.quarrymod;
 
 import com.mojang.logging.LogUtils;
+import com.persiki84.quarrymod.block.QuarryBlocks;
 import com.persiki84.quarrymod.commands.QuarryCommands;
+import com.persiki84.quarrymod.network.PacketHandler;
+import com.persiki84.quarrymod.network.QuarryBroadcast;
 import com.persiki84.quarrymod.data.QuarryDataManager;
 import com.persiki84.quarrymod.events.QuarryEventHandler;
 import net.minecraftforge.common.MinecraftForge;
@@ -29,11 +32,13 @@ public class QuarryMod {
         instance = this;
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         modEventBus.addListener(this::commonSetup);
+        QuarryBlocks.register(modEventBus);
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new QuarryEventHandler());
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
+        event.enqueueWork(PacketHandler::register);
         LOGGER.info("QuarryMod loading!");
     }
 
@@ -49,6 +54,7 @@ public class QuarryMod {
         if (dataManager != null) {
             dataManager.save();
         }
+        QuarryBroadcast.clear();
     }
 
     @SubscribeEvent
@@ -60,6 +66,7 @@ public class QuarryMod {
             return;
         }
         dataManager.getBlockManager().tickRegenerations(event.getServer());
+        QuarryBroadcast.tick(event.getServer(), dataManager.getBlockManager());
     }
 
     @SubscribeEvent

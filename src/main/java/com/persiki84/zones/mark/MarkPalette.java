@@ -1,10 +1,11 @@
 package com.persiki84.zones.mark;
 
-import net.minecraft.network.chat.Component;
+import java.util.ArrayList;
+import java.util.List;
 
+// WHY: цвет выбирается окном палитры и команда принимает любой, а этот набор остался подсказками
+// WHY: аргумента цвета, чтобы оператор в чате не набирал число вслепую
 public final class MarkPalette {
-    // WHY: палитра одна на меню меток и на карту: разъехавшиеся наборы дали бы цвет, который
-    // WHY: выбран на карте, но не показывается в списке значений меню
     public static final int[] COLORS = {
             0xFFE7E9F4, 0xFFCE2A22, 0xFF3F7BD8, 0xFF3FA75A,
             0xFFE0B33C, 0xFFD9772E, 0xFF9B59B6, 0xFF34C6C6,
@@ -13,14 +14,11 @@ public final class MarkPalette {
 
     private MarkPalette() {}
 
-    public static int indexOf(int color) {
-        for (int index = 0; index < COLORS.length; index++) {
-            if (COLORS[index] == color) return index;
+    public static List<String> suggestions() {
+        List<String> values = new ArrayList<>(COLORS.length);
+        for (int color : COLORS) {
+            values.add(Integer.toString(color));
         }
-        return 0;
-    }
-
-    public static Component name(int index) {
-        return Component.translatable("zones.mark.menu.color." + index);
+        return values;
     }
 }

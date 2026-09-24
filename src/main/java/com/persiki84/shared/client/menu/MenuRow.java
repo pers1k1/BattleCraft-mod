@@ -164,12 +164,8 @@ public abstract class MenuRow extends AbstractWidget implements GlidingRow {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (anchor.gone(getY(), height)) return;
 
-        boolean clipped = anchor.clip(graphics, getX(), width, getY(), height);
-        try {
-            super.render(graphics, mouseX, anchor.pointer(mouseY), partialTick);
-        } finally {
-            if (clipped) graphics.disableScissor();
-        }
+        anchor.draw(graphics, getX(), width, getY(), height,
+                () -> super.render(graphics, mouseX, anchor.pointer(mouseY), partialTick));
     }
 
     @Override
@@ -262,13 +258,17 @@ public abstract class MenuRow extends AbstractWidget implements GlidingRow {
                 UiTheme.alpha(UiAccent.color(), focus * MARK_ALPHA));
     }
 
+    // WHY: строка втягивается на нажатии одинаково со всех сторон, а не долей своей ширины: при
+    // WHY: общем масштабе значение у правого края широкой строки ехало влево и отскакивало обратно,
+    // WHY: и в конце нажатия число заметно смещалось относительно своих стрелок
     private void pushSquash(GuiGraphics graphics, float squash, float lift) {
         float centerX = getX() + width / 2.0f;
         float centerY = getY() + height / 2.0f;
+        float across = width > 0 ? 1.0f - squash * height / (float) width : 1.0f;
 
         graphics.pose().pushPose();
         graphics.pose().translate(centerX, centerY + lift, 0.0f);
-        graphics.pose().scale(1.0f - squash, 1.0f - squash, 1.0f);
+        graphics.pose().scale(across, 1.0f - squash, 1.0f);
         graphics.pose().translate(-centerX, -centerY, 0.0f);
     }
 

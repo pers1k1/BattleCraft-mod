@@ -13,6 +13,7 @@ import com.persiki84.zones.network.ShopSyncPacket;
 import com.persiki84.zones.mark.MapMark;
 import com.persiki84.zones.mark.MarkMenuState;
 import com.persiki84.zones.mark.MarkRegistry;
+import com.persiki84.zones.mark.MarkTeamWatch;
 import com.persiki84.zones.network.MarkSyncAllPacket;
 import com.persiki84.zones.network.ZoneSyncAllPacket;
 import com.persiki84.zones.network.ZoneUpsertPacket;
@@ -88,6 +89,7 @@ public class ZonesMod {
         ZoneRegistry.unbind();
         MarkRegistry.persist();
         MarkRegistry.unbind();
+        MarkTeamWatch.reset();
         ShopCatalog.persist();
         ShopCatalog.unbind();
     }
@@ -100,12 +102,22 @@ public class ZonesMod {
         if (restockTicks < RESTOCK_INTERVAL_TICKS) return;
         restockTicks = 0;
 
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server != null) MarkTeamWatch.resyncChanged(server, ZonesMod::syncTeamScoped);
+
         if (!ShopCatalog.restockDue(System.currentTimeMillis())) {
             ShopCatalog.flushDue();
             return;
         }
         ShopCatalog.persist();
-        syncShopToEveryone(ServerLifecycleHooks.getCurrentServer());
+        syncShopToEveryone(server);
+    }
+
+    @SubscribeEvent
+    public void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            MarkTeamWatch.forget(player);
+        }
     }
 
     @SubscribeEvent
@@ -146,12 +158,18 @@ public class ZonesMod {
     // WHY: оператору уходят все метки, включая скрытые от его команды: иначе спрятанную надпись
     // WHY: он не увидит на карте и не сможет ни подвинуть, ни вернуть - как полный каталог магазина
     public static void syncMarksTo(ServerPlayer player) {
+        MarkTeamWatch.remember(player);
         boolean full = player.hasPermissions(2);
         List<MapMark> visible = new ArrayList<>();
         for (MapMark mark : MarkRegistry.all()) {
             if (full || mark.visibleTo(player.getTeam())) visible.add(mark);
         }
         PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), new MarkSyncAllPacket(visible));
+    }
+
+    private static void syncTeamScoped(ServerPlayer player) {
+        syncMarksTo(player);
+        syncShopTo(player);
     }
 
     public static void syncMarksToEveryone(MinecraftServer server) {

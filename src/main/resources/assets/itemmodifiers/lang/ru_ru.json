@@ -95,5 +95,8 @@
   "itemmodifiers.menu.lore.placeholder": "Текст строки",
   "itemmodifiers.menu.lore.add": "Добавить строку",
   "itemmodifiers.menu.lore.clear": "Очистить описание",
-  "itemmodifiers.menu.lore.error_empty": "Строка пуста"
+  "itemmodifiers.menu.lore.error_empty": "Строка пуста",
+  "itemmodifiers.menu.item.pick": "Другой предмет",
+  "itemmodifiers.menu.action.pick": "Выбрать",
+  "itemmodifiers.menu.pick.title": "ПРЕДМЕТ ДЛЯ НАСТРОЙКИ"
 }

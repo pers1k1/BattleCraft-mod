@@ -16,21 +16,25 @@ public class PointSyncData {
     public final CaptureMode mode;
     public final boolean required;
     public final boolean shownInHud;
+    public final boolean hiddenInside;
+    public final int markerRange;
 
     public PointSyncData(String owner, ZoneArea area, ResourceLocation dimension, CaptureMode mode,
-                         boolean required, boolean shownInHud) {
+                         boolean required, boolean shownInHud, boolean hiddenInside, int markerRange) {
         this.owner = owner;
         this.area = area;
         this.dimension = dimension;
         this.mode = mode;
         this.required = required;
         this.shownInHud = shownInHud;
+        this.hiddenInside = hiddenInside;
+        this.markerRange = markerRange;
     }
 
     public static PointSyncData of(CapturePoint point) {
         return new PointSyncData(point.getOwnerTeam(), point.getArea(),
                 point.getDimension().location(), point.getMode(),
-                point.isRequired(), point.isShownInHud());
+                point.isRequired(), point.isShownInHud(), point.isHiddenInside(), point.getMarkerRange());
     }
 
     public BlockPos pos() {
@@ -51,6 +55,8 @@ public class PointSyncData {
             buf.writeUtf(point.mode.id());
             buf.writeBoolean(point.required);
             buf.writeBoolean(point.shownInHud);
+            buf.writeBoolean(point.hiddenInside);
+            buf.writeVarInt(point.markerRange);
         }
     }
 
@@ -65,8 +71,10 @@ public class PointSyncData {
             CaptureMode mode = CaptureMode.byId(buf.readUtf(NAME_LIMIT));
             boolean required = buf.readBoolean();
             boolean shownInHud = buf.readBoolean();
+            boolean hiddenInside = buf.readBoolean();
+            int markerRange = buf.readVarInt();
             points.put(name, new PointSyncData(owner.isEmpty() ? null : owner, area, dimension, mode,
-                    required, shownInHud));
+                    required, shownInHud, hiddenInside, markerRange));
         }
         return points;
     }

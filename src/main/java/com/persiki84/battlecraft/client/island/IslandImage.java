@@ -88,24 +88,6 @@ public final class IslandImage {
         return cut;
     }
 
-    public static void round(NativeImage image, float cornerShare) {
-        float width = image.getWidth();
-        float height = image.getHeight();
-        float radius = Math.min(width, height) * cornerShare;
-        if (radius <= 0.5f) return;
-
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                float coverage = coverage(x + 0.5f, y + 0.5f, width, height, radius);
-                if (coverage >= 1.0f) continue;
-
-                int pixel = image.getPixelRGBA(x, y);
-                int alpha = Math.round(FastColor.ABGR32.alpha(pixel) * coverage);
-                image.setPixelRGBA(x, y, FastColor.ABGR32.color(alpha, pixel));
-            }
-        }
-    }
-
     public static float coverage(float x, float y, float width, float height, float radius) {
         float dx = Math.max(0.0f, Math.max(radius - x, x - (width - radius)));
         float dy = Math.max(0.0f, Math.max(radius - y, y - (height - radius)));

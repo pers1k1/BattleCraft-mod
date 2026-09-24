@@ -57,5 +57,11 @@
   "quarrymod.menu.list.empty": "Карьерных блоков нет",
   "quarrymod.menu.list.more": "Ещё блоков, не показано",
   "quarrymod.menu.list.custom": "%s · кулдаун %s с",
-  "quarrymod.menu.action.aimed": "По прицелу"
+  "quarrymod.menu.action.aimed": "По прицелу",
+  "quarrymod.event.taken": "Блок уже забрал кто-то другой!",
+  "quarrymod.marker.timer": "%s:%s",
+  "quarrymod.marker.ready": "готово",
+  "quarrymod.marker.multiplier": "x%s",
+  "block.quarrymod.excavated": "Выработка",
+  "quarrymod.menu.list.left": "%s · восстановление %s с"
 }

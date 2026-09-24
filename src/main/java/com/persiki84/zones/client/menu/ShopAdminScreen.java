@@ -9,9 +9,8 @@ import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.MenuField;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.PickRow;
-import com.persiki84.shared.gunsmith.GunSlot;
+import com.persiki84.shared.client.menu.pick.ItemPickerScreen;
 import com.persiki84.shared.gunsmith.GunSmith;
-import com.persiki84.shared.gunsmith.GunStat;
 import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.client.menu.ToggleRow;
 import com.persiki84.zones.client.ClientShopData;
@@ -19,6 +18,7 @@ import com.persiki84.zones.shop.ShopAccess;
 import com.persiki84.zones.shop.ShopEntry;
 import com.persiki84.zones.shop.ShopSection;
 import com.persiki84.zones.shop.StockScope;
+import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -58,7 +58,6 @@ public class ShopAdminScreen extends ManagerScreen {
     private int newPrice = DEFAULT_PRICE;
     private int newCount = 1;
     private FieldRow itemIdRow;
-    private int pickedGun;
     private int pickedNote;
     private String noteEntryId;
     private String noteText = "";
@@ -80,6 +79,11 @@ public class ShopAdminScreen extends ManagerScreen {
 
     public ShopAdminScreen() {
         super(Component.translatable("zones.shopadmin.title"));
+    }
+
+    @Override
+    public MenuKind presence() {
+        return MenuKind.ADMIN;
     }
 
     @Override
@@ -438,92 +442,22 @@ public class ShopAdminScreen extends ManagerScreen {
         return -bundle;
     }
 
+    // WHY: обвесы правятся в мастерской, где видно оружие и сами обвесы, а не строками выбора:
+    // WHY: здесь только вход в неё на нужном стволе
     private List<AbstractWidget> attachRows() {
         List<ShopEntry> guns = armedEntries();
         if (guns.isEmpty()) return List.of(noGunsRow());
 
-        pickedGun = Math.floorMod(pickedGun, guns.size());
-        ShopEntry entry = guns.get(pickedGun);
-
+        ShopGunBench bench = new ShopGunBench(sectionId);
         List<AbstractWidget> rows = new ArrayList<>();
-        rows.add(new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
-                Component.translatable("zones.shopadmin.gun"), entryLabels(guns),
-                () -> pickedGun, this::selectGun).icon(entry::stack));
-        addSlotRows(rows, entry);
-        addStatRows(rows, entry);
-        return rows;
-    }
-
-    private void addStatRows(List<AbstractWidget> rows, ShopEntry entry) {
-        for (GunStat stat : GunSmith.stats(entry.stack())) {
-            ActionRow row = new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
-                    Component.translatable(stat.label()), () -> Component.literal(stat.value()), () -> {});
-            row.active = false;
+        for (ShopEntry entry : guns) {
+            String id = entry.id();
+            ActionRow row = new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, entry.stack().getHoverName(),
+                    () -> Component.translatable("gunsmith.open"),
+                    () -> com.persiki84.shared.client.menu.gunsmith.GunsmithScreen.open(bench, bench.positionOf(id), this));
             rows.add(row);
         }
-    }
-
-    private void selectGun(int picked) {
-        pickedGun = picked;
-        rebuild();
-    }
-
-    private void addSlotRows(List<AbstractWidget> rows, ShopEntry entry) {
-        List<GunSlot> slots = GunSmith.slots(entry.stack());
-        if (slots.isEmpty()) {
-            rows.add(noAttachmentsRow());
-            return;
-        }
-        for (GunSlot slot : slots) {
-            rows.add(slotRow(entry, slot));
-            if (!slot.installed().isEmpty()) rows.add(notesRow(entry, slot));
-        }
-    }
-
-    private PickRow slotRow(ShopEntry entry, GunSlot slot) {
-        List<String> values = new ArrayList<>();
-        List<Component> labels = new ArrayList<>();
-        values.add("");
-        labels.add(Component.translatable("zones.shopadmin.slot_empty"));
-
-        for (GunSlot.GunOption option : slot.options()) {
-            values.add(option.value());
-            labels.add(Component.literal(option.label()));
-        }
-
-        String id = entry.id();
-        return new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, Component.translatable(slot.label()),
-                labels, () -> Math.max(0, values.indexOf(installedIn(id, slot.id()))),
-                picked -> applySlot(entry, slot, values.get(picked)))
-                .icon(() -> GunSmith.preview(installedIn(id, slot.id())));
-    }
-
-    private AbstractWidget notesRow(ShopEntry entry, GunSlot slot) {
-        String id = entry.id();
-        ActionRow row = new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
-                Component.translatable("zones.shopadmin.effect"),
-                () -> GunSmith.notesLabel(installedIn(id, slot.id())), () -> {});
-        row.active = false;
-        return row;
-    }
-
-    private String installedIn(String entryId, String slotId) {
-        for (ShopEntry entry : entries()) {
-            if (!entry.id().equals(entryId)) continue;
-
-            for (GunSlot slot : GunSmith.slots(entry.stack())) {
-                if (slot.id().equals(slotId)) return slot.installed();
-            }
-        }
-        return "";
-    }
-
-    private void applySlot(ShopEntry entry, GunSlot slot, String value) {
-        if (value.isEmpty()) {
-            send("item detach " + sectionId + " " + entry.id() + " " + slot.id());
-            return;
-        }
-        send("item attach " + sectionId + " " + entry.id() + " \"" + value + "\"");
+        return rows;
     }
 
     private List<ShopEntry> armedEntries() {
@@ -536,10 +470,6 @@ public class ShopAdminScreen extends ManagerScreen {
 
     private AbstractWidget noGunsRow() {
         return frozenRow("zones.shopadmin.no_guns");
-    }
-
-    private AbstractWidget noAttachmentsRow() {
-        return frozenRow("zones.shopadmin.no_attachments");
     }
 
     private AbstractWidget frozenRow(String label) {
@@ -850,9 +780,9 @@ public class ShopAdminScreen extends ManagerScreen {
                 value -> newPrice = value, 0, MAX_PRICE, 5));
         rows.add(parentRow(section, children));
         rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
-                Component.translatable("zones.shopadmin.add_hand"),
+                Component.translatable("zones.shopadmin.add_pick"),
                 () -> Component.translatable("zones.shopadmin.action.add"),
-                () -> send("item hand " + sectionId + " " + newPrice + childSuffix(children))));
+                () -> pickEntry(childSuffix(children))));
         addByIdRows(rows, children);
         rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
                 Component.translatable("zones.shopadmin.remove_section"),
@@ -862,6 +792,22 @@ public class ShopAdminScreen extends ManagerScreen {
             rebuild();
         }).alerting());
         return rows;
+    }
+
+    // WHY: товар выбирается глазами: из инвентаря со всеми тегами (номером слота, стак берёт
+    // WHY: сервер) или из реестра с поиском; цена задаётся тут же, числом
+    private void pickEntry(String childSuffix) {
+        String section = sectionId;
+        ItemPickerScreen.open(Component.translatable("zones.shopadmin.pick.title"), this,
+                ItemPickerScreen.Options.counted(Component.translatable("zones.shopadmin.new_price"), 0, MAX_PRICE, newPrice),
+                choice -> {
+                    newPrice = choice.amount();
+                    if (choice.fromInventory()) {
+                        send("item slot " + section + " " + choice.slot() + " " + choice.amount() + childSuffix);
+                    } else {
+                        send("item id " + section + " \"" + choice.itemId() + "\" " + newCount + " " + choice.amount() + childSuffix);
+                    }
+                });
     }
 
     private void addByIdRows(List<AbstractWidget> rows, List<String> children) {

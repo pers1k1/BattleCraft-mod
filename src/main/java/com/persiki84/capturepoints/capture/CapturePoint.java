@@ -1,5 +1,6 @@
 package com.persiki84.capturepoints.capture;
 
+import com.persiki84.battlecraft.rules.MarkerRange;
 import com.persiki84.shared.zone.ZoneArea;
 import com.persiki84.shared.zone.ZoneShape;
 import net.minecraft.core.BlockPos;
@@ -19,6 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CapturePoint {
+    public static final int KIND_RANGE = 0;
+
     private String name;
     private ResourceKey<Level> dimension = Level.OVERWORLD;
     private ZoneArea area;
@@ -41,6 +44,8 @@ public class CapturePoint {
 
     private boolean required = true;
     private boolean shownInHud = true;
+    private boolean hiddenInside = true;
+    private int markerRange = KIND_RANGE;
 
     private CaptureMode mode;
     private RewardSplit rewardSplit;
@@ -198,7 +203,11 @@ public class CapturePoint {
     public void setRequired(boolean value) { this.required = value; }
 
     public boolean isShownInHud() { return shownInHud; }
+    public int getMarkerRange() { return markerRange; }
+    public void setMarkerRange(int blocks) { this.markerRange = MarkerRange.normalize(blocks); }
     public void setShownInHud(boolean value) { this.shownInHud = value; }
+    public boolean isHiddenInside() { return hiddenInside; }
+    public void setHiddenInside(boolean value) { this.hiddenInside = value; }
 
     public CaptureMode getMode() { return mode; }
     public void setMode(CaptureMode mode) { this.mode = mode == null ? CaptureMode.DEFAULT : mode; }
@@ -295,6 +304,8 @@ public class CapturePoint {
         tag.putString("teamCooldownScope", teamCooldownScope.id());
         tag.putBoolean("required", required);
         tag.putBoolean("shownInHud", shownInHud);
+        tag.putBoolean("hiddenInside", hiddenInside);
+        tag.putInt("markerRange", markerRange);
     }
 
     protected static void readTuning(CompoundTag tag, CapturePoint point) {
@@ -312,6 +323,8 @@ public class CapturePoint {
         // WHY: иначе первое же чтение сняло бы с матча все условия открытия финальной
         point.required = !tag.contains("required") || tag.getBoolean("required");
         point.shownInHud = !tag.contains("shownInHud") || tag.getBoolean("shownInHud");
+        point.hiddenInside = !tag.contains("hiddenInside") || tag.getBoolean("hiddenInside");
+        point.markerRange = MarkerRange.normalize(tag.getInt("markerRange"));
     }
 
     private static int percentOr(CompoundTag tag, String key, int fallback) {

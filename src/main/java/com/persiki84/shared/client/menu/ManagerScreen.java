@@ -10,6 +10,7 @@ import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTitle;
 import com.persiki84.shared.client.ui.UiAccent;
+import com.persiki84.shared.menu.MenuFace;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -27,6 +28,7 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
 public abstract class ManagerScreen extends GlassScreen {
@@ -67,6 +69,7 @@ public abstract class ManagerScreen extends GlassScreen {
     protected static final String HINT_SUFFIX = MenuHint.SUFFIX;
 
     private static final int LAYOUT_PASSES = 3;
+    private static final float FRAME_MARGIN = 8.0f;
     private static final float FIT_MARGIN = 12.0f;
     private static final float PAGE_SPEED = 21.0f;
     private static final float PAGE_SLIDE = 14.0f;
@@ -81,6 +84,7 @@ public abstract class ManagerScreen extends GlassScreen {
     private final ScrollHint rowsBelow = new ScrollHint();
     private final ScrollHint listAbove = new ScrollHint();
     private final ScrollHint listBelow = new ScrollHint();
+    private final PaletteStack palettes = new PaletteStack();
     private final List<UiButton> tabButtons = new ArrayList<>();
     private final List<Component> tabTitles = new ArrayList<>();
     private UiButton backButton;
@@ -99,6 +103,18 @@ public abstract class ManagerScreen extends GlassScreen {
     protected abstract int activeTab();
 
     protected abstract void pickTab(int index);
+
+    @Override
+    public MenuFace face() {
+        return MenuFace.of(presence(), getTitle(), tabs(), activeTab());
+    }
+
+    @Override
+    protected Area frameArea() {
+        float top = TITLE_TOP - FRAME_MARGIN;
+        return new Area(contentLeft() - FRAME_MARGIN, top, CONTENT_WIDTH + FRAME_MARGIN * 2.0f,
+                panelTop() + panelHeight() + FRAME_MARGIN - top);
+    }
 
     protected abstract void buildBody();
 
@@ -582,6 +598,54 @@ public abstract class ManagerScreen extends GlassScreen {
         }
     }
 
+    // WHY: окно палитры одно на все экраны: выбор цвета стрелками по списку названий не показывал
+    // WHY: сам цвет, а своего цвета вне списка не давал выбрать вовсе
+    protected void palette(String owner, PaletteWindow.Kind kind, Component title, int color,
+                           IntConsumer apply, Runnable clear) {
+        palettes.toggle(this.width, this.height, owner, kind, title, color, apply, clear);
+    }
+
+    protected boolean paletteCovering(double mouseX, double mouseY) {
+        return palettes.covering(mouseX, mouseY);
+    }
+
+    @Override
+    protected void renderOverlay(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        palettes.render(graphics, this.width, this.height, mouseX, mouseY);
+    }
+
+    @Override
+    protected boolean inputCaptured() {
+        return palettes.covering(cursorX(), cursorY());
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (!leaving() && palettes.mouseClicked(mouseX, mouseY)) return true;
+
+        boolean handled = super.mouseClicked(mouseX, mouseY, button);
+        if (palettes.any()) setFocused(null);
+        return handled;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (palettes.mouseDragged(mouseX, mouseY)) return true;
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (palettes.mouseReleased()) return true;
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean charTyped(char symbol, int modifiers) {
+        if (palettes.charTyped(symbol)) return true;
+        return super.charTyped(symbol, modifiers);
+    }
+
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
         if (leaving() || inputCaptured()) return true;
@@ -642,6 +706,7 @@ public abstract class ManagerScreen extends GlassScreen {
         if (index == activeTab()) return;
 
         slide = Integer.compare(index, activeTab());
+        palettes.closeAll();
         pickTab(index);
         page.snap(0.0f);
         rebuild();
@@ -649,6 +714,7 @@ public abstract class ManagerScreen extends GlassScreen {
 
     @Override
     public boolean keyPressed(int key, int scan, int modifiers) {
+        if (palettes.keyPressed(key)) return true;
         // WHY: строка ловит Escape сама, когда в ней печатают число или клавишу, поэтому поиск
         // WHY: перехватывает его только вне строк - иначе ввод в строке нечем отменить
         if (key == GLFW.GLFW_KEY_ESCAPE && !inputCaptured() && searching()

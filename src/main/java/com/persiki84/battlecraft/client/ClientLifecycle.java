@@ -4,6 +4,7 @@ import com.persiki84.battlecraft.BattleCraftMod;
 import com.persiki84.battlecraft.client.hud.AnnounceHud;
 import com.persiki84.battlecraft.client.hud.RadioHud;
 import com.persiki84.battlecraft.client.island.IslandModel;
+import com.persiki84.battlecraft.client.menu.MenuPresenceClient;
 import com.persiki84.battlecraft.client.media.MediaWatch;
 import com.persiki84.battlecraft.client.voice.RadioChirp;
 import com.persiki84.battlecraft.client.voice.RadioTalk;
@@ -30,6 +31,7 @@ public final class ClientLifecycle {
         ClientCombatState.forget();
         ClientLobbyData.clear();
         MenuData.forget();
+        MenuPresenceClient.forget();
         IslandModel.forget();
         AnnounceHud.forget();
         RadioHud.forget();

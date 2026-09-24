@@ -26,13 +26,17 @@ public enum PaletteKey {
     ZONE_HOSTILE(Group.WORLD, "zoneHostile", UiWorldPalette::hostile, UiWorldPalette::hostile),
     ZONE_SHOP(Group.WORLD, "zoneShop", UiWorldPalette::shop, UiWorldPalette::shop),
     ZONE_CONTESTED(Group.WORLD, "zoneContested", UiWorldPalette::contested, UiWorldPalette::contested),
-    MARK(Group.WORLD, "mark", UiWorldPalette::mark, UiWorldPalette::mark);
+    MARK(Group.WORLD, "mark", UiWorldPalette::mark, UiWorldPalette::mark),
+
+    DAMAGE(Group.DAMAGE, "damage", UiWorldPalette::damage, UiWorldPalette::damage),
+    DAMAGE_CRIT(Group.DAMAGE, "damageCrit", UiWorldPalette::damageCrit, UiWorldPalette::damageCrit);
 
     public enum Group {
         ACCENT,
         SURFACE,
         GLASS,
-        WORLD;
+        WORLD,
+        DAMAGE;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);
@@ -40,6 +44,10 @@ public enum PaletteKey {
 
         public boolean onGlassTab() {
             return this == GLASS;
+        }
+
+        public boolean onInterfaceTab() {
+            return this == DAMAGE;
         }
     }
 

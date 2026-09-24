@@ -3,43 +3,35 @@ package com.persiki84.battlecraft.client.island;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.persiki84.battlecraft.BattleCraftMod;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.regex.Pattern;
 
 public final class DiscordAvatar {
     private static final ResourceLocation TARGET = new ResourceLocation("battlecraft", "island/avatar");
-    private static final String ENDPOINT = "https://cdn.discordapp.com/avatars/%s/%s.png?size=128";
+    private static final String ENDPOINT = "https://cdn.discordapp.com/avatars/%s/%s.png?size=%d";
     private static final String FOLDER = "battlecraft";
-    private static final String CACHE = "discord-avatar-%s.png";
+    private static final String CACHE_PREFIX = "discord-avatar-";
+    private static final String CACHE = CACHE_PREFIX + "%s-%d.png";
     private static final int TIMEOUT_MS = 6000;
-    private static final int SIZE_LIMIT = 1 << 20;
+    private static final int SIZE_LIMIT = 4 << 20;
+    private static final int HTTP_OK = 200;
+    private static final Pattern USER_ID = Pattern.compile("\\d{1,24}");
+    private static final Pattern AVATAR_HASH = Pattern.compile("(a_)?[0-9a-fA-F]{32}");
 
     private static volatile boolean ready;
-    private static volatile int edge = 128;
-    private static String loadedHash = "";
+    private static volatile int edge = 1;
 
     private DiscordAvatar() {}
-
-    public static void remember(String userId, String avatarHash) {
-        if (userId == null || userId.isEmpty() || avatarHash == null || avatarHash.isEmpty()) {
-            BattleCraftMod.LOGGER.info("[battlecraft] discord gave no avatar: id={} hash={}", userId, avatarHash);
-            return;
-        }
-        if (avatarHash.equals(loadedHash)) return;
-
-        loadedHash = avatarHash;
-        BattleCraftMod.LOGGER.info("[battlecraft] discord avatar requested for {} hash {}", userId, avatarHash);
-        Thread worker = new Thread(() -> fetch(userId, avatarHash), "battlecraft-avatar");
-        worker.setDaemon(true);
-        worker.start();
-    }
 
     public static boolean ready() {
         return ready;
@@ -53,54 +45,115 @@ public final class DiscordAvatar {
         return TARGET;
     }
 
-    private static void fetch(String userId, String avatarHash) {
-        try {
-            Path cache = cacheFile(avatarHash);
-            byte[] encoded = Files.isRegularFile(cache) ? Files.readAllBytes(cache) : download(userId, avatarHash);
-            if (encoded.length == 0) return;
+    // WHY: хеш и id приходят из именованного канала, который может открыть любой локальный процесс,
+    // WHY: а оба ложатся в адрес запроса и в имя файла кэша. Всё, что не похоже на Discord, отбрасывается
+    public static boolean acceptable(String userId, String avatarHash) {
+        return userId != null && avatarHash != null
+                && USER_ID.matcher(userId).matches() && AVATAR_HASH.matcher(avatarHash).matches();
+    }
 
-            if (!Files.isRegularFile(cache)) {
-                Files.createDirectories(cache.getParent());
-                Files.write(cache, encoded);
-            }
-            Minecraft.getInstance().execute(() -> upload(encoded));
+    public static boolean fetch(String userId, String avatarHash) {
+        NativeImage[] levels = null;
+        try {
+            byte[] encoded = encoded(userId, avatarHash);
+            levels = shaped(encoded);
+            NativeImage[] carriedLevels = levels;
+            Minecraft.getInstance().execute(() -> upload(carriedLevels));
+            return true;
         } catch (Exception error) {
+            IslandPicture.discard(levels);
             BattleCraftMod.LOGGER.warn("[battlecraft] discord avatar unavailable: {}", error.toString());
+            return false;
+        }
+    }
+
+    private static byte[] encoded(String userId, String avatarHash) throws IOException {
+        Path cache = cacheFile(avatarHash);
+        if (Files.isRegularFile(cache)) {
+            byte[] cached = Files.readAllBytes(cache);
+            if (decodable(cached)) return cached;
+            Files.deleteIfExists(cache);
+        }
+
+        byte[] downloaded = download(userId, avatarHash);
+        if (!decodable(downloaded)) throw new IOException("avatar is not an image");
+        store(cache, downloaded);
+        return downloaded;
+    }
+
+    private static boolean decodable(byte[] encoded) {
+        try (NativeImage probe = NativeImage.read(new ByteArrayInputStream(encoded))) {
+            return probe.getWidth() > 0 && probe.getHeight() > 0;
+        } catch (Exception broken) {
+            return false;
+        }
+    }
+
+    private static NativeImage[] shaped(byte[] encoded) throws IOException {
+        try (NativeImage decoded = NativeImage.read(new ByteArrayInputStream(encoded));
+             NativeImage squared = IslandImage.squared(decoded)) {
+            return IslandScale.chain(squared, IslandImage.CORNER_SHARE);
         }
     }
 
     private static Path cacheFile(String avatarHash) {
-        return Minecraft.getInstance().gameDirectory.toPath().resolve(FOLDER)
-                .resolve(String.format(CACHE, avatarHash));
+        return folder().resolve(String.format(CACHE, avatarHash, IslandScale.EDGE_LIMIT));
     }
 
-    private static byte[] download(String userId, String avatarHash) throws Exception {
-        URI address = URI.create(String.format(ENDPOINT, userId, avatarHash));
+    private static Path folder() {
+        return Minecraft.getInstance().gameDirectory.toPath().resolve(FOLDER);
+    }
+
+    // WHY: кэш пишется через временный файл: оборванная запись оставляла битый png, который потом
+    // WHY: читался с диска каждый запуск, и аватар не появлялся уже никогда
+    private static void store(Path cache, byte[] encoded) throws IOException {
+        Files.createDirectories(cache.getParent());
+        Path staging = cache.resolveSibling(cache.getFileName() + ".part");
+        Files.write(staging, encoded);
+        Files.move(staging, cache, StandardCopyOption.REPLACE_EXISTING);
+        sweep(cache);
+    }
+
+    private static void sweep(Path kept) {
+        try (DirectoryStream<Path> old = Files.newDirectoryStream(kept.getParent(), CACHE_PREFIX + "*.png")) {
+            for (Path file : old) {
+                if (!file.equals(kept)) Files.deleteIfExists(file);
+            }
+        } catch (IOException error) {
+            BattleCraftMod.LOGGER.debug("[battlecraft] old discord avatars kept: {}", error.toString());
+        }
+    }
+
+    private static byte[] download(String userId, String avatarHash) throws IOException {
+        URI address = URI.create(String.format(ENDPOINT, userId, avatarHash, IslandScale.EDGE_LIMIT));
         HttpURLConnection connection = (HttpURLConnection) address.toURL().openConnection();
         connection.setConnectTimeout(TIMEOUT_MS);
         connection.setReadTimeout(TIMEOUT_MS);
         connection.setRequestProperty("User-Agent", "BattleCraft");
 
-        try (InputStream stream = connection.getInputStream()) {
-            return stream.readNBytes(SIZE_LIMIT);
+        try {
+            int status = connection.getResponseCode();
+            if (status != HTTP_OK) throw new IOException("discord cdn answered " + status);
+            try (InputStream stream = connection.getInputStream()) {
+                byte[] body = stream.readNBytes(SIZE_LIMIT + 1);
+                if (body.length > SIZE_LIMIT) throw new IOException("avatar is larger than " + SIZE_LIMIT);
+                return body;
+            }
         } finally {
             connection.disconnect();
         }
     }
 
-    private static void upload(byte[] encoded) {
-        NativeImage image = null;
+    private static void upload(NativeImage[] levels) {
         try {
-            image = NativeImage.read(new ByteArrayInputStream(encoded));
-            IslandImage.round(image, IslandImage.CORNER_SHARE);
-            edge = Math.min(image.getWidth(), image.getHeight());
-            BattleCraftMod.LOGGER.info("[battlecraft] discord avatar ready, {} px", edge);
-            Minecraft.getInstance().getTextureManager().register(TARGET, new DynamicTexture(image));
+            IslandPicture picture = IslandPicture.upload(levels);
+            Minecraft.getInstance().getTextureManager().register(TARGET, picture);
+            edge = picture.edge();
             ready = true;
+            BattleCraftMod.LOGGER.info("[battlecraft] discord avatar ready, {} px with mipmaps", edge);
         } catch (Exception error) {
-            if (image != null) image.close();
+            IslandPicture.discard(levels);
             BattleCraftMod.LOGGER.warn("[battlecraft] discord avatar rejected: {}", error.toString());
         }
     }
-
 }

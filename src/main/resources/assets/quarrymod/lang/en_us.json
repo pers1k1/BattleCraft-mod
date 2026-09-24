@@ -57,5 +57,11 @@
   "quarrymod.menu.list.empty": "No quarry blocks",
   "quarrymod.menu.list.more": "More blocks, not shown",
   "quarrymod.menu.list.custom": "%s · cooldown %s s",
-  "quarrymod.menu.action.aimed": "Aimed at"
+  "quarrymod.menu.action.aimed": "Aimed at",
+  "quarrymod.event.taken": "Someone got this block first!",
+  "quarrymod.marker.timer": "%s:%s",
+  "quarrymod.marker.ready": "ready",
+  "quarrymod.marker.multiplier": "x%s",
+  "block.quarrymod.excavated": "Excavated",
+  "quarrymod.menu.list.left": "%s · back in %ss"
 }

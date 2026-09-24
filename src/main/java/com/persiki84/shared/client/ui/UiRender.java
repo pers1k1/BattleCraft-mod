@@ -106,8 +106,6 @@ public final class UiRender {
     private static final float ALIGN_RIGHT = 1.0f;
     private static final float BAKE_SLACK = 0.02f;
     private static final float SUPERSAMPLE = 1.3f;
-    private static final double SCROLL_SECONDS_PER_UNIT = 0.09;
-    private static final double SCROLL_MIN_SECONDS = 3.0;
     private static final float FADE_UNITS = 5.0f;
     private static final int MAX_GLYPHS = 512;
     private static final int FULL_BRIGHT = 15728880;
@@ -144,6 +142,7 @@ public final class UiRender {
     private static boolean smoothing;
     private static boolean rawScale;
     private static boolean floating;
+    private static boolean marqueeFloating;
     private static boolean dissolving;
     private static boolean fading;
     private static float fadeFrom;
@@ -1266,26 +1265,40 @@ public final class UiRender {
             return;
         }
 
-        float left = boxX;
-        float travel = span - boxWidth;
-        double seconds = Util.getMillis() / 1000.0;
-        double period = Math.max(travel * SCROLL_SECONDS_PER_UNIT, SCROLL_MIN_SECONDS);
-        double sway = Math.sin(Math.PI / 2.0 * Math.cos(Math.PI * 2.0 * seconds / period)) / 2.0 + 0.5;
-        float start = left - (float) (sway * travel);
-
-        // WHY: ножницы режут глиф пополам, и строка выглядит вылезшей за плитку; кромки гасятся
-        // WHY: по букве, поэтому обрез приходится на уже прозрачную часть строки
-        scissor(graphics, left, boxY, boxWidth, boxHeight);
-        fadeFrom = (left - start) / scale;
-        fadeTo = (left + boxWidth - start) / scale;
-        fadeWidth = FADE_UNITS / scale;
-        fading = true;
+        float start = boxX - UiMarquee.shift(value.getString(), span - boxWidth);
+        float margin = UiMarquee.margin(boxWidth, scale);
+        scissor(graphics, boxX - margin, boxY, boxWidth + margin * 2.0f, boxHeight);
+        marqueeFrom(graphics, boxX, boxWidth, start, span, scale);
         try {
             drawGlyphs(graphics, font, start, y, scale, tracking, color, false);
         } finally {
-            fading = false;
+            marqueeDone();
             graphics.disableScissor();
         }
+    }
+
+    // WHY: ножницы режут глиф пополам, и строка выглядит вылезшей из стенки; край гасится маской
+    // WHY: в шейдере текста по пикселю, а ванильное перо её не знает и гасится целой буквой
+    public static void marqueeFrom(GuiGraphics graphics, float boxX, float boxWidth, float start, float span,
+                                   float scale) {
+        marqueeFloating = floating(true);
+        if (MsdfFontSets.ready()) {
+            graphics.bufferSource().endBatch();
+            UiMarquee.reveal(graphics, boxX, boxWidth, start, span, scale);
+            return;
+        }
+        fadeFrom = (boxX - start) / scale;
+        fadeTo = (boxX + boxWidth - start) / scale;
+        fadeWidth = FADE_UNITS / scale;
+        fading = true;
+    }
+
+    // WHY: на хвосте хода строка сдвигается на доли пикселя за кадр, и привязка пера к сетке
+    // WHY: превращала торможение в рывки по целому пикселю
+    public static void marqueeDone() {
+        fading = false;
+        floating(marqueeFloating);
+        UiMarquee.conceal();
     }
 
     private static int faded(int color, float x) {

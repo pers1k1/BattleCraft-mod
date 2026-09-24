@@ -15,11 +15,15 @@ import com.persiki84.shared.client.menu.MenuCommands;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.MenuField;
+import com.persiki84.battlecraft.rules.MarkerRange;
+import com.persiki84.capturepoints.capture.CapturePoint;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.PickRow;
 import com.persiki84.shared.client.menu.ToggleRow;
+import com.persiki84.shared.client.menu.pick.ItemPickerScreen;
 import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.zone.ZoneShape;
+import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.nbt.CompoundTag;
@@ -42,6 +46,7 @@ public class CapturePointManagerScreen extends ManagerScreen {
     private static final int MAX_SECONDS = 3600;
     private static final int MAX_AMOUNT = 64;
     private static final int MAX_PERCENT = 2000;
+    private static final int RANGE_STEP = 50;
     private static final int MAX_LEVEL = 6;
     private static final int EFFECT_LIMIT = 64;
     private static final int DEFAULT_RADIUS = 10;
@@ -64,6 +69,11 @@ public class CapturePointManagerScreen extends ManagerScreen {
 
     public CapturePointManagerScreen() {
         super(Component.translatable("capturepoints.menu.title"));
+    }
+
+    @Override
+    public MenuKind presence() {
+        return MenuKind.ADMIN;
     }
 
     @Override
@@ -191,6 +201,18 @@ public class CapturePointManagerScreen extends ManagerScreen {
         }
         rows.add(pointToggle("capturepoints.menu.shown_in_hud", name, "shownInHud",
                 value -> send(point, "sethud " + quoted(point) + " " + value)));
+        rows.add(pointToggle("capturepoints.menu.hidden_inside", name, "hiddenInside",
+                value -> send(point, "sethideinside " + quoted(point) + " " + value)));
+        rows.add(markerRangeRow(point));
+    }
+
+    // WHY: ноль значит «как у вида»: у точки нет своего предела, и она берёт общий из настроек
+    private NumberRow markerRangeRow(CompoundTag point) {
+        NumberRow row = number("capturepoints.menu.marker_range", point, "markerRange",
+                CapturePoint.KIND_RANGE, MarkerRange.MAX_BLOCKS, RANGE_STEP,
+                value -> send(point, "setmarkerrange " + quoted(point) + " " + value));
+        row.floorLabel(Component.translatable("battlecraft.markers.kind"));
+        return row;
     }
 
     private ToggleRow pointToggle(String label, String name, String key,
@@ -273,8 +295,7 @@ public class CapturePointManagerScreen extends ManagerScreen {
     private void addRewardRows(List<AbstractWidget> rows, CompoundTag point) {
         String name = point.getString("name");
         rows.add(heading(Component.translatable("capturepoints.menu.group.reward")));
-        rows.add(reading("capturepoints.menu.reward_item", () -> itemLabel(live(name).getString("rewardItem"))));
-        rows.add(action("capturepoints.menu.take_hand", "capturepoints.menu.action.take",
+        rows.add(itemPickRow("capturepoints.menu.reward_item", () -> itemLabel(live(name).getString("rewardItem")),
                 () -> pickReward(point)));
         rows.add(number("capturepoints.menu.reward", point, "rewardAmount", 0, MAX_AMOUNT, 1,
                 value -> applyReward(point, value)));
@@ -283,8 +304,7 @@ public class CapturePointManagerScreen extends ManagerScreen {
     private void addIncomeRows(List<AbstractWidget> rows, CompoundTag point) {
         String name = point.getString("name");
         rows.add(heading(Component.translatable("capturepoints.menu.group.income")));
-        rows.add(reading("capturepoints.menu.income_item", () -> itemLabel(live(name).getString("incomeItem"))));
-        rows.add(action("capturepoints.menu.take_hand", "capturepoints.menu.action.take",
+        rows.add(itemPickRow("capturepoints.menu.income_item", () -> itemLabel(live(name).getString("incomeItem")),
                 () -> pickIncome(point)));
         rows.add(number("capturepoints.menu.income", point, "incomeAmount", 0, MAX_AMOUNT, 1,
                 value -> applyIncome(point, value)));
@@ -397,26 +417,26 @@ public class CapturePointManagerScreen extends ManagerScreen {
         send(point, "setincome " + quoted(point) + " " + item + " " + amount);
     }
 
-    private void pickReward(CompoundTag point) {
-        String held = heldItem();
-        if (held.isEmpty()) {
-            MenuFeedback.show(Component.translatable("capturepoints.menu.error.empty_hand"), true);
-            return;
-        }
+    // WHY: предмет награды и дохода выбирается глазами, из инвентаря или всего реестра, вместе с
+    // WHY: количеством: взятие из руки требовало держать нужную вещь перед нажатием строки
+    private ActionRow itemPickRow(String label, java.util.function.Supplier<Component> value, Runnable run) {
+        ActionRow row = new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT, Component.translatable(label), value, run);
+        row.hint(label + HINT_SUFFIX);
+        return row;
+    }
 
+    private void pickReward(CompoundTag point) {
         int amount = Math.max(1, valueOf(point.getString("name"), "rewardAmount"));
-        send(point, "setreward " + quoted(point) + " " + held + " " + amount);
+        ItemPickerScreen.open(Component.translatable("capturepoints.menu.pick.reward"), this,
+                ItemPickerScreen.Options.counted(Component.translatable("capturepoints.menu.reward"), 1, MAX_AMOUNT, amount),
+                choice -> send(point, "setreward " + quoted(point) + " " + choice.itemId() + " " + choice.amount()));
     }
 
     private void pickIncome(CompoundTag point) {
-        String held = heldItem();
-        if (held.isEmpty()) {
-            MenuFeedback.show(Component.translatable("capturepoints.menu.error.empty_hand"), true);
-            return;
-        }
-
         int amount = Math.max(1, valueOf(point.getString("name"), "incomeAmount"));
-        send(point, "setincome " + quoted(point) + " " + held + " " + amount);
+        ItemPickerScreen.open(Component.translatable("capturepoints.menu.pick.income"), this,
+                ItemPickerScreen.Options.counted(Component.translatable("capturepoints.menu.income"), 1, MAX_AMOUNT, amount),
+                choice -> send(point, "setincome " + quoted(point) + " " + choice.itemId() + " " + choice.amount()));
     }
 
     private void applyBuff(CompoundTag point) {
@@ -687,7 +707,8 @@ public class CapturePointManagerScreen extends ManagerScreen {
                     .append(point.getString("owner")).append(point.getString("rewardItem"))
                     .append(point.getString("incomeItem")).append(point.getString("buff"))
                     .append(point.getList("commands", Tag.TAG_STRING)).append(point.getBoolean("required"))
-                    .append(point.getBoolean("shownInHud")).append('\n');
+                    .append(point.getBoolean("shownInHud")).append(point.getBoolean("hiddenInside"))
+                    .append('\n');
         }
         return mark.toString();
     }

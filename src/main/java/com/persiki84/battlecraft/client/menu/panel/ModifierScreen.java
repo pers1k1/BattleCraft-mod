@@ -6,6 +6,7 @@ import com.persiki84.shared.client.menu.FieldRow;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.PanelScreen;
+import com.persiki84.shared.client.menu.pick.ItemPickerScreen;
 import com.persiki84.shared.AmountText;
 import com.persiki84.shared.Names;
 import net.minecraft.client.Minecraft;
@@ -170,6 +171,9 @@ public class ModifierScreen extends PanelScreen {
                     () -> Component.translatable("itemmodifiers.menu.item.count", inHand),
                     this::pickHand));
         }
+        rows.add(new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("itemmodifiers.menu.item.pick"),
+                () -> Component.translatable("itemmodifiers.menu.action.pick"), this::pickOther));
         for (CompoundTag item : tracked()) {
             String id = item.getString("item");
             int count = item.getList("effects", Tag.TAG_STRING).size()
@@ -178,8 +182,15 @@ public class ModifierScreen extends PanelScreen {
                     () -> Component.translatable("itemmodifiers.menu.item.count", count),
                     () -> pickItem(id)));
         }
-        if (rows.isEmpty()) rows.add(reading("itemmodifiers.menu.item.empty", Component::empty));
+        if (rows.size() == 1) rows.add(reading("itemmodifiers.menu.item.empty", Component::empty));
         return rows;
+    }
+
+    // WHY: вид предмета для настройки выбирается глазами из реестра с поиском, а не только из
+    // WHY: уже настроенных: иначе первый модификатор новому предмету было не с чего начать
+    private void pickOther() {
+        ItemPickerScreen.open(Component.translatable("itemmodifiers.menu.pick.title"), this,
+                ItemPickerScreen.Options.itemOnly(), choice -> pickItem(choice.itemId()));
     }
 
     // WHY: выбор в списке молча ничего не менял, а добавление уходило в руку: теперь выбор сразу

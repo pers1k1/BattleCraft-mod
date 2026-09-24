@@ -93,6 +93,28 @@
             "values": [
                 0.0
             ]
+        },
+        {
+            "name": "RevealBand",
+            "type": "float",
+            "count": 4,
+            "values": [
+                -100000.0,
+                100000.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "RevealShade",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ]
         }
     ]
 }

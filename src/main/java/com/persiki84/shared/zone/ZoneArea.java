@@ -13,6 +13,7 @@ public final class ZoneArea {
     private final double size;
     private final double heightUp;
     private final double heightDown;
+    private AABB bounds;
 
     public ZoneArea(ZoneShape shape, BlockPos center, double size, double heightUp, double heightDown) {
         this.shape = shape;
@@ -74,7 +75,10 @@ public final class ZoneArea {
     }
 
     public AABB bounds() {
-        return new AABB(centerX() - size, minY(), centerZ() - size, centerX() + size, maxY(), centerZ() + size);
+        if (bounds == null) {
+            bounds = new AABB(centerX() - size, minY(), centerZ() - size, centerX() + size, maxY(), centerZ() + size);
+        }
+        return bounds;
     }
 
     public double footprint() {

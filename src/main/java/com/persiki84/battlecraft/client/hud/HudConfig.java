@@ -5,6 +5,10 @@ import net.minecraftforge.common.ForgeConfigSpec;
 public final class HudConfig {
 
     private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
+    public static final float DAMAGE_SCALE_LEAST = 0.5f;
+    public static final float DAMAGE_SCALE_MOST = 2.0f;
+    public static final float DAMAGE_TIME_LEAST = 0.5f;
+    public static final float DAMAGE_TIME_MOST = 2.0f;
     public static final ForgeConfigSpec SPEC;
 
     private static ForgeConfigSpec.BooleanValue HOTBAR_AUTO_HIDE;
@@ -22,6 +26,10 @@ public final class HudConfig {
     private static ForgeConfigSpec.BooleanValue VOICE_TRACE;
     private static ForgeConfigSpec.DoubleValue RADIO_NOISE;
     private static ForgeConfigSpec.BooleanValue RADIO_CHIRP;
+    private static ForgeConfigSpec.BooleanValue DAMAGE_NUMBERS;
+    private static ForgeConfigSpec.BooleanValue DAMAGE_STACK;
+    private static ForgeConfigSpec.DoubleValue DAMAGE_SCALE;
+    private static ForgeConfigSpec.DoubleValue DAMAGE_TIME;
     private static ForgeConfigSpec.BooleanValue STATUS_BARS;
     private static ForgeConfigSpec.BooleanValue EFFECT_CHIPS;
     private static ForgeConfigSpec.BooleanValue BOSS_BARS;
@@ -90,6 +98,18 @@ public final class HudConfig {
         MARKER_SCALE = defineMarkerScale();
         POINTS_IN_HUD = definePointsInHud();
         defineRadio();
+        defineDamage();
+    }
+
+    private static void defineDamage() {
+        DAMAGE_NUMBERS = BUILDER.comment("Цифры урона над целью")
+                .define("damageNumbers", true);
+        DAMAGE_STACK = BUILDER.comment("Удары подряд по одной цели складываются в одну цифру")
+                .define("damageStack", true);
+        DAMAGE_SCALE = BUILDER.comment("Размер цифр урона, 1 это обычный")
+                .defineInRange("damageScale", 1.0, DAMAGE_SCALE_LEAST, DAMAGE_SCALE_MOST);
+        DAMAGE_TIME = BUILDER.comment("Сколько держится цифра урона, 1 это обычное время")
+                .defineInRange("damageTime", 1.0, DAMAGE_TIME_LEAST, DAMAGE_TIME_MOST);
     }
 
     private static void defineRadio() {
@@ -535,6 +555,38 @@ public final class HudConfig {
 
     public static boolean radioChirp() {
         return read(RADIO_CHIRP, true);
+    }
+
+    public static boolean damageNumbers() {
+        return read(DAMAGE_NUMBERS, true);
+    }
+
+    public static void damageNumbers(boolean value) {
+        if (SPEC.isLoaded()) DAMAGE_NUMBERS.set(value);
+    }
+
+    public static boolean damageStack() {
+        return read(DAMAGE_STACK, true);
+    }
+
+    public static void damageStack(boolean value) {
+        if (SPEC.isLoaded()) DAMAGE_STACK.set(value);
+    }
+
+    public static float damageScale() {
+        return SPEC.isLoaded() ? DAMAGE_SCALE.get().floatValue() : 1.0f;
+    }
+
+    public static void damageScale(float value) {
+        if (SPEC.isLoaded()) DAMAGE_SCALE.set((double) Math.max(DAMAGE_SCALE_LEAST, Math.min(DAMAGE_SCALE_MOST, value)));
+    }
+
+    public static float damageTime() {
+        return SPEC.isLoaded() ? DAMAGE_TIME.get().floatValue() : 1.0f;
+    }
+
+    public static void damageTime(float value) {
+        if (SPEC.isLoaded()) DAMAGE_TIME.set((double) Math.max(DAMAGE_TIME_LEAST, Math.min(DAMAGE_TIME_MOST, value)));
     }
 
     public static void radioChirp(boolean value) {

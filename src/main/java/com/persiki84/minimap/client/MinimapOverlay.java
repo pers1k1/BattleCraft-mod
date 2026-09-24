@@ -210,8 +210,10 @@ public class MinimapOverlay {
     }
 
     private static void renderBases(GuiGraphics guiGraphics, double mapX, double mapZ, float zoom, float cx, float cy) {
+        Minecraft mc = Minecraft.getInstance();
         for (Zone zone : ClientZoneData.all()) {
             if (zone.type() != ZoneType.BASE || !ZoneColors.visibleToOwnTeam(zone)) continue;
+            if (mc.level == null || !zone.inDimension(mc.level.dimension().location())) continue;
 
             renderBase(guiGraphics, zone.area().centerX(), zone.area().centerZ(), mapX, mapZ, zoom, cx, cy,
                     0xFF000000 | ZoneColors.packed(zone));

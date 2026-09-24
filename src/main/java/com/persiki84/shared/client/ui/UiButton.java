@@ -17,10 +17,17 @@ public class UiButton extends AbstractButton implements GlidingRow, SelfPainted 
     private static final float HOVER_DAMPING = 0.92f;
     private static final float PRESS_RESPONSE = 0.26f;
     private static final float PRESS_DAMPING = 0.58f;
+    private static final float LIVE_SPEED = 12.0f;
+    private static final float SWAP_SPEED = 14.0f;
 
     private final Consumer<UiButton> action;
     private final Spring hover = new Spring(HOVER_RESPONSE, HOVER_DAMPING, 0.0f);
     private final Spring press = new Spring(PRESS_RESPONSE, PRESS_DAMPING, 0.0f);
+    private final Smooth live = new Smooth(1.0f, LIVE_SPEED);
+    private boolean primed;
+    private final Smooth swap = new Smooth(1.0f, SWAP_SPEED);
+    private Component outgoing;
+    private String shownLabel;
     private final RowAnchor anchor = new RowAnchor();
     private Component explanation;
     private int swatch;
@@ -50,6 +57,20 @@ public class UiButton extends AbstractButton implements GlidingRow, SelfPainted 
     }
 
     // WHY: пробник звуковой схемы играет образец чужой схемы, и свой щелчок кнопки лёг бы поверх него
+    // WHY: экран пересобирает кнопки от любой правки данных, а нажатие, наведение и переход
+    // WHY: доступности живут в самой кнопке: без передачи новая кнопка начинала бы с нуля
+    public void adopt(UiButton older) {
+        if (older == null || older == this) return;
+        hover.take(older.hover);
+        press.take(older.press);
+        live.snap(older.live.get());
+        primed = older.primed;
+        swap.snap(older.swap.get());
+        outgoing = older.outgoing;
+        shownLabel = older.shownLabel;
+        held = older.held;
+    }
+
     public UiButton muted() {
         muted = true;
         return this;
@@ -73,12 +94,8 @@ public class UiButton extends AbstractButton implements GlidingRow, SelfPainted 
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (anchor.gone(getY(), this.height)) return;
 
-        boolean clipped = anchor.clip(graphics, getX(), this.width, getY(), this.height);
-        try {
-            super.render(graphics, mouseX, anchor.pointer(mouseY), partialTick);
-        } finally {
-            if (clipped) graphics.disableScissor();
-        }
+        anchor.draw(graphics, getX(), this.width, getY(), this.height,
+                () -> super.render(graphics, mouseX, anchor.pointer(mouseY), partialTick));
     }
 
     @Override
@@ -132,9 +149,34 @@ public class UiButton extends AbstractButton implements GlidingRow, SelfPainted 
         }
 
         float delta = UiFrame.delta();
+        if (!primed) {
+            primed = true;
+            live.snap(this.active ? 1.0f : 0.0f);
+        }
+        trackLabel();
         UiSkin.button(graphics, this.getX(), this.getY(), this.width, this.height, this.getMessage(),
-                this.active, hover.to(focused ? 1.0f : 0.0f, delta), press.to(held ? 1.0f : 0.0f, delta),
+                outgoing, swap.to(1.0f, delta), live.to(this.active ? 1.0f : 0.0f, delta),
+                hover.to(focused ? 1.0f : 0.0f, delta), press.to(held ? 1.0f : 0.0f, delta),
                 UiSkin.fit(graphics), swatch, lit);
+    }
+
+    private void trackLabel() {
+        String now = this.getMessage().getString();
+        if (shownLabel == null) {
+            shownLabel = now;
+            return;
+        }
+        if (now.equals(shownLabel)) return;
+
+        String previous = shownLabel;
+        shownLabel = now;
+        if (swap.get() < 0.999f) {
+            outgoing = null;
+            swap.snap(1.0f);
+            return;
+        }
+        outgoing = Component.literal(previous);
+        swap.snap(0.0f);
     }
 
     @Override

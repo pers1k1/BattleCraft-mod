@@ -18,10 +18,22 @@ public final class ZoneRegistry {
     public static void bind(ServerLevel level) {
         currentLevel = level;
         zones.clear();
+        boolean adopted = false;
         for (Zone zone : ZoneStorage.load(level)) {
+            adopted |= adopt(zone, level);
             zones.put(zone.id(), zone);
         }
         refreshForbiddenRules();
+        if (adopted) ZoneStorage.save(level, zones.values());
+    }
+
+    // WHY: до 19.09.2026 у зоны не было мира, и записанные тогда зоны действовали во всех сразу.
+    // WHY: Они заводились в основном мире, поэтому при первом чтении получают именно его
+    private static boolean adopt(Zone zone, ServerLevel level) {
+        if (zone.dimension() != null) return false;
+
+        zone.setDimension(level.dimension().location());
+        return true;
     }
 
     public static void unbind() {

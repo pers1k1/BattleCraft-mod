@@ -267,12 +267,16 @@ final class SuperbSmith {
         String slotId = slot.toLowerCase(Locale.ROOT);
         List<GunSlot.GunOption> options = new ArrayList<>();
         for (int level : levels) {
-            if (level > 0) options.add(new GunSlot.GunOption(slotId + ":" + level, "· " + level));
+            if (level > 0) options.add(new GunSlot.GunOption(slotId + ":" + level, levelLabel(level)));
         }
 
         int current = levelOf(gun, slot);
         return new GunSlot(slotId, "zones.attachment.slot." + slotId,
                 current > 0 ? slotId + ":" + current : "", options);
+    }
+
+    private static String levelLabel(int level) {
+        return Component.translatable("zones.attachment.level", level).getString();
     }
 
     private static int levelOf(ItemStack gun, String slot) {

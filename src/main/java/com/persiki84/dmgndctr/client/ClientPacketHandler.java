@@ -1,13 +1,12 @@
 package com.persiki84.dmgndctr.client;
 
 import com.persiki84.dmgndctr.network.DamagePacket;
-import net.minecraft.client.Minecraft;
 
 public class ClientPacketHandler {
     public static void handle(DamagePacket msg) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level != null) {
-            mc.particleEngine.add(new TextParticle(mc.level, msg.x, msg.y, msg.z, msg.damage, msg.isCrit));
+        for (int index = 0; index < msg.count(); index++) {
+            DamageNumbers.add(msg.targets[index], msg.xs[index], msg.ys[index], msg.zs[index],
+                    msg.amounts[index], msg.crits[index]);
         }
     }
 }

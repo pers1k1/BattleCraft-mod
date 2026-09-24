@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 
 import com.persiki84.capturepoints.capture.CaptureMode;
+import com.persiki84.capturepoints.capture.CapturePoint;
 import com.persiki84.knockdown.cap.KnockdownCapability;
 import com.persiki84.knockdown.cap.KnockdownProvider;
 import com.persiki84.capturepoints.network.PointSyncData;
@@ -27,8 +28,10 @@ public class ClientCaptureData {
     private static final Map<String, ZoneArea> pointAreas = new HashMap<>();
     private static final Map<String, ZoneArea> finalPointAreas = new HashMap<>();
     private static final Map<String, CaptureMode> pointModes = new HashMap<>();
+    private static final Map<String, Integer> pointRanges = new HashMap<>();
     private static final Set<String> optionalPoints = new HashSet<>();
     private static final Set<String> hiddenFromHud = new HashSet<>();
+    private static final Set<String> shownInside = new HashSet<>();
     private static final Map<String, Session> sessions = new HashMap<>();
     private static final Map<String, String> pointOwnersView = Collections.unmodifiableMap(pointOwners);
     private static final Map<String, String> finalPointOwnersView = Collections.unmodifiableMap(finalPointOwners);
@@ -107,8 +110,10 @@ public class ClientCaptureData {
         finalPointPositions.clear();
         finalPointAreas.clear();
         pointModes.clear();
+        pointRanges.clear();
         optionalPoints.clear();
         hiddenFromHud.clear();
+        shownInside.clear();
         sessions.clear();
         localCapturingPoint = null;
         localAttackerTeam = null;
@@ -163,8 +168,10 @@ public class ClientCaptureData {
 
     private static void forgetPoint(String pointName) {
         pointModes.remove(pointName);
+        pointRanges.remove(pointName);
         optionalPoints.remove(pointName);
         hiddenFromHud.remove(pointName);
+        shownInside.remove(pointName);
         forgetProgress(pointName);
     }
 
@@ -198,6 +205,7 @@ public class ClientCaptureData {
 
     private static void rememberFlags(String name, PointSyncData data) {
         pointModes.put(name, data.mode);
+        pointRanges.put(name, data.markerRange);
         if (data.required) {
             optionalPoints.remove(name);
         } else {
@@ -208,6 +216,15 @@ public class ClientCaptureData {
         } else {
             hiddenFromHud.add(name);
         }
+        if (data.hiddenInside) {
+            shownInside.remove(name);
+        } else {
+            shownInside.add(name);
+        }
+    }
+
+    public static int getMarkerRange(String pointName) {
+        return pointRanges.getOrDefault(pointName, CapturePoint.KIND_RANGE);
     }
 
     public static boolean isPointRequired(String pointName) {
@@ -218,6 +235,10 @@ public class ClientCaptureData {
     // WHY: целей и метка над местностью, потому что иначе её нечем было бы найти
     public static boolean isPointShownInHud(String pointName) {
         return !hiddenFromHud.contains(pointName);
+    }
+
+    public static boolean isPointHiddenInside(String pointName) {
+        return !shownInside.contains(pointName);
     }
 
     private static boolean inCurrentDimension(PointSyncData data) {

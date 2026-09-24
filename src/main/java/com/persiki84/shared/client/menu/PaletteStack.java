@@ -20,15 +20,15 @@ public final class PaletteStack {
         return !windows.isEmpty();
     }
 
-    public void toggle(float screenWidth, float screenHeight, String owner, Component title, int color,
-                       IntConsumer apply, Runnable clear) {
+    public void toggle(float screenWidth, float screenHeight, String owner, PaletteWindow.Kind kind,
+                       Component title, int color, IntConsumer apply, Runnable clear) {
         PaletteWindow open = live(owner);
         if (open != null) {
             open.beginClose();
             return;
         }
 
-        PaletteWindow window = new PaletteWindow(owner, title, color, apply, clear);
+        PaletteWindow window = new PaletteWindow(owner, kind, title, color, apply, clear);
         window.place(slotX(screenWidth), slotY(screenHeight));
         windows.add(window);
     }

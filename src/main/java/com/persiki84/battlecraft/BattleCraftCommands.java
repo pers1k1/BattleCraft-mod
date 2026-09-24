@@ -419,6 +419,11 @@ public class BattleCraftCommands {
         return MenuNetwork.open(context.getSource().getPlayerOrException(), menuId) ? 1 : 0;
     }
 
+    public static int openMenu(CommandContext<CommandSourceStack> context, String menuId, int tab)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        return MenuNetwork.open(context.getSource().getPlayerOrException(), menuId, tab) ? 1 : 0;
+    }
+
     private static void say(CommandContext<CommandSourceStack> context, Component message) {
         context.getSource().sendSuccess(() -> message, false);
     }

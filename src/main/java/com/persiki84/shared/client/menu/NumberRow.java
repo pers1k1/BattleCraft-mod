@@ -170,11 +170,17 @@ public class NumberRow extends MenuRow {
                 UiTheme.alpha(tint, progress), false);
     }
 
+    // WHY: мигающий курсор не входит в ширину набранного: вместе с ним строка центровалась
+    // WHY: заново каждые полсекунды, и число дёргалось влево-вправо на полширины курсора
     private void renderTyping(GuiGraphics graphics) {
         float centerX = valueCenter();
-        String caret = (System.currentTimeMillis() / 500L) % 2L == 0L ? "_" : "";
-        UiRender.textCentered(graphics, font(), typed + caret, centerX,
-                UiRender.centerY(getY(), height, LABEL_SCALE), LABEL_SCALE, UiTheme.WHITE, false);
+        float y = UiRender.centerY(getY(), height, LABEL_SCALE);
+        UiRender.textCentered(graphics, font(), typed, centerX, y, LABEL_SCALE, UiTheme.WHITE, false);
+        if ((System.currentTimeMillis() / 500L) % 2L != 0L) return;
+
+        float half = UiRender.measure(graphics, font(), Component.literal(typed), LABEL_SCALE) / 2.0f;
+        UiRender.textScaled(graphics, font(), Component.literal("_"), centerX + half, y, LABEL_SCALE,
+                UiTheme.WHITE, false);
     }
 
     private float valueCenter() {

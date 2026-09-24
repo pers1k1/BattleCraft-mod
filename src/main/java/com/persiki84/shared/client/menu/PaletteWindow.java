@@ -64,11 +64,21 @@ public final class PaletteWindow {
     private static final float MAX_STEP = 1.0f / 15.0f;
     private static final float BURN_MARGIN = 28.0f;
     private static final float WINDOW_CHARGE = 0.55f;
+    private static final long SERVER_GAP_MS = 400L;
 
     private static final int[] PRESETS = {
             0xFFE7E9F4, 0xFFCE2A22, 0xFFE8A33D, 0xFFE6D34A, 0xFF3FDB6A, 0xFF4FC9B0,
             0xFF4F9BE8, 0xFFA96BE0, 0xFFF07FB8, 0xFF8A8FA6, 0xFF1B1B24, 0xFF0C0C10
     };
+
+    // WHY: цвет, который держит сервер, уходит командой: протяжка по полю слала бы её каждый кадр,
+    // WHY: а сторож частоты на сервере молча выбрасывает лишнее, и в окне оставался бы один цвет,
+    // WHY: а в мире другой; поэтому уходит последнее значение не чаще раза в SERVER_GAP_MS.
+    // WHY: Альфа там не значит ничего, мир рисует метки и зоны непрозрачными
+    public enum Kind {
+        LOCAL,
+        SERVER
+    }
 
     private enum Grab {
         NONE,
@@ -79,6 +89,7 @@ public final class PaletteWindow {
     }
 
     private final String owner;
+    private final Kind kind;
     private final Component title;
     private final IntConsumer apply;
     private final Runnable clear;
@@ -93,6 +104,8 @@ public final class PaletteWindow {
     private Grab grab = Grab.NONE;
     private float grabX;
     private float grabY;
+    private boolean held;
+    private long sentAt;
     private boolean typing;
     private String typed = "";
     private int hexValue;
@@ -110,8 +123,9 @@ public final class PaletteWindow {
     private UiShards shards;
     private long grain;
 
-    public PaletteWindow(String owner, Component title, int color, IntConsumer apply, Runnable clear) {
+    public PaletteWindow(String owner, Kind kind, Component title, int color, IntConsumer apply, Runnable clear) {
         this.owner = owner;
+        this.kind = kind;
         this.title = title;
         this.apply = apply;
         this.clear = clear;
@@ -133,7 +147,7 @@ public final class PaletteWindow {
     }
 
     public boolean gone() {
-        return burned >= leaveSpan();
+        return burned >= leaveSpan() && !held;
     }
 
     // WHY: набор движения защёлкивается на каждой стадии отдельно: смена его на экране кастомизации
@@ -164,7 +178,15 @@ public final class PaletteWindow {
     }
 
     public boolean covers(double pointX, double pointY) {
-        return !closing() && within(pointX, pointY, left, top, WIDTH, HEIGHT);
+        return !closing() && within(pointX, pointY, left, top, WIDTH, height());
+    }
+
+    public float height() {
+        return opaque() ? HEIGHT - BAR_HEIGHT - GAP : HEIGHT;
+    }
+
+    private boolean opaque() {
+        return kind == Kind.SERVER;
     }
 
     public boolean dragging() {
@@ -172,7 +194,7 @@ public final class PaletteWindow {
     }
 
     private void adopt(int color) {
-        alpha = ((color >>> 24) & 0xFF) / 255.0f;
+        alpha = opaque() ? 1.0f : ((color >>> 24) & 0xFF) / 255.0f;
         float[] hsb = UiColor.toHsb(color);
         hue = hsb[0];
         saturation = hsb[1];
@@ -188,7 +210,7 @@ public final class PaletteWindow {
         screenWidth = width;
         screenHeight = height;
         left = clamp(left, width - WIDTH);
-        top = clamp(top, height - HEIGHT);
+        top = clamp(top, height - height());
         advance();
 
         graphics.flush();
@@ -224,7 +246,7 @@ public final class PaletteWindow {
         }
 
         float mode = closing() ? UiReveal.BURN : enterMode();
-        UiAssemble.window(graphics, width, height, UiStage.windowTexture(), left, top, WIDTH, HEIGHT,
+        UiAssemble.window(graphics, width, height, UiStage.windowTexture(), left, top, WIDTH, height(),
                 BURN_MARGIN, phase(), seconds(), mode, WINDOW_CHARGE);
     }
 
@@ -235,7 +257,7 @@ public final class PaletteWindow {
     // WHY: замощение нужно раньше композита: через него переносятся и копия кадра в стадии окна, и
     // WHY: снимок подложки, иначе мир за улетевшим осколком остаётся с места, где ячейка была
     private UiShards field() {
-        if (shards == null) shards = UiShards.of(left, top, WIDTH, HEIGHT, grain);
+        if (shards == null) shards = UiShards.of(left, top, WIDTH, height(), grain);
         return shards;
     }
 
@@ -247,6 +269,7 @@ public final class PaletteWindow {
         long frame = UiFrame.frame();
         if (frame == stamp) return;
         stamp = frame;
+        settle();
 
         float step = Math.min(MAX_STEP, UiFrame.delta());
         copyPulse = Math.max(0.0f, copyPulse - step / PULSE_SECONDS);
@@ -272,11 +295,11 @@ public final class PaletteWindow {
     }
 
     private void paint(GuiGraphics graphics, int mouseX, int mouseY) {
-        UiGlass.window(graphics, left, top, WIDTH, HEIGHT, PANEL_RADIUS, 1.0f, PANEL_LIFT);
+        UiGlass.window(graphics, left, top, WIDTH, height(), PANEL_RADIUS, 1.0f, PANEL_LIFT);
         paintTitle(graphics, mouseX, mouseY);
         paintField(graphics);
         paintHue(graphics);
-        paintAlpha(graphics);
+        if (!opaque()) paintAlpha(graphics);
         paintHex(graphics);
         paintActions(graphics, mouseX, mouseY);
         paintPresets(graphics);
@@ -406,7 +429,8 @@ public final class PaletteWindow {
         if (argb == hexValue && hexText != null) return hexText;
 
         hexValue = argb;
-        hexText = String.format(Locale.ROOT, "#%08X", argb);
+        hexText = opaque() ? String.format(Locale.ROOT, "#%06X", argb & 0xFFFFFF)
+                : String.format(Locale.ROOT, "#%08X", argb);
         return hexText;
     }
 
@@ -431,7 +455,7 @@ public final class PaletteWindow {
     }
 
     private float hexTop() {
-        return alphaTop() + BAR_HEIGHT + GAP;
+        return opaque() ? alphaTop() : alphaTop() + BAR_HEIGHT + GAP;
     }
 
     private float actionTop() {
@@ -515,7 +539,7 @@ public final class PaletteWindow {
     }
 
     private boolean grabAlpha(double mouseX, double mouseY) {
-        if (!within(mouseX, mouseY, fieldLeft(), alphaTop(), FIELD_WIDTH, BAR_HEIGHT)) return false;
+        if (opaque() || !within(mouseX, mouseY, fieldLeft(), alphaTop(), FIELD_WIDTH, BAR_HEIGHT)) return false;
 
         grab = Grab.ALPHA;
         seekAlpha(mouseX);
@@ -618,9 +642,18 @@ public final class PaletteWindow {
         return true;
     }
 
+    private void settle() {
+        if (!held || grab == Grab.FIELD || grab == Grab.HUE) return;
+        if (System.currentTimeMillis() - sentAt < SERVER_GAP_MS) return;
+
+        held = false;
+        sentAt = System.currentTimeMillis();
+        if (apply != null) apply.accept(color());
+    }
+
     private void moveTo(double mouseX, double mouseY) {
         left = clamp((float) (mouseX - grabX), screenWidth - WIDTH);
-        top = clamp((float) (mouseY - grabY), screenHeight - HEIGHT);
+        top = clamp((float) (mouseY - grabY), screenHeight - height());
     }
 
     private static float clamp(float value, float limit) {
@@ -644,6 +677,10 @@ public final class PaletteWindow {
     }
 
     private void push() {
+        if (kind == Kind.SERVER) {
+            held = true;
+            return;
+        }
         if (apply != null) apply.accept(color());
     }
 
@@ -665,7 +702,7 @@ public final class PaletteWindow {
     }
 
     public boolean charTyped(char symbol) {
-        if (!typing || typed.length() >= 8) return false;
+        if (!typing || typed.length() >= (opaque() ? 6 : 8)) return false;
 
         char upper = Character.toUpperCase(symbol);
         if ((upper >= '0' && upper <= '9') || (upper >= 'A' && upper <= 'F')) {

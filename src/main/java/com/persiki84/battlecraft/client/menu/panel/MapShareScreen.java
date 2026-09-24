@@ -9,6 +9,7 @@ import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.HeadingRow;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.PanelScreen;
+import com.persiki84.shared.menu.MenuKind;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -30,6 +31,11 @@ public class MapShareScreen extends PanelScreen {
 
     public MapShareScreen() {
         super(Component.translatable("battlecraft.map.title"));
+    }
+
+    @Override
+    public MenuKind presence() {
+        return MenuKind.MAP;
     }
 
     @Override

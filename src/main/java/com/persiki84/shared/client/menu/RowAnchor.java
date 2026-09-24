@@ -10,6 +10,7 @@ public final class RowAnchor {
     private GlidingRow.Lane lane;
     private int anchorY;
     private int shiftedY;
+    private float residue;
     private float bandTop;
     private float bandBottom;
     private boolean banded;
@@ -17,6 +18,7 @@ public final class RowAnchor {
     public void set(int y, GlidingRow.Lane chosen) {
         anchorY = y;
         shiftedY = y;
+        residue = 0.0f;
         lane = chosen;
     }
 
@@ -24,19 +26,29 @@ public final class RowAnchor {
         return lane != null;
     }
 
+    // WHY: виджет хранит Y целым в единицах GUI, а это 2-4 пикселя экрана; хвост затухания
+    // WHY: прокрутки идёт долями единицы и по целому Y превращается в редкие скачки на целый шаг,
+    // WHY: поэтому дробь доезжает сдвигом позы при отрисовке, а клики остаются на целом Y
     public void follow(ScrollLanes lanes) {
         bandTop = lanes.top(lane);
         bandBottom = lanes.bottom(lane);
         banded = bandBottom > bandTop;
-        shiftedY = Math.round(anchorY + lanes.offset(lane));
+        float exact = anchorY + lanes.offset(lane);
+        shiftedY = Math.round(exact);
+        residue = exact - shiftedY;
     }
 
     public int shifted() {
         return shiftedY;
     }
 
+    public float residue() {
+        return residue;
+    }
+
     public boolean gone(int y, int height) {
-        return banded && (y + height <= bandTop || y >= bandBottom);
+        float top = y + residue;
+        return banded && (top + height <= bandTop || top >= bandBottom);
     }
 
     public boolean covers(double mouseY) {
@@ -47,8 +59,20 @@ public final class RowAnchor {
         return covers(mouseY) ? mouseY : POINTER_AWAY;
     }
 
-    public boolean clip(GuiGraphics graphics, int x, int width, int y, int height) {
-        if (!banded || (y >= bandTop && y + height <= bandBottom)) return false;
+    public void draw(GuiGraphics graphics, int x, int width, int y, int height, Runnable body) {
+        boolean clipped = clip(graphics, x, width, y + residue, height);
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0f, residue, 0.0f);
+        try {
+            body.run();
+        } finally {
+            graphics.pose().popPose();
+            if (clipped) graphics.disableScissor();
+        }
+    }
+
+    private boolean clip(GuiGraphics graphics, int x, int width, float top, int height) {
+        if (!banded || (top >= bandTop && top + height <= bandBottom)) return false;
 
         UiRender.clip(graphics, x - CLIP_MARGIN, bandTop, width + CLIP_MARGIN * 2.0f, bandBottom - bandTop);
         return true;

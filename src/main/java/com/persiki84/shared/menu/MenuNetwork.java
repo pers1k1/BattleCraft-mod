@@ -43,10 +43,15 @@ public final class MenuNetwork {
     }
 
     public static boolean open(ServerPlayer player, String menuId) {
+        return open(player, menuId, MenuStatePacket.NO_TAB);
+    }
+
+    public static boolean open(ServerPlayer player, String menuId, int tab) {
         CompoundTag state = MenuStates.snapshot(menuId, player);
         if (state == null) return false;
 
-        sendState(player, menuId, state, true);
+        INSTANCE.send(PacketDistributor.PLAYER.with(() -> player),
+                new MenuStatePacket(menuId, state, true, tab));
         return true;
     }
 
