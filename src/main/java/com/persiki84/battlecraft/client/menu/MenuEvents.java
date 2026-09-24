@@ -6,6 +6,8 @@ import com.persiki84.battlecraft.client.setup.SetupScreen;
 import com.persiki84.battlecraft.client.setup.SetupState;
 import com.persiki84.battlecraft.client.menu.browse.ServerBrowseScreen;
 import com.persiki84.battlecraft.client.menu.browse.WorldBrowseScreen;
+import com.persiki84.battlecraft.mixin.JoinMultiplayerScreenAccessor;
+import com.persiki84.battlecraft.mixin.SelectWorldScreenAccessor;
 import com.persiki84.shared.client.ui.UiBoot;
 import com.persiki84.shared.client.ui.UiSound;
 import net.minecraft.client.gui.screens.Screen;
@@ -56,12 +58,19 @@ public final class MenuEvents {
         if (!HudConfig.browseScreens()) return;
 
         Screen opening = event.getNewScreen();
-        Screen parent = event.getCurrentScreen();
-        if (opening instanceof SelectWorldScreen) {
-            event.setNewScreen(new WorldBrowseScreen(parent));
-        } else if (opening instanceof JoinMultiplayerScreen) {
-            event.setNewScreen(new ServerBrowseScreen(parent));
+        if (opening instanceof SelectWorldScreen worlds) {
+            Screen parent = ((SelectWorldScreenAccessor) worlds).battlecraft$lastScreen();
+            event.setNewScreen(new WorldBrowseScreen(parentOr(parent, event)));
+        } else if (opening instanceof JoinMultiplayerScreen servers) {
+            Screen parent = ((JoinMultiplayerScreenAccessor) servers).battlecraft$lastScreen();
+            event.setNewScreen(new ServerBrowseScreen(parentOr(parent, event)));
         }
+    }
+
+    // WHY: родитель берётся у ванильного экрана, а не текущий: экран «Отключение» открывает список
+    // WHY: серверов поверх себя, и «Назад» возвращал в него же, замыкая петлю без выхода в меню
+    private static Screen parentOr(Screen vanillaParent, ScreenEvent.Opening event) {
+        return vanillaParent != null ? vanillaParent : event.getCurrentScreen();
     }
 
     // WHY: главное меню подставляется ещё под мозанговским оверлеем, и звук открытия

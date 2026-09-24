@@ -26,6 +26,7 @@
     "InventoryScreenMixin",
     "ItemInHandLayerMixin",
     "ItemStackMixin",
+    "JoinMultiplayerScreenAccessor",
     "KeyboardHandlerMixin",
     "LevelLoadingScreenAccessor",
     "LoadingOverlayMixin",
@@ -35,6 +36,7 @@
     "PostChainAccessor",
     "ProgressScreenAccessor",
     "ScreenMixin",
+    "SelectWorldScreenAccessor",
     "TabButtonMixin",
     "TabNavigationBarMixin"
   ],

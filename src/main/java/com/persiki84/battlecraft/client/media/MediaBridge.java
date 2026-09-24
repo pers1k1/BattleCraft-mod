@@ -30,6 +30,7 @@ public final class MediaBridge {
     private static volatile int restarts;
     private static volatile boolean unsupported;
     private static volatile boolean stopped;
+    private static volatile String announced = "";
 
     private MediaBridge() {}
 
@@ -169,10 +170,25 @@ public final class MediaBridge {
                 MediaWatch.bands(spread(state.get("peak").getAsFloat()));
                 return;
             }
-            MediaWatch.publish(read(state));
+            publish(read(state));
         } catch (Exception ignored) {
-            MediaWatch.publish(MediaTrack.NONE);
+            publish(MediaTrack.NONE);
         }
+    }
+
+    private static void publish(MediaTrack track) {
+        announce(track);
+        MediaWatch.publish(track);
+    }
+
+    // WHY: без строки в логе «плеер не подхватывается» не отличить от моста, который его не
+    // WHY: услышал, от острова, который его не показал. Пишется только смена источника
+    private static void announce(MediaTrack track) {
+        String source = track.present() ? track.app() + (track.blind() ? " by sound" : "") : "none";
+        if (source.equals(announced)) return;
+
+        announced = source;
+        BattleCraftMod.LOGGER.info("[battlecraft] media source: {}", source);
     }
 
     private static float[] spectrum(com.google.gson.JsonArray sent) {

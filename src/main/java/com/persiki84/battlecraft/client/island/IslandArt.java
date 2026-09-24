@@ -17,6 +17,7 @@ public final class IslandArt {
     };
 
     private static final long NOTHING = Long.MIN_VALUE;
+    private static final long RETRY_MS = 1000L;
 
     private static volatile boolean ready;
     private static volatile boolean carried;
@@ -24,11 +25,13 @@ public final class IslandArt {
     private static volatile int edge = 1;
     private static volatile int carriedEdge = 1;
     private static volatile long wantedStamp = NOTHING;
+    private static volatile long failedStamp = NOTHING;
+    private static volatile long failedAt;
 
     private IslandArt() {}
 
     public static void accept(long stamp, Path file) {
-        if (stamp == wantedStamp) return;
+        if (stamp == wantedStamp || retriedRecently(stamp)) return;
 
         wantedStamp = stamp;
         if (stamp <= 0L) {
@@ -43,6 +46,7 @@ public final class IslandArt {
     // WHY: карточке трека остаётся аватар Discord до самой смены песни
     public static void forget() {
         wantedStamp = NOTHING;
+        failedStamp = NOTHING;
         drop();
     }
 
@@ -55,11 +59,31 @@ public final class IslandArt {
     // WHY: неудачная подготовка снимает ожидание: иначе тот же стемп уже не примут, и трек доиграет
     // WHY: без обложки, хотя файл появился через полсекунды
     private static void missed(long stamp) {
-        if (stamp == wantedStamp) wantedStamp = NOTHING;
+        if (stamp != wantedStamp) return;
+
+        wantedStamp = NOTHING;
+        failedStamp = stamp;
+        failedAt = System.currentTimeMillis();
+    }
+
+    // WHY: файл, который не декодируется, повторялся каждый кадр: сотня фоновых разборов в секунду
+    // WHY: минутами. Повтор того же стемпа не чаще раза в секунду
+    private static boolean retriedRecently(long stamp) {
+        return stamp == failedStamp && System.currentTimeMillis() - failedAt < RETRY_MS;
+    }
+
+    // WHY: обложка, которую не удалось разобрать, не должна оставлять на месте картинку прошлого
+    // WHY: трека: остров возвращается к аватару
+    private static void abandon(long stamp) {
+        if (wantedStamp == NOTHING && failedStamp == stamp) drop();
     }
 
     public static boolean ready() {
         return ready;
+    }
+
+    public static boolean pending() {
+        return wantedStamp > 0L;
     }
 
     public static boolean carries() {
@@ -104,6 +128,7 @@ public final class IslandArt {
         } catch (Exception error) {
             IslandPicture.discard(levels);
             missed(stamp);
+            Minecraft.getInstance().execute(() -> abandon(stamp));
             BattleCraftMod.LOGGER.warn("[battlecraft] cover art rejected: {}", error.toString());
         } finally {
             if (decoded != null) decoded.close();

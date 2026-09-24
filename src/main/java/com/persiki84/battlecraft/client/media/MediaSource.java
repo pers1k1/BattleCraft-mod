@@ -30,6 +30,14 @@ public enum MediaSource {
     VLC("VLC"),
     AIMP("AIMP"),
     FOOBAR("foobar2000"),
+    TELEGRAM("Telegram"),
+    MEDIA_PLAYER("Media Player"),
+    WINDOWS_MEDIA_PLAYER("Windows Media Player"),
+    WINAMP("Winamp"),
+    MUSICBEE("MusicBee"),
+    POTPLAYER("PotPlayer"),
+    MPC("MPC"),
+    ITUNES("iTunes"),
     GENERIC("");
 
     private final String label;
@@ -68,6 +76,8 @@ public enum MediaSource {
         if (app == null || app.isEmpty()) return GENERIC;
 
         String needle = app.toLowerCase(Locale.ROOT);
+        MediaSource player = ofPlayer(needle);
+        if (player != GENERIC) return player;
         if (needle.contains("spotify")) return SPOTIFY;
         if (needle.contains("yandexmusic") || needle.contains("yandex music")) return YANDEX_MUSIC;
         if (needle.contains("chromium")) return CHROMIUM;
@@ -84,6 +94,23 @@ public enum MediaSource {
         if (needle.contains("vlc")) return VLC;
         if (needle.contains("aimp")) return AIMP;
         if (needle.contains("foobar")) return FOOBAR;
+        return GENERIC;
+    }
+
+    // WHY: проверяется раньше браузеров: сессия Windows у магазинных приложений и Telegram
+    // WHY: называется идентификатором пакета, и в «microsoft.zunemusic» или «unigram» проверки
+    // WHY: браузеров по короткой подстроке (tor, zen, edge) могли бы найти своё
+    private static MediaSource ofPlayer(String needle) {
+        if (needle.contains("telegram") || needle.contains("unigram")) return TELEGRAM;
+        if (needle.contains("zunemusic") || needle.contains("microsoft.media.player")
+                || needle.contains("music.ui")) return MEDIA_PLAYER;
+        if (needle.contains("wmplayer") || needle.contains("mediaplayer32")) return WINDOWS_MEDIA_PLAYER;
+        if (needle.contains("winamp")) return WINAMP;
+        if (needle.contains("musicbee")) return MUSICBEE;
+        if (needle.contains("potplayer")) return POTPLAYER;
+        if (needle.contains("mpc-hc") || needle.contains("mpc-be")) return MPC;
+        if (needle.contains("itunes")) return ITUNES;
+        if (needle.contains("applemusic")) return APPLE_MUSIC;
         return GENERIC;
     }
 

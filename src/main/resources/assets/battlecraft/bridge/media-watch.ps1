@@ -25,7 +25,7 @@ function Build-Library {
         ('/reference:' + (Join-Path $metadata 'Windows.Foundation.winmd')),
         ('/reference:' + (Join-Path $metadata 'Windows.Media.winmd')),
         ('/reference:' + (Join-Path $metadata 'Windows.Storage.winmd')),
-        '/reference:System.Core.dll', '/reference:System.dll', $source
+        '/reference:System.Core.dll', '/reference:System.dll', '/reference:System.Drawing.dll', $source
     )
     & $compiler $arguments | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "csc exit $LASTEXITCODE" }
@@ -49,18 +49,19 @@ while ($true) {
         if ($tick -le 0) {
             $tick = 32
             $state = [BattleCraftMedia]::Poll($artPath)
-            Write-Output $state
+            [Console]::Out.WriteLine($state)
             $match = [regex]::Match($state, '"app":"([^"]*)"')
             $app = if ($match.Success) { $match.Groups[1].Value } else { '' }
         } else {
             $tick--
-            $bands = [BattleCraftSpectrum]::Poll($ParentPid, $app)
-            if ($bands) { Write-Output $bands } else { Write-Output ([BattleCraftLevel]::Poll($app)) }
+            if (-not [BattleCraftSpectrum]::Follow($ParentPid, $app)) {
+                [Console]::Out.WriteLine([BattleCraftLevel]::Poll($app))
+            }
         }
         [Console]::Out.Flush()
         $failures = 0
     } catch {
-        Write-Output '{"ok":false}'
+        [Console]::Out.WriteLine('{"ok":false}')
         [Console]::Out.Flush()
         $failures++
         $tick = 0

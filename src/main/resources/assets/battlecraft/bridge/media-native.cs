@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using Windows.Foundation;
 using Windows.Media.Control;
@@ -17,10 +18,20 @@ public static class BattleCraftMedia {
     const int AwaitSleepMs = 5;
     const float BlindGate = 0.0015f;
     const int BlindArm = 3;
+    const int HeardHold = 6;
+    const int ArtTries = 6;
 
     static readonly string[] Sites = {
         "soundcloud", "youtube music", "youtube", "spotify", "music.yandex",
         "vk.com", "vkmusic", "twitch", "deezer", "bandcamp", "apple music", "zvuk"
+    };
+
+    static readonly string[][] Captioned = {
+        new[] { "vlc", "vlc" }, new[] { "potplayer", "potplayer" },
+        new[] { "mpc-hc", "media player classic", "mpc-hc" }, new[] { "mpc-be", "mpc-be" },
+        new[] { "winamp", "winamp" }, new[] { "wmplayer", "windows media" }, new[] { "aimp", "aimp" },
+        new[] { "foobar2000", "foobar2000" }, new[] { "musicbee", "musicbee" },
+        new[] { "mediamonkey", "mediamonkey" }, new[] { "audacious", "audacious" }
     };
 
     static readonly ProcessMeter listener = new ProcessMeter(4);
@@ -31,6 +42,13 @@ public static class BattleCraftMedia {
     static string lastApp = "";
     static string lastSite = "";
     static int armed;
+    static int overheard;
+    static string heard = "";
+    static int heardQuiet;
+    static string captionApp = "";
+    static string captionText = "";
+    static int artTries;
+    static long artCounter;
     static long artStamp;
 
     public static void Init() {
@@ -96,6 +114,13 @@ public static class BattleCraftMedia {
         if (picked == null) return Blind();
 
         string app = picked.Session.SourceAppUserModelId ?? "";
+        if (Live(picked.Session) == 0) {
+            string other = Elsewhere(app);
+            if (other.Length > 0) return Heard(other, SiteOf(other));
+        } else {
+            overheard = 0;
+            heard = "";
+        }
         lastApp = app;
         lastSite = SiteOf(app);
         armed = BlindArm;
@@ -103,23 +128,62 @@ public static class BattleCraftMedia {
         return Serialize(picked.Session, picked.Properties, app, lastSite);
     }
 
+    // WHY: сессия на паузе (Spotify, забытая вкладка) висит в списке и перебивала локальный плеер
+    // WHY: без сессии Windows, который в это время играет: звучащий плеер важнее молчащей сессии.
+    // WHY: Между треками плеер молчит секунду, и без удержания остров прыгал бы на сессию и обратно
+    static string Elsewhere(string paused) {
+        string found = scan.Loudest(BlindGate, AppProcess.NameOf(paused));
+        if (found.Length > 0) return Overheard(found);
+
+        overheard = 0;
+        if (heard.Length > 0 && ++heardQuiet <= HeardHold) return heard;
+        heard = "";
+        return "";
+    }
+
+    static string Overheard(string found) {
+        heardQuiet = 0;
+        if (found == heard) return heard;
+
+        overheard = Math.Min(overheard + 1, BlindArm);
+        if (overheard >= BlindArm) heard = found;
+        return heard;
+    }
+
     // WHY: Firefox после перезагрузки вкладки перестаёт публиковать сессию SMTC, хотя звук идёт, и
     // WHY: поднимает её обратно только на новом медиаэлементе (реклама, быстрая смена трека). Название
     // WHY: брать неоткуда, поэтому остров держится на звуке самого приложения и показывает площадку
     static string Blind() {
-        signature = "";
         string app = Sounding();
-        if (app.Length == 0) return "{\"ok\":false}";
+        if (app.Length == 0) {
+            signature = "";
+            return "{\"ok\":false}";
+        }
+        return Heard(app, lastSite);
+    }
 
+    static string Heard(string app, string site) {
+        signature = "";
         var json = new StringBuilder("{\"ok\":true,\"blind\":true");
         Put(json, "app", app);
-        Put(json, "site", lastSite);
-        Put(json, "title", "");
+        Put(json, "site", site);
+        Put(json, "title", HeardTitle(app));
         Put(json, "artist", "");
         Put(json, "album", "");
         Put(json, "status", "Playing");
         json.Append(",\"playing\":true,\"pos\":0,\"dur\":0,\"age\":0,\"art\":").Append(artStamp).Append('}');
         return json.ToString();
+    }
+
+    // WHY: между треками и в удержании после остановки заголовок окна уже пуст или равен имени
+    // WHY: плеера, и строка острова мигала бы названием плеера. Держится прошлое название того же плеера
+    static string HeardTitle(string app) {
+        string title = Caption(app);
+        if (title.Length == 0 && app == captionApp) return captionText;
+
+        captionApp = app;
+        captionText = title;
+        return title;
     }
 
     static string Sounding() {
@@ -151,12 +215,23 @@ public static class BattleCraftMedia {
         return found;
     }
 
+    // WHY: у трека без обложки стемп обнуляется, и остров показывает аватар, а не обложку прошлого
+    // WHY: трека. Картинку сессия иногда публикует на опрос-другой позже названия, поэтому
+    // WHY: она дочитывается ещё несколько опросов
     static void Restamp(string app, GlobalSystemMediaTransportControlsSessionMediaProperties properties, string artPath) {
         string stamp = app + "|" + (properties.Title ?? "") + "|" + (properties.Artist ?? "");
-        if (stamp == signature) return;
+        if (stamp != signature) {
+            signature = stamp;
+            artTries = ArtTries;
+            artStamp = 0;
+        }
+        if (artTries <= 0) return;
 
-        signature = stamp;
-        if (SaveArt(properties, artPath)) artStamp++;
+        artTries--;
+        if (!SaveArt(properties, artPath)) return;
+
+        artStamp = ++artCounter;
+        artTries = 0;
     }
 
     static string Serialize(GlobalSystemMediaTransportControlsSession session,
@@ -187,7 +262,7 @@ public static class BattleCraftMedia {
         if (properties.Thumbnail == null || string.IsNullOrEmpty(artPath)) return false;
 
         try {
-            byte[] bytes = ReadThumbnail(properties);
+            byte[] bytes = AsPng(ReadThumbnail(properties));
             if (bytes.Length == 0) return false;
 
             string staging = artPath + ".part";
@@ -197,6 +272,20 @@ public static class BattleCraftMedia {
             return true;
         } catch {
             return false;
+        }
+    }
+
+    // WHY: «Медиаплеер» и Telegram отдают обложку и в BMP, который декодер игры не берёт («Corrupt
+    // WHY: BMP»): остров держал обложку прошлого трека и перечитывал файл каждый кадр. Любая картинка
+    // WHY: перекладывается в PNG средствами Windows, нечитаемая бросает и считается отсутствующей
+    static byte[] AsPng(byte[] bytes) {
+        if (bytes.Length == 0) return bytes;
+
+        using (var source = new MemoryStream(bytes))
+        using (var image = System.Drawing.Image.FromStream(source))
+        using (var target = new MemoryStream()) {
+            image.Save(target, System.Drawing.Imaging.ImageFormat.Png);
+            return target.ToArray();
         }
     }
 
@@ -248,6 +337,53 @@ public static class BattleCraftMedia {
         return "";
     }
 
+    // WHY: плееры без сессии Windows пишут трек в заголовок окна: «Трек - VLC media player»,
+    // WHY: «Исполнитель - Трек [foobar2000]», «12. Трек - Winamp». Срезается подпись плеера, номер и
+    // WHY: расширение файла; заголовок из одного имени плеера (плеер стоит) названием не считается
+    static string Caption(string app) {
+        string process = AudioTaps.ProcessName(app);
+        string[] marks = CaptionMarks(process);
+        if (marks == null) return "";
+
+        var owners = new HashSet<uint>();
+        foreach (var running in SafeProcesses(process)) owners.Add((uint) running.Id);
+        foreach (string caption in Titles(owners, true)) {
+            string track = TrackOf(caption, marks);
+            if (track.Length > 0) return track;
+        }
+        return "";
+    }
+
+    static string[] CaptionMarks(string process) {
+        if (process.Length == 0) return null;
+        foreach (var player in Captioned) {
+            if (process.StartsWith(player[0], StringComparison.Ordinal)) return player.Skip(1).ToArray();
+        }
+        return null;
+    }
+
+    static string TrackOf(string caption, string[] marks) {
+        string text = WithoutTail(WithoutTail((caption ?? "").Trim(), " [", marks), " - ", marks);
+        text = Regex.Replace(text, @"^\d+\.\s+", "");
+        text = Regex.Replace(text, @"\.(mp3|flac|wav|m4a|ogg|opus|aac|wma|ape|mp4|mkv|webm|avi)$", "",
+                RegexOptions.IgnoreCase).Trim();
+        return text.Length == 0 || Mentions(text, marks) ? "" : text;
+    }
+
+    static string WithoutTail(string text, string separator, string[] marks) {
+        int at = text.LastIndexOf(separator, StringComparison.Ordinal);
+        if (at <= 0 || !Mentions(text.Substring(at), marks)) return text;
+        return text.Substring(0, at).Trim();
+    }
+
+    static bool Mentions(string text, string[] marks) {
+        string lower = text.ToLowerInvariant();
+        foreach (string mark in marks) {
+            if (lower.Contains(mark)) return true;
+        }
+        return false;
+    }
+
     static Process[] SafeProcesses(string name) {
         try {
             return Process.GetProcessesByName(name);
@@ -263,12 +399,21 @@ public static class BattleCraftMedia {
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder text, int limit);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint owner);
 
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
+
     static List<string> Titles(HashSet<uint> owners) {
+        return Titles(owners, false);
+    }
+
+    // WHY: у каждого процесса есть скрытые служебные окна с подписью («Default IME»), и для
+    // WHY: названия трека они принимались бы за заголовок плеера
+    static List<string> Titles(HashSet<uint> owners, bool visibleOnly) {
         var found = new List<string>();
         EnumWindows((window, parameter) => {
             uint owner;
             GetWindowThreadProcessId(window, out owner);
             if (!owners.Contains(owner)) return true;
+            if (visibleOnly && !IsWindowVisible(window)) return true;
 
             int length = GetWindowTextLength(window);
             if (length == 0) return true;
@@ -295,6 +440,7 @@ class Chosen {
 
 class MeterEntry {
     public string App;
+    public uint Pid;
     public IAudioMeterInformation Meter;
 }
 
@@ -350,6 +496,7 @@ static class AudioTaps {
 
         var entry = new MeterEntry();
         entry.App = name;
+        entry.Pid = owner;
         entry.Meter = meter;
         found.Add(entry);
     }
@@ -366,6 +513,65 @@ static class AudioTaps {
         string trimmed = (app ?? "").Trim().ToLowerInvariant();
         if (!trimmed.EndsWith(".exe")) return "";
         return trimmed.Substring(0, trimmed.Length - 4);
+    }
+}
+
+// WHY: сессия Windows называет приложение именем exe не всегда: у магазинного это идентификатор
+// WHY: пакета (Медиаплеер, Unigram), а Telegram задаёт себе свой (Telegram.TelegramDesktop). Без
+// WHY: процесса спектр снимал весь звук машины вместе с дискордом, а запасной режим терял плеер
+static class AppProcess {
+    const int QueryLimited = 0x1000;
+    const int ShortestToken = 3;
+
+    static string cachedApp = "";
+    static string cachedName = "";
+
+    [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(int access, bool inherit, uint pid);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    static extern int GetApplicationUserModelId(IntPtr process, ref int length, StringBuilder id);
+
+    public static string NameOf(string app) {
+        string named = AudioTaps.ProcessName(app);
+        if (named.Length > 0 || string.IsNullOrEmpty(app)) return named;
+        if (app == cachedApp && cachedName.Length > 0) return cachedName;
+
+        cachedApp = app;
+        cachedName = Resolve(app, AudioTaps.Each(AudioTaps.Endpoint()));
+        return cachedName;
+    }
+
+    static string Resolve(string app, List<MeterEntry> sessions) {
+        foreach (var entry in sessions) {
+            if (string.Equals(PackagedId(entry.Pid), app, StringComparison.OrdinalIgnoreCase)) return entry.App;
+        }
+        var tokens = Tokens(app);
+        foreach (var entry in sessions) {
+            if (tokens.Contains(entry.App)) return entry.App;
+        }
+        return "";
+    }
+
+    static HashSet<string> Tokens(string app) {
+        var tokens = new HashSet<string>();
+        foreach (string part in app.ToLowerInvariant().Split('.', '!', '_', ' ')) {
+            if (part.Length >= ShortestToken) tokens.Add(part);
+        }
+        return tokens;
+    }
+
+    static string PackagedId(uint pid) {
+        IntPtr process = OpenProcess(QueryLimited, false, pid);
+        if (process == IntPtr.Zero) return "";
+        try {
+            int length = 256;
+            var id = new StringBuilder(length);
+            return GetApplicationUserModelId(process, ref length, id) == 0 ? id.ToString() : "";
+        } catch {
+            return "";
+        } finally {
+            CloseHandle(process);
+        }
     }
 }
 
@@ -428,7 +634,7 @@ class ProcessMeter {
     }
 
     static IAudioMeterInformation Named(IMMDevice device, string app) {
-        string wanted = AudioTaps.ProcessName(app);
+        string wanted = AppProcess.NameOf(app);
         if (wanted.Length == 0) return null;
 
         foreach (var entry in AudioTaps.Each(device)) {
@@ -441,21 +647,31 @@ class ProcessMeter {
 // WHY: когда сессии SMTC нет вообще, играющее приложение искать больше негде: метры всех сессий
 // WHY: известных плееров держатся живыми между опросами, потому что свежий метр читается нулём
 class PlayerScan {
-    const int Rebuild = 8;
+    // WHY: сессия звука у только что запущенного плеера появляется в списке лишь на пересборке, и
+    // WHY: при восьми опросах VLC ждал до пяти секунд, чего хватало, чтобы счесть его неподхваченным
+    const int Rebuild = 3;
 
     static readonly string[] Known = {
         "firefox", "librewolf", "waterfox", "zen", "chrome", "chromium", "msedge", "brave",
-        "vivaldi", "opera", "browser", "tor", "spotify", "vlc", "aimp", "foobar2000"
+        "vivaldi", "opera", "browser", "tor", "spotify", "vlc", "aimp", "foobar2000",
+        "microsoft.media.player", "music.ui", "wmplayer", "winamp", "musicbee", "mediamonkey",
+        "potplayer", "potplayer64", "potplayermini", "potplayermini64", "mpc-hc", "mpc-hc64",
+        "mpc-be", "mpc-be64", "itunes", "applemusic", "audacious", "strawberry", "clementine",
+        "dopamine", "telegram", "ayugram", "kotatogram", "64gram", "unigram"
     };
 
     readonly List<MeterEntry> taps = new List<MeterEntry>();
     int age;
 
     public string Loudest(float gate) {
+        return Loudest(gate, "");
+    }
+
+    public string Loudest(float gate, string skipped) {
         try {
             if (age <= 0) Rescan();
             age--;
-            return Best(gate);
+            return Best(gate, skipped);
         } catch {
             taps.Clear();
             age = 0;
@@ -463,10 +679,12 @@ class PlayerScan {
         }
     }
 
-    string Best(float gate) {
+    string Best(float gate, string skipped) {
         string best = "";
         float top = gate;
         foreach (var tap in taps) {
+            if (tap.App == skipped) continue;
+
             float peak;
             if (tap.Meter.GetPeakValue(out peak) != 0 || peak <= top) continue;
             top = peak;
@@ -559,6 +777,8 @@ public static class BattleCraftSpectrum {
     const int EventFlag = 0x00040000;
     const int StopWaitMs = 200;
     const long BufferSpan = 2000000;
+    const int PumpMs = 4;
+    const int KeepAliveMs = 100;
     static readonly float[] LowHz = {15.0f, 80.0f, 188.0f, 560.0f, 1520.0f, 4550.0f};
     static readonly float[] HighHz = {95.0f, 188.0f, 560.0f, 1520.0f, 4550.0f, 10000.0f};
     static readonly int[] low = new int[Bands];
@@ -584,6 +804,10 @@ public static class BattleCraftSpectrum {
     static int tag;
     static int bits;
     static int rate = 48000;
+    static int emittedAt;
+
+    [DllImport("winmm.dll")] static extern uint timeBeginPeriod(uint period);
+    [DllImport("winmm.dll")] static extern uint timeEndPeriod(uint period);
 
     public static bool Ready() {
         return running && !broken;
@@ -595,13 +819,19 @@ public static class BattleCraftSpectrum {
 
     // WHY: захват идёт по дереву процессов играющего приложения, а не «всё кроме игры»: иначе в
     // WHY: полоски бьют чужие звуки, например голоса в дискорде. Приложение неизвестно - остаётся
-    // WHY: прежний захват с исключением самой игры
-    public static string Poll(int excluded, string app) {
+    // WHY: прежний захват с исключением самой игры. Полосы отсюда не отдаются: их пишет сам поток
+    // WHY: захвата, а это только держит захват на нужном приложении и говорит, идёт ли он
+    public static bool Follow(int excluded, string app) {
         string wanted = app ?? "";
         if (running && wanted.Length > 0 && wanted != aimed) Restart(excluded, wanted);
         if (!running && !broken) Start(excluded, wanted);
-        if (!Ready()) return null;
+        return Ready();
+    }
 
+    // WHY: раньше полосы отдавал цикл скрипта раз в 15 мс, и на каждом опросе сессий Windows он
+    // WHY: замирал до 125 мс. Строка уходит из потока захвата сразу за пакетом звука; вывод консоли
+    // WHY: синхронизирован, и строки скрипта с ней не перемешиваются
+    static void Emit() {
         var text = new StringBuilder("{\"b\":[");
         lock (door) {
             for (int band = 0; band < Bands; band++) {
@@ -609,7 +839,9 @@ public static class BattleCraftSpectrum {
                 text.Append(level[band].ToString("0.000000", CultureInfo.InvariantCulture));
             }
         }
-        return text.Append("]}").ToString();
+        Console.Out.WriteLine(text.Append("]}").ToString());
+        Console.Out.Flush();
+        emittedAt = Environment.TickCount;
     }
 
     static void Restart(int excluded, string app) {
@@ -771,19 +1003,26 @@ public static class BattleCraftSpectrum {
         Grab();
     }
 
+    // WHY: таймер Windows по умолчанию режет сон до 15.6 мс, и Sleep(8) просыпался вдвое позже.
+    // WHY: Миллисекундная точность просится только для процесса моста и возвращается на выходе
     static void Pump() {
+        timeBeginPeriod(1);
         try {
             while (running) {
-                Drain();
-                Thread.Sleep(8);
+                bool fresh = Drain();
+                if (fresh || Environment.TickCount - emittedAt >= KeepAliveMs) Emit();
+                Thread.Sleep(PumpMs);
             }
         } catch {
             broken = true;
             running = false;
+        } finally {
+            timeEndPeriod(1);
         }
     }
 
-    static void Drain() {
+    static bool Drain() {
+        bool fresh = false;
         int frames;
         while (capture.GetNextPacketSize(out frames) == 0 && frames > 0) {
             IntPtr data;
@@ -791,12 +1030,14 @@ public static class BattleCraftSpectrum {
             int flags;
             long position;
             long stamp;
-            if (capture.GetBuffer(out data, out got, out flags, out position, out stamp) != 0) return;
+            if (capture.GetBuffer(out data, out got, out flags, out position, out stamp) != 0) break;
 
             if ((flags & 2) != 0) Silence(got); else Absorb(data, got);
             capture.ReleaseBuffer(got);
+            fresh = true;
         }
-        Transform();
+        if (fresh) Transform();
+        return fresh;
     }
 
     static void Silence(int frames) {
@@ -951,7 +1192,7 @@ static class ProcessTree {
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr snapshot);
 
     public static int RootOf(string app) {
-        string wanted = AudioTaps.ProcessName(app);
+        string wanted = AppProcess.NameOf(app);
         if (wanted.Length == 0) return 0;
 
         var parents = new Dictionary<int, int>();

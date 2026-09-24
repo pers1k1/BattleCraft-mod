@@ -82,7 +82,6 @@ public class MapTextureManager {
             region.close();
         }
         regions.clear();
-        outgoing.clear();
     }
 
     private static final int MAX_SCAN_RADIUS = 32;
@@ -91,17 +90,12 @@ public class MapTextureManager {
     private static final int FRESH_BUDGET = 16;
     private static final int RESCAN_BUDGET = 4;
     private static final long SWEEP_NANOS = 2_000_000L;
-    private static final int SEND_BATCH = 24;
-    private static final int SEND_EVERY = 10;
-    private static final int QUEUE_LIMIT = 4096;
     private static final int REGION_BUDGET = 24;
 
     private static final java.util.List<ChunkPos> window = new java.util.ArrayList<>();
-    private static final java.util.Set<ChunkPos> outgoing = new java.util.LinkedHashSet<>();
 
     private static int windowRadius = -1;
     private static int cursor;
-    private static int sendCountdown;
 
     public static void update() {
         Minecraft mc = Minecraft.getInstance();
@@ -109,7 +103,6 @@ public class MapTextureManager {
 
         ChunkPos center = new ChunkPos(new BlockPos((int) mc.player.getX(), 0, (int) mc.player.getZ()));
         if (sweep(mc, center) > 0) uploadDirtyRegions();
-        flushOutgoing(mc);
         trimRegions(center);
     }
 
@@ -154,35 +147,6 @@ public class MapTextureManager {
         }
         window.sort(java.util.Comparator.comparingLong(pos -> (long) pos.x * pos.x + (long) pos.z * pos.z));
         return window;
-    }
-
-    // WHY: пакет клиента серверу не длиннее 32767 байт, а чанк весит 1032, поэтому пачка идёт по
-    // WHY: 24 штуки и раз в полсекунды: прежняя отправка по чанку на каждую покраску забивала канал
-    private static void flushOutgoing(Minecraft mc) {
-        if (outgoing.isEmpty() || sendCountdown-- > 0) return;
-
-        sendCountdown = SEND_EVERY;
-        if (!ClientMapData.serverTakesChunks() || !inTeam()) {
-            outgoing.clear();
-            return;
-        }
-
-        java.util.List<com.persiki84.minimap.network.MapChunkSyncPacket.ChunkData> batch = new java.util.ArrayList<>();
-        java.util.Iterator<ChunkPos> waiting = outgoing.iterator();
-        while (waiting.hasNext() && batch.size() < SEND_BATCH) {
-            ChunkPos pos = waiting.next();
-            waiting.remove();
-
-            int[] colors = ClientMapData.chunkData.get(pos);
-            if (colors != null) {
-                batch.add(new com.persiki84.minimap.network.MapChunkSyncPacket.ChunkData(pos.x, pos.z, colors));
-            }
-        }
-        if (batch.isEmpty()) return;
-
-        String dimension = mc.level.dimension().location().toString().replace(":", "_");
-        com.persiki84.minimap.network.PacketHandler.INSTANCE
-                .sendToServer(new com.persiki84.minimap.network.MapChunkSyncPacket(dimension, batch));
     }
 
     private static void trimRegions(ChunkPos center) {
@@ -282,10 +246,6 @@ public class MapTextureManager {
         region.dirty = true;
     }
 
-    private static boolean inTeam() {
-        return Minecraft.getInstance().player != null && Minecraft.getInstance().player.getTeam() != null;
-    }
-
     // WHY: пустая покраска это не знание о местности, а чанк, который нечем было красить: записав
     // WHY: её, карта запоминала чёрный квадрат навсегда, потому что известный чанк больше не берут
     private static boolean updateChunk(LevelChunk chunk, ChunkPos cp) {
@@ -300,18 +260,7 @@ public class MapTextureManager {
         ClientMapData.chunkData.put(cp, newColors);
         ClientMapStorage.touch();
         drawChunkToImage(cp, newColors);
-        queue(cp);
         return true;
-    }
-
-    private static void queue(ChunkPos cp) {
-        if (!ClientMapData.serverTakesChunks() || !inTeam()) return;
-        if (outgoing.size() >= QUEUE_LIMIT) {
-            java.util.Iterator<ChunkPos> oldest = outgoing.iterator();
-            oldest.next();
-            oldest.remove();
-        }
-        outgoing.add(cp);
     }
 
     public static void renderMap(GuiGraphics guiGraphics, double mapX, double mapZ, float zoom,

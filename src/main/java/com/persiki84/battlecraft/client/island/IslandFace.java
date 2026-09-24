@@ -67,10 +67,11 @@ public final class IslandFace {
     }
 
     // WHY: обложка догружается мостом, и подставлять на это время аватар Discord нельзя: в карточке
-    // WHY: трека игрок видит чужую картинку. Место держится пустой площадкой, пока обложка не пришла
+    // WHY: трека игрок видит чужую картинку. Место держится пустой площадкой, пока обложка не пришла,
+    // WHY: но только пока она действительно ожидается: у трека без обложки площадка висела пустой вечно
     private static boolean awaited() {
         return HudConfig.islandCover() && IslandModel.media() > 0.02f && IslandModel.blind() < 0.5f
-                && !IslandArt.ready();
+                && !IslandArt.ready() && IslandArt.pending();
     }
 
     private static ResourceLocation ownSkin() {

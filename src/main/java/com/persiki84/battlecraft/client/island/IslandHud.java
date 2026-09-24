@@ -77,6 +77,7 @@ public final class IslandHud {
     private static final IslandText title = new IslandText();
     private static final IslandText artist = new IslandText();
     private static final IslandText timing = new IslandText();
+    private static final IslandText pillRow = new IslandText();
     private static final Frame frame = new Frame();
 
     private static MediaTrack shownTrack = MediaTrack.NONE;
@@ -137,8 +138,8 @@ public final class IslandHud {
         float cardWave = HudConfig.islandVisualizer() ? WAVE_GAP + WAVE_CARD_WIDTH : 0.0f;
         float pillTitle = PAD + FACE + GAP + clamp(UiRender.measure(graphics, font, title.value(),
                 TITLE_PILL_SCALE), TITLE_MIN, TITLE_MAX) + pillWave + PAD;
-        float pillTiming = PAD + FACE + GAP + UiRender.measure(graphics, font, timing.value(), TIME_SCALE)
-                + PILL_TIME_GAP + PILL_BAR_MIN + PAD;
+        float pillTiming = PAD + FACE + GAP + UiRender.measure(graphics, font, pillRow.value(), TIME_SCALE)
+                + (untimed() ? 0.0f : PILL_TIME_GAP + PILL_BAR_MIN) + PAD;
         float pill = Math.max(pillTitle, pillTiming * (1.0f - frame.blind));
         float card = PAD + ART + GAP + clamp(Math.max(
                 UiRender.measure(graphics, font, title.value(), TITLE_CARD_SCALE),
@@ -269,11 +270,11 @@ public final class IslandHud {
         float left = x + PAD + frame.avatar + GAP;
         float timed = 0.0f;
         if (HudConfig.islandTime()) {
-            UiRender.labelScaled(graphics, font, timing.value(), left, y + PILL_TIME_TOP, TIME_SCALE,
+            UiRender.labelScaled(graphics, font, pillRow.value(), left, y + PILL_TIME_TOP, TIME_SCALE,
                     UiTheme.alpha(inked(), fade));
-            timed = UiRender.measure(graphics, font, timing.value(), TIME_SCALE) + PILL_TIME_GAP;
+            timed = UiRender.measure(graphics, font, pillRow.value(), TIME_SCALE) + PILL_TIME_GAP;
         }
-        if (!HudConfig.islandBar()) return;
+        if (!HudConfig.islandBar() || untimed()) return;
 
         float barLeft = left + timed;
         float span = x + frame.width - PAD - barLeft;
@@ -304,7 +305,7 @@ public final class IslandHud {
         float span = x + frame.width - PAD - barX;
         if (span <= 8.0f) return;
 
-        if (HudConfig.islandBar()) {
+        if (HudConfig.islandBar() && !untimed()) {
             UiGlass.sunken(graphics, barX, y + CARD_BAR_TOP, span, BAR_HEIGHT, BAR_HEIGHT / 2.0f, fade * 0.9f);
             UiGlass.progress(graphics, barX, y + CARD_BAR_TOP, span, BAR_HEIGHT, value,
                     UiTheme.alpha(UiAccent.color(), fade), fade);
@@ -421,24 +422,38 @@ public final class IslandHud {
         return Math.max(low, Math.min(high, value));
     }
 
-    // WHY: у слепого трека названия нет, вместо него в строке стоит площадка, с которой шёл звук
+    // WHY: у слепого трека название есть, только если плеер пишет его в заголовок окна, иначе
+    // WHY: в строке стоит площадка или плеер, с которого шёл звук
     private static void refresh(MediaTrack track) {
         if (!track.sameTrack(shownTrack)) {
             shownTrack = track;
-            title.set(track.blind() ? track.origin() : track.title());
+            shownPlayed = -1L;
+            title.set(track.blind() && track.title().isEmpty() ? track.origin() : track.title());
             artist.set(track.artist().isEmpty() ? track.origin() : track.artist());
         }
 
-        stampTiming(Math.max(0L, track.elapsedMs(System.currentTimeMillis()) / 1000L),
+        stampTiming(Math.max(0L, IslandClock.elapsedMs(track, System.currentTimeMillis()) / 1000L),
                 Math.max(0L, track.durationMs() / 1000L));
     }
 
+    // WHY: у трека без длины полосе нечего показывать, и строка таблетки отдаётся исполнителю
+    // WHY: с отсчётом: в таблетке больше негде увидеть, кто играет
     private static void stampTiming(long played, long whole) {
         if (played == shownPlayed && whole == shownWhole) return;
 
         shownPlayed = played;
         shownWhole = whole;
-        timing.set(clock(played) + " / " + clock(whole));
+        if (whole > 0L) {
+            timing.set(clock(played) + " / " + clock(whole));
+            pillRow.set(clock(played) + " / " + clock(whole));
+            return;
+        }
+        timing.set(clock(played));
+        pillRow.set(artist.raw.isEmpty() ? clock(played) : artist.raw + " · " + clock(played));
+    }
+
+    private static boolean untimed() {
+        return shownTrack.durationMs() <= 0L;
     }
 
     private static String clock(long seconds) {
