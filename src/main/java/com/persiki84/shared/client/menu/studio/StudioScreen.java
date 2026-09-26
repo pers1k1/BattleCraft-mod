@@ -65,6 +65,7 @@ public abstract class StudioScreen extends GlassScreen {
     protected final StudioStack inspector = new StudioStack();
     protected final StudioStack canvas = new StudioStack();
     protected final StudioShelf shelf = new StudioShelf(this::layout);
+    protected final StudioMenu contextMenu = new StudioMenu();
     private final Map<String, String> due = new LinkedHashMap<>();
     private final Smooth artShown = new Smooth(0.0f, ART_SPEED);
     private Screen parent;
@@ -216,6 +217,18 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     protected void renderCanvasOverlay(GuiGraphics graphics, int mouseX, int mouseY) {
+    }
+
+    protected List<StudioMenu.Action> tileActions(int index) {
+        return List.of();
+    }
+
+    protected List<StudioMenu.Action> nodeActions(StudioNav.Node node) {
+        return List.of();
+    }
+
+    protected List<StudioMenu.Action> canvasActions() {
+        return List.of();
     }
 
     protected int contentWidth() {
@@ -449,6 +462,7 @@ public abstract class StudioScreen extends GlassScreen {
         renderCanvasOverlay(graphics, mouseX, mouseY);
         renderCarriedPick(graphics);
         if (modalOpen()) renderModal(graphics, this.width / 2.0f, contentTop() + panelHeight() / 2.0f, mouseX, mouseY);
+        contextMenu.render(graphics, mouseX, mouseY);
         MenuFeedback.render(graphics, this.width / 2.0f, panelBottom() + GAP);
         renderTooltip(graphics, mouseX, mouseY);
     }
@@ -545,7 +559,7 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     private void renderTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
-        if (carryingTile || carryingPick || carryingNode) return;
+        if (carryingTile || carryingPick || carryingNode || contextMenu.showing()) return;
 
         ItemStack stack = hoveredStack(mouseX, mouseY);
         if (stack.isEmpty()) return;
@@ -579,12 +593,46 @@ public abstract class StudioScreen extends GlassScreen {
             if (!modalClick(x, y, button)) closeModal();
             return true;
         }
+        if (contextMenu.showing()) {
+            if (contextMenu.click(x, y)) return true;
+            contextMenu.close();
+            if (button != 1) return true;
+        }
+        if (button == 1 && openContext(x, y)) return true;
         if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
         if (pressArt(x, y)) return dropFocus();
         if (nav.over(x, y)) return dropFocus() && pressNav(x, y);
         if (gridCanvas() && grid.over(x, y)) return dropFocus() && pressGrid(x, y);
         if (shelfOpen() && shelf.over(x, y)) return dropFocus() && pressShelf(x, y);
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    // WHY: правая кнопка сначала выбирает вещь, как левая, и только потом открывает меню: свойства
+    // WHY: справа и строки меню говорят об одном и том же, и действие меню берёт выбранное
+    private boolean openContext(double x, double y) {
+        List<StudioMenu.Action> actions = contextActions(x, y);
+        if (actions == null) return false;
+        dropFocus();
+        contextMenu.show(actions, x, y, this.width, this.height);
+        return true;
+    }
+
+    private List<StudioMenu.Action> contextActions(double x, double y) {
+        if (nav.over(x, y)) {
+            StudioNav.Node node = nav.at(x, y);
+            if (node == null) return List.of();
+            if (!node.key().equals(selectedNode())) {
+                flushCommits();
+                selectNode(node);
+                layout();
+            }
+            return nodeActions(node);
+        }
+        if (!gridCanvas() || !grid.over(x, y)) return null;
+        int index = grid.pick(x, y, tiles().size());
+        if (index < 0) return canvasActions();
+        if (index != selectedTile()) chooseTile(index);
+        return tileActions(index);
     }
 
     // WHY: сетка и список рисуются мимо виджетов экрана, и щелчок по ним не снимал фокус с поля:
@@ -751,6 +799,7 @@ public abstract class StudioScreen extends GlassScreen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
         if (leaving() || modalOpen()) return true;
+        contextMenu.close();
 
         double x = localX(mouseX);
         double y = localY(mouseY);
@@ -771,6 +820,10 @@ public abstract class StudioScreen extends GlassScreen {
 
     @Override
     public boolean keyPressed(int key, int scan, int modifiers) {
+        if (key == GLFW.GLFW_KEY_ESCAPE && contextMenu.showing()) {
+            contextMenu.close();
+            return true;
+        }
         if (key == GLFW.GLFW_KEY_ESCAPE && modalOpen()) {
             closeModal();
             return true;

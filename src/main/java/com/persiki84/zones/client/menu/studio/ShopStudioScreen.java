@@ -3,11 +3,13 @@ package com.persiki84.zones.client.menu.studio;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.gunsmith.GunsmithScreen;
 import com.persiki84.shared.client.menu.pick.ItemShelf;
+import com.persiki84.shared.client.menu.studio.StudioMenu;
 import com.persiki84.shared.client.menu.studio.StudioNav;
 import com.persiki84.shared.client.menu.studio.StudioScreen;
 import com.persiki84.shared.client.menu.studio.StudioStack;
 import com.persiki84.shared.client.menu.studio.StudioTile;
 import com.persiki84.shared.client.ui.UiButton;
+import com.persiki84.shared.gunsmith.GunSmith;
 import com.persiki84.zones.client.ClientShopData;
 import com.persiki84.zones.client.menu.ShopGunBench;
 import com.persiki84.zones.client.menu.ShopScreen;
@@ -430,6 +432,78 @@ public final class ShopStudioScreen extends StudioScreen {
         cachedVersion = -1;
         grid.reveal(slot, owner.entries().size());
         grid.flash(slot);
+    }
+
+    @Override
+    protected List<StudioMenu.Action> tileActions(int index) {
+        ShopEntry entry = tiles.get(index).entry();
+        List<StudioMenu.Action> actions = new ArrayList<>();
+        actions.add(StudioMenu.Action.of("studio.menu.copy", this::copyEntry));
+        actions.add(StudioMenu.Action.of("studio.menu.guns", this::openGuns).when(GunSmith.isGun(entry.stack())));
+        actions.add(StudioMenu.Action.of("studio.menu.first", () -> placeEntry(entry, 1)).when(index > 0));
+        actions.add(StudioMenu.Action.of("studio.menu.last", () -> placeEntry(entry, tiles.size()))
+                .when(index < tiles.size() - 1));
+        if (!entry.access().everyone()) actions.add(StudioMenu.Action.of("studio.menu.show_all", () -> openToAll(entry)));
+        actions.add(StudioMenu.Action.danger("studio.menu.delete", this::removeEntry));
+        return actions;
+    }
+
+    private void placeEntry(ShopEntry entry, int position) {
+        ShopNode node = node();
+        if (node != null) send(COMMAND + "item order " + node.section() + " " + entry.id() + " to " + position);
+    }
+
+    private void openToAll(ShopEntry entry) {
+        ShopNode node = node();
+        if (node != null) send(COMMAND + "access item " + node.section() + " " + entry.id() + " everyone");
+    }
+
+    @Override
+    protected List<StudioMenu.Action> nodeActions(StudioNav.Node picked) {
+        ShopNode node = ShopNode.parse(picked.key());
+        if (node == null) return List.of();
+        List<String> siblings = node.top() ? sectionIds() : childIdsOf(node);
+        int place = siblings.indexOf(node.top() ? node.section() : node.child());
+        List<StudioMenu.Action> actions = new ArrayList<>();
+        if (node.top()) actions.add(StudioMenu.Action.of("studio.menu.new_child", this::createChild));
+        actions.add(StudioMenu.Action.of("studio.menu.rename", this::rename));
+        actions.add(StudioMenu.Action.of("studio.menu.add", this::openShelf));
+        actions.add(StudioMenu.Action.of("studio.menu.up", () -> shift(node, "up")).when(place > 0));
+        actions.add(StudioMenu.Action.of("studio.menu.down", () -> shift(node, "down")).when(place < siblings.size() - 1));
+        actions.add(StudioMenu.Action.careful(node.top() ? "studio.menu.delete_section" : "studio.menu.delete_child",
+                this::removeNode));
+        return actions;
+    }
+
+    @Override
+    protected List<StudioMenu.Action> canvasActions() {
+        if (node() == null) return List.of(StudioMenu.Action.of("studio.menu.new_section", this::createSection));
+        return List.of(StudioMenu.Action.of("studio.menu.add", this::openShelf),
+                StudioMenu.Action.of("studio.menu.new_section", this::createSection));
+    }
+
+    private static List<String> childIdsOf(ShopNode node) {
+        ShopSection top = node.topSection();
+        return top == null ? List.of() : top.childIds();
+    }
+
+    private void shift(ShopNode node, String direction) {
+        send(node.top() ? COMMAND + "section order " + node.section() + " " + direction
+                : COMMAND + "subsection order " + node.section() + " " + node.child() + " " + direction);
+    }
+
+    private void rename() {
+        entryId = null;
+        adding = false;
+        inspectorRows.focusTitle();
+        layout();
+    }
+
+    private void openShelf() {
+        entryId = null;
+        adding = true;
+        inspectorRows.rest();
+        layout();
     }
 
     @Override

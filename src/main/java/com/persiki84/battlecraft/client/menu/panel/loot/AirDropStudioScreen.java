@@ -7,11 +7,14 @@ import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.pick.ItemShelf;
+import com.persiki84.shared.client.menu.gunsmith.GunsmithScreen;
+import com.persiki84.shared.client.menu.studio.StudioMenu;
 import com.persiki84.shared.client.menu.studio.StudioNav;
 import com.persiki84.shared.client.menu.studio.StudioScreen;
 import com.persiki84.shared.client.menu.studio.StudioStack;
 import com.persiki84.shared.client.menu.studio.StudioTile;
 import com.persiki84.shared.client.ui.UiButton;
+import com.persiki84.shared.gunsmith.GunSmith;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -439,6 +442,76 @@ public final class AirDropStudioScreen extends StudioScreen {
             return base() + "slot " + pick.slot() + " " + count + " " + count + " " + chance;
         }
         return base() + "add " + ItemShelf.spec(pick.stack()) + " 1 1 " + chance;
+    }
+
+    @Override
+    protected List<StudioMenu.Action> tileActions(int index) {
+        if (tableName() == null) return cacheActions((CacheTile) tiles.get(index));
+        int last = table().entries().size() - 1;
+        boolean gun = GunSmith.isGun(LootSnapshot.stack(table().entries().get(index)));
+        return List.of(StudioMenu.Action.of("studio.menu.copy", this::copyEntry),
+                StudioMenu.Action.of("studio.menu.guns", () -> openEntryGuns(index)).when(gun),
+                StudioMenu.Action.of("studio.menu.first", () -> moveTile(index, 0)).when(index > 0),
+                StudioMenu.Action.of("studio.menu.last", () -> moveTile(index, last)).when(index < last),
+                StudioMenu.Action.danger("studio.menu.delete", this::removeEntry));
+    }
+
+    private void openEntryGuns(int index) {
+        LootGunBench bench = new LootGunBench(tableName());
+        GunsmithScreen.open(bench, bench.positionOf(index), this);
+    }
+
+    private List<StudioMenu.Action> cacheActions(CacheTile cache) {
+        String prefix = "airdrop cache " + cache.id() + " ";
+        return List.of(StudioMenu.Action.of("studio.menu.fill", () -> now(prefix + "fill")),
+                StudioMenu.Action.of("studio.menu.empty", () -> now(prefix + "empty")),
+                StudioMenu.Action.of("studio.menu.tp", () -> now(prefix + "tp")),
+                StudioMenu.Action.of("studio.menu.open_table", () -> openTable(cache.table())),
+                StudioMenu.Action.careful("studio.menu.remove_cache", () -> removeCache(prefix)));
+    }
+
+    private void removeCache(String prefix) {
+        now(prefix + "remove");
+        selectedCache = -1;
+        layout();
+    }
+
+    @Override
+    protected List<StudioMenu.Action> nodeActions(StudioNav.Node picked) {
+        if (DROP.equals(picked.key())) return dropActions();
+        if (CACHES.equals(picked.key())) return canvasActions();
+        LootSnapshot.Table current = currentTable();
+        boolean airdrop = current != null && current.airdrop();
+        boolean deletable = current != null && !airdrop && current.caches() == 0;
+        return List.of(StudioMenu.Action.of("studio.menu.roll", this::roll).when(!table().entries().isEmpty()),
+                StudioMenu.Action.of("studio.menu.add", this::openShelf),
+                StudioMenu.Action.of("studio.menu.airdrop_table", () -> now("airdrop config table " + tableName()))
+                        .when(current != null && !airdrop),
+                StudioMenu.Action.careful("studio.menu.delete_table", this::deleteTable).when(deletable));
+    }
+
+    private List<StudioMenu.Action> dropActions() {
+        return List.of(StudioMenu.Action.of("studio.menu.drop_now", () -> now("airdrop now")),
+                StudioMenu.Action.of("studio.menu.drop_here", () -> now("airdrop spawn")));
+    }
+
+    @Override
+    protected List<StudioMenu.Action> canvasActions() {
+        if (CACHES.equals(selectedNode())) {
+            return List.of(StudioMenu.Action.of("studio.menu.aim", this::addLookedAt),
+                    StudioMenu.Action.of("studio.menu.fill_all", () -> now("airdrop cache fill_all")));
+        }
+        if (tableName() == null) return List.of();
+        return List.of(StudioMenu.Action.of("studio.menu.add", this::openShelf),
+                StudioMenu.Action.of("studio.menu.roll", this::roll).when(!table().entries().isEmpty()));
+    }
+
+    private void openShelf() {
+        flushCommits();
+        selectedEntry = -1;
+        adding = true;
+        lootRows.rest();
+        layout();
     }
 
     @Override

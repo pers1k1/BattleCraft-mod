@@ -8,6 +8,7 @@ import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.ToggleRow;
 import com.persiki84.shared.client.menu.pick.ItemShelf;
+import com.persiki84.shared.client.menu.studio.StudioMenu;
 import com.persiki84.shared.client.menu.studio.StudioNav;
 import com.persiki84.shared.client.menu.studio.StudioScreen;
 import com.persiki84.shared.client.menu.studio.StudioStack;
@@ -381,6 +382,30 @@ public final class SellStudioScreen extends StudioScreen {
         }
         send(COMMAND + "price set " + item + " " + newPrice);
         selectedItem = item;
+    }
+
+    @Override
+    protected List<StudioMenu.Action> tileActions(int index) {
+        if (currencyNode()) return List.of(StudioMenu.Action.of("studio.menu.change_currency", this::openShelf));
+        return List.of(StudioMenu.Action.danger("studio.menu.remove_price", this::removeSelected));
+    }
+
+    @Override
+    protected List<StudioMenu.Action> nodeActions(StudioNav.Node picked) {
+        return canvasActions();
+    }
+
+    @Override
+    protected List<StudioMenu.Action> canvasActions() {
+        String key = currencyNode() ? "studio.menu.change_currency" : "studio.menu.add";
+        return List.of(StudioMenu.Action.of(key, this::openShelf));
+    }
+
+    private void openShelf() {
+        flushCommits();
+        adding = true;
+        turntable.rest();
+        layout();
     }
 
     @Override

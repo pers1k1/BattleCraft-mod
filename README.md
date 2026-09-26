@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.26v3` in files, `26.09.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.26v4` in files, `26.09.26v4 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -835,6 +835,11 @@ Version 2026.09.26 - built and started on a dedicated server, the new commands c
 ## Items with tags on the shelf, 26 September 2026 (v3)
 
 - All items on the editor shelf lists what the creative inventory lists, with every variant and its tags, plus registry items that sit in no creative tab. A TACZ gun used to be a single untagged `modern_kinetic_gun`; now every gun, potion and enchanted book is its own tile, and it goes into the shop or a loot table with its tag. `shop item id` reads the item in the item argument syntax, so an id with a tag is accepted.
+
+## Right-click menus in the editors, 26 September 2026 (v4)
+
+- A right click on a tile, on a section in the tree or on empty space in the shop, airdrop and buyback editors selects the thing and opens a menu at the cursor. Shop items: copy, attachments, move to start or end, open to every team, delete. Sections and parts: new part, rename, add items, move up or down, delete. Loot entries: copy, attachments, move to start or end, delete. Caches: fill, empty, teleport, open the table, remove. Loot tables: test roll, add items, use for the airdrop, delete. Buyback: remove a price, change the currency.
+- The menu unfolds from the click point with a slight spring, its rows slide in one after another, the highlight glides to the row under the cursor, and it shrinks and fades when it closes. Destructive entries are red and set apart by a rule; deleting a section, a part, a table or a cache asks for a second click right in the row. Esc, scrolling or a click outside closes it.
 
 ## Releases
 
