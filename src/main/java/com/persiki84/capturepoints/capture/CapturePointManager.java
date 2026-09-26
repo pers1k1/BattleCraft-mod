@@ -20,15 +20,21 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.AABB;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.registries.ForgeRegistries;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -51,8 +57,11 @@ public class CapturePointManager {
     private static MinecraftServer currentServer;
     private static final String DATA_FOLDER = "capturepoints";
     private static final String DATA_FILE = "points.dat";
+    private static final String BROKEN_SUFFIX = ".broken-";
+    private static final DateTimeFormatter BROKEN_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     private static long ticks;
+    private static boolean loadFailed;
 
     public static void addCapturePoint(CapturePoint point) {
         capturePoints.put(point.getName(), point);
@@ -114,8 +123,10 @@ public class CapturePointManager {
         }
     }
 
+    // WHY: вне матча захватов нет, и точка, оставшаяся за командой с прошлого раза, не должна
+    // WHY: капать доходом и баффом в лобби
     private static void updatePassiveEffects() {
-        if (currentServer == null) return;
+        if (currentServer == null || !MatchState.running()) return;
 
         for (CapturePoint point : capturePoints.values()) {
             String owner = point.getOwnerTeam();
@@ -190,29 +201,53 @@ public class CapturePointManager {
         if (currentServer == null) return;
 
         for (CapturePoint point : capturePoints.values()) {
-            if (point.getPassiveIncomeAmount() <= 0 && point.getBuffEffect() == null) continue;
-
             ServerLevel level = levelOf(point);
-            if (level == null) continue;
+            if (level == null || !entitiesLoadedAt(level, point.getPosition())) continue;
 
-            ArmorStand hologram = findHologram(level, point);
+            if (!hasBonus(point)) {
+                removeHologramAt(point);
+                continue;
+            }
+            ArmorStand hologram = keepSingleHologram(level, point);
             if (hologram == null) hologram = spawnHologram(level, point);
             if (hologram != null) hologram.setCustomName(hologramText(point));
         }
+    }
+
+    private static boolean hasBonus(CapturePoint point) {
+        return point.getPassiveIncomeAmount() > 0 || point.getBuffEffect() != null;
+    }
+
+    // WHY: стойку в незагруженном чанке не найти, и рядом ставилась бы вторая, пока первая ждёт
+    // WHY: загрузки сущностей
+    private static boolean entitiesLoadedAt(ServerLevel level, BlockPos pos) {
+        return level.hasChunkAt(pos) && level.areEntitiesLoaded(ChunkPos.asLong(pos));
     }
 
     public static ServerLevel levelOf(CapturePoint point) {
         return currentServer == null ? null : currentServer.getLevel(point.getDimension());
     }
 
-    private static ArmorStand findHologram(ServerLevel level, CapturePoint point) {
-        List<ArmorStand> stands = level.getEntitiesOfClass(ArmorStand.class,
-                new AABB(point.getPosition()).inflate(1), CapturePointManager::isHologram);
+    private static ArmorStand keepSingleHologram(ServerLevel level, CapturePoint point) {
+        List<ArmorStand> stands = hologramsAt(level, point);
         if (stands.isEmpty()) return null;
 
-        ArmorStand found = stands.get(0);
-        found.addTag(HOLOGRAM_TAG);
-        return found;
+        ArmorStand kept = stands.get(0);
+        kept.addTag(HOLOGRAM_TAG);
+        for (int index = 1; index < stands.size(); index++) {
+            stands.get(index).discard();
+        }
+        return kept;
+    }
+
+    private static List<ArmorStand> hologramsAt(ServerLevel level, CapturePoint point) {
+        return level.getEntitiesOfClass(ArmorStand.class, hologramBounds(point), CapturePointManager::isHologram);
+    }
+
+    // WHY: стойка висит на HOLOGRAM_LIFT над центром, а рамка в блок вокруг центра её не
+    // WHY: доставала: поиск промахивался, и каждые 100 тиков вставала новая стойка навечно
+    private static AABB hologramBounds(CapturePoint point) {
+        return new AABB(point.getPosition()).inflate(1).expandTowards(0, HOLOGRAM_LIFT, 0);
     }
 
     private static boolean isHologram(ArmorStand stand) {
@@ -430,7 +465,7 @@ public class CapturePointManager {
             point.resetCooldown();
         }
 
-        persist();
+        flush();
         syncPoints();
         syncFinalPoints();
     }
@@ -471,9 +506,7 @@ public class CapturePointManager {
         ServerLevel level = levelOf(point);
         if (level == null) return;
 
-        List<ArmorStand> stands = level.getEntitiesOfClass(ArmorStand.class,
-                new AABB(point.getPosition()).inflate(1), CapturePointManager::isHologram);
-        for (ArmorStand stand : stands) {
+        for (ArmorStand stand : hologramsAt(level, point)) {
             stand.discard();
         }
     }
@@ -503,8 +536,15 @@ public class CapturePointManager {
                 new com.persiki84.capturepoints.network.GlobalMarkerSyncPacket(globalCaptureMarkers, globalFinalMarkers));
     }
 
+    // WHY: после проваленного чтения в памяти пусто, и запись при остановке или сбросе матча
+    // WHY: затёрла бы файл, если его не удалось отодвинуть; снимает запрет только persist()
+    public static void flush() {
+        if (!loadFailed) persist();
+    }
+
     public static void persist() {
         if (currentServer == null) return;
+        loadFailed = false;
 
         java.nio.file.Path folder = currentServer.getWorldPath(LevelResource.ROOT).resolve(DATA_FOLDER);
         java.nio.file.Path target = folder.resolve(DATA_FILE);
@@ -554,23 +594,33 @@ public class CapturePointManager {
         CaptureSessions.cancelAll();
         capturePoints.clear();
         finalPoints.clear();
+        loadFailed = false;
 
-        try {
-            File dataFolder = server.getWorldPath(LevelResource.ROOT).resolve(DATA_FOLDER).toFile();
-            File dataFile = new File(dataFolder, DATA_FILE);
-            if (!dataFile.exists()) {
-                CapturePointsMod.LOGGER.info("No capture points data found, starting fresh");
-                return;
-            }
-
-            try (FileInputStream fis = new FileInputStream(dataFile)) {
-                restore(net.minecraft.nbt.NbtIo.readCompressed(fis));
-            }
-
+        Path dataFile = server.getWorldPath(LevelResource.ROOT).resolve(DATA_FOLDER).resolve(DATA_FILE);
+        if (!Files.exists(dataFile)) {
+            CapturePointsMod.LOGGER.info("No capture points data found, starting fresh");
+            return;
+        }
+        try (InputStream stream = Files.newInputStream(dataFile)) {
+            restore(net.minecraft.nbt.NbtIo.readCompressed(stream));
             CapturePointsMod.LOGGER.info("Loaded {} capture points and {} final points",
                     capturePoints.size(), finalPoints.size());
         } catch (Exception e) {
+            loadFailed = true;
             CapturePointsMod.LOGGER.error("Failed to load capture points", e);
+            setAside(dataFile);
+        }
+    }
+
+    // WHY: нечитаемый файл уезжает в сторону, а не перезаписывается первым же сохранением:
+    // WHY: карта точек стоит одного лишнего файла на диске
+    private static void setAside(Path file) {
+        Path spoiled = file.resolveSibling(file.getFileName() + BROKEN_SUFFIX + LocalDateTime.now().format(BROKEN_STAMP));
+        try {
+            Files.move(file, spoiled, StandardCopyOption.REPLACE_EXISTING);
+            CapturePointsMod.LOGGER.warn("Unreadable {} moved to {}", file.getFileName(), spoiled.getFileName());
+        } catch (IOException error) {
+            CapturePointsMod.LOGGER.error("Cannot set aside {}", file, error);
         }
     }
 
@@ -578,9 +628,8 @@ public class CapturePointManager {
         finalForOpenerOnly = mainTag.getBoolean("finalForOpenerOnly");
         globalCaptureMarkers = !mainTag.contains("globalCaptureMarkers") || mainTag.getBoolean("globalCaptureMarkers");
         globalFinalMarkers = !mainTag.contains("globalFinalMarkers") || mainTag.getBoolean("globalFinalMarkers");
-        BlockProtectionHandler.setProtectionEnabled(mainTag.getBoolean("blockProtection"));
-        BlockProtectionHandler.setPlayerPlacedBreakable(mainTag.getBoolean("playerPlacedBreakable"));
-        BlockProtectionHandler.setPlacementDenied(mainTag.getBoolean("placementDenied"));
+        BlockProtectionHandler.restore(mainTag.getBoolean("blockProtection"),
+                mainTag.getBoolean("playerPlacedBreakable"), mainTag.getBoolean("placementDenied"));
         com.persiki84.capturepoints.event.PlacedBlocks.load(mainTag);
 
         ListTag pointsList = mainTag.getList("points", Tag.TAG_COMPOUND);

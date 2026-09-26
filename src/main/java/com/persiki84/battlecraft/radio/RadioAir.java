@@ -1,5 +1,6 @@
 package com.persiki84.battlecraft.radio;
 
+import com.persiki84.shared.ActionGate;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.Map;
@@ -11,6 +12,8 @@ import java.util.concurrent.ConcurrentHashMap;
 // WHY: список игроков. Поэтому тик кладёт сюда готовый список получателей, а поток только берёт
 public final class RadioAir {
     private static final long HOLD_MS = 1200L;
+    private static final String ARM_GATE_KEY = "battlecraft_radio_arm";
+    private static final int ARM_GATE_TICKS = 4;
     private static final UUID[] NOBODY = new UUID[0];
 
     private static final Map<UUID, Long> until = new ConcurrentHashMap<>();
@@ -19,7 +22,9 @@ public final class RadioAir {
     private RadioAir() {}
 
     // WHY: нажатие сразу же собирает маршрут, а не ждёт ближайшего обхода: первый кадр звука
-    // WHY: приходит раньше него, и без этого у каждой передачи срезался бы первый слог
+    // WHY: приходит раньше него, и без этого у каждой передачи срезался бы первый слог.
+    // WHY: Сборка маршрута обходит всех игроков и шлёт каждому слушателю пакет, поэтому частые
+    // WHY: заявки только продлевают эфир, а маршрут доберёт ближайший обход по голосу
     public static void set(ServerPlayer player, boolean talking) {
         UUID id = player.getUUID();
         if (!talking) {
@@ -28,7 +33,7 @@ public final class RadioAir {
         }
 
         until.put(id, System.currentTimeMillis() + HOLD_MS);
-        RadioRelay.arm(player);
+        if (ActionGate.allow(player, ARM_GATE_KEY, ARM_GATE_TICKS)) RadioRelay.arm(player);
     }
 
     public static boolean onAir(UUID speaker) {

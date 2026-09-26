@@ -6,6 +6,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.mojang.logging.LogUtils;
 import com.persiki84.shared.zone.ZoneShape;
+import com.persiki84.zones.UnreadableFiles;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -31,23 +32,31 @@ public final class MarkStorage {
 
     private MarkStorage() {}
 
-    public static List<MapMark> load(ServerLevel level) {
+    public static List<MapMark> load(ServerLevel level) throws IOException {
         List<MapMark> marks = new ArrayList<>();
         Path path = WorldFiles.pathFor(level, FOLDER, FILE);
         if (path == null || !Files.exists(path)) return marks;
 
+        try {
+            readInto(path, marks);
+        } catch (IOException | RuntimeException error) {
+            LOGGER.error("Failed to read {}", path, error);
+            UnreadableFiles.setAside(path, LOGGER);
+            throw new IOException("Unreadable " + path, error);
+        }
+        return marks;
+    }
+
+    private static void readInto(Path path, List<MapMark> marks) throws IOException {
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             List<StoredMark> stored = GSON.fromJson(reader, ENTRY_LIST);
-            if (stored == null) return marks;
+            if (stored == null) return;
 
             for (StoredMark entry : stored) {
                 MapMark mark = entry.toMark();
                 if (mark != null) marks.add(mark);
             }
-        } catch (IOException | RuntimeException error) {
-            LOGGER.error("Failed to read {}", path, error);
         }
-        return marks;
     }
 
     public static void save(ServerLevel level, Collection<MapMark> marks) {

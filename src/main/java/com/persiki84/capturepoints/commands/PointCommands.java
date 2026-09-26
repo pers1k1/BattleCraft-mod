@@ -13,6 +13,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.PacketDistributor;
 
 public final class PointCommands {
+    public static final int MAX_SECONDS = 86_400;
 
     private PointCommands() {}
 

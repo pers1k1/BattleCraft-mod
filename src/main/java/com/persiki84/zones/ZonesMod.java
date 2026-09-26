@@ -20,7 +20,7 @@ import com.persiki84.zones.network.ZoneUpsertPacket;
 import com.persiki84.shared.client.menu.MenuScreens;
 import com.persiki84.shared.menu.MenuStates;
 import com.persiki84.zones.client.menu.MarkManagerScreen;
-import com.persiki84.zones.client.menu.ShopAdminScreen;
+import com.persiki84.zones.client.menu.studio.ShopStudioScreen;
 import com.persiki84.zones.client.menu.ZoneManagerScreen;
 import com.persiki84.zones.shop.ShopCatalog;
 import com.persiki84.zones.shop.ShopViewer;
@@ -70,7 +70,7 @@ public class ZonesMod {
 
     private void clientSetup(final FMLClientSetupEvent event) {
         MenuScreens.register(ZONES_MENU_ID, ZoneManagerScreen::new);
-        MenuScreens.register(ShopAdminScreen.MENU_ID, ShopAdminScreen::new);
+        MenuScreens.register(ShopStudioScreen.MENU_ID, ShopStudioScreen::new);
         MenuScreens.register(MarkMenuState.MENU_ID, MarkManagerScreen::new);
     }
 
@@ -85,9 +85,9 @@ public class ZonesMod {
 
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
-        ZoneRegistry.persist();
+        ZoneRegistry.flush();
         ZoneRegistry.unbind();
-        MarkRegistry.persist();
+        MarkRegistry.flush();
         MarkRegistry.unbind();
         MarkTeamWatch.reset();
         ShopCatalog.persist();

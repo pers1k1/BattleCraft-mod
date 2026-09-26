@@ -22,10 +22,15 @@ public enum CacheTier {
     }
 
     public static CacheTier of(String id) {
+        CacheTier known = parse(id);
+        return known == null ? COMMON : known;
+    }
+
+    public static CacheTier parse(String id) {
         for (CacheTier tier : values()) {
-            if (tier.id().equals(id)) return tier;
+            if (tier.id().equalsIgnoreCase(id)) return tier;
         }
-        return COMMON;
+        return null;
     }
 
     public static CacheTier byIndex(int index) {

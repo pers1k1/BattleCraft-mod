@@ -20,28 +20,46 @@ public class KillEventHandler {
         if (!(event.getEntity() instanceof Player victim)) return;
         if (!(event.getSource().getEntity() instanceof ServerPlayer killer)) return;
         if (killer == victim) return;
+        if (!rivals(killer, victim)) return;
 
-        if (!KillRewardMod.rewardTeamKills) {
-            Team killerTeam = killer.getTeam();
-            Team victimTeam = victim.getTeam();
-            if (killerTeam != null && victimTeam != null &&
-                    killerTeam.getName().equals(victimTeam.getName())) {
-                return;
-            }
+        long wait = RepeatKillGuard.secondsLeft(killer.getUUID(), victim.getUUID());
+        if (wait > 0L) {
+            killer.displayClientMessage(Component.translatable("killreward.repeat_kill",
+                    victim.getName().getString(), wait).withStyle(ChatFormatting.GRAY), true);
+            return;
         }
 
+        RepeatKillGuard.remember(killer.getUUID(), victim.getUUID());
         giveReward(killer, victim.getName().getString());
+    }
+
+    // WHY: в матче без команды стоят только те, кто ещё не выбрал сторону: такую жертву можно было
+    // WHY: завести вторым аккаунтом и убивать ради награды, ни с кем не воюя
+    private static boolean rivals(ServerPlayer killer, Player victim) {
+        Team victimTeam = victim.getTeam();
+        if (victimTeam == null) return !KillRewardMod.matchActive();
+
+        Team killerTeam = killer.getTeam();
+        if (killerTeam == null || KillRewardMod.rewardTeamKills) return true;
+        return !killerTeam.getName().equals(victimTeam.getName());
+    }
+
+    // WHY: награда больше стака одним предметом уходила клиенту байтом количества и терялась:
+    // WHY: выдаётся стаками предельного размера, остаток падает под ноги
+    private static void hand(ServerPlayer player, net.minecraft.world.item.Item item, int amount) {
+        int left = amount;
+        while (left > 0) {
+            ItemStack stack = new ItemStack(item, Math.min(left, item.getMaxStackSize()));
+            left -= stack.getCount();
+            if (!player.getInventory().add(stack)) player.drop(stack, false);
+        }
     }
 
     private void giveReward(ServerPlayer player, String victimName) {
         var item = KillRewardMod.getRewardItem();
         if (item != null) {
-            ItemStack reward = new ItemStack(item, KillRewardMod.rewardAmount);
             String itemName = item.getDescription().getString();
-
-            if (!player.getInventory().add(reward)) {
-                player.drop(reward, false);
-            }
+            hand(player, item, KillRewardMod.rewardAmount);
 
             player.sendSystemMessage(
                     Component.translatable("killreward.kill_rewarded", victimName,

@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.persiki84.airdrop.AirDropFiles;
 import com.persiki84.airdrop.AirDropMod;
 import com.persiki84.shared.WorldFiles;
 
@@ -15,6 +16,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,6 +34,7 @@ public final class LootTables {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static final Map<String, LootTable> TABLES = new TreeMap<>();
+    private static final Set<String> UNREADABLE = new HashSet<>();
     private static Path folder;
 
     private LootTables() {}
@@ -39,6 +42,7 @@ public final class LootTables {
     public static void reload(Path configDir) {
         folder = configDir.resolve(FOLDER);
         TABLES.clear();
+        UNREADABLE.clear();
         readFolder();
         if (!TABLES.containsKey(AIRDROP)) TABLES.put(AIRDROP, LootTable.empty(AIRDROP));
     }
@@ -69,6 +73,7 @@ public final class LootTables {
             TABLES.put(name, LootTable.fromJson(name, json));
         } catch (Exception error) {
             AirDropMod.LOGGER.warn("[airdrop] cannot read loot table {}: {}", fileName, error.toString());
+            UNREADABLE.add(name);
         }
     }
 
@@ -97,7 +102,11 @@ public final class LootTables {
         return TABLES.containsKey(name);
     }
 
+    // WHY: вместо нечитаемой таблицы в памяти стоит пустая или её нет вовсе, и первая правка
+    // WHY: записала бы эту пустоту поверх файла: битый файл до правки не трогается, а на правке
+    // WHY: сначала уезжает в сторону, чтобы его содержимое можно было восстановить руками
     public static void put(LootTable table) {
+        if (UNREADABLE.remove(table.name()) && folder != null) AirDropFiles.setAside(fileOf(table.name()));
         TABLES.put(table.name(), table);
         save(table);
     }

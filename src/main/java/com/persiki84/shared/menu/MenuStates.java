@@ -18,6 +18,10 @@ public final class MenuStates {
         sources.put(menuId, new Source(permission, snapshot));
     }
 
+    public static boolean registered(String menuId) {
+        return sources.containsKey(menuId);
+    }
+
     public static CompoundTag snapshot(String menuId, ServerPlayer player) {
         Source source = sources.get(menuId);
         if (source == null || !player.hasPermissions(source.permission())) return null;

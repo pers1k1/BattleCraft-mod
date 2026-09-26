@@ -25,6 +25,8 @@ public final class ShopSection {
     public Map<String, ShopSection> children() { return children; }
     public Map<String, ShopEntry> entries() { return entries; }
 
+    public void rename(String newTitle) { title = newTitle; }
+
     public ShopSection child(String childId) { return children.get(childId); }
     public ShopEntry entry(String entryId) { return entries.get(entryId); }
 

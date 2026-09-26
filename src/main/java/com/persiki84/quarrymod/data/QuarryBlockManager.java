@@ -32,6 +32,7 @@ public class QuarryBlockManager {
     private final Map<Long, List<QuarryBlock>> chunkIndex = new ConcurrentHashMap<>();
 
     private long globalCooldownTime = 20000;
+    private volatile boolean dirty;
     private static final long MIN_COOLDOWN = 1000;
     private static final long MAX_COOLDOWN = 3600000;
 
@@ -64,6 +65,7 @@ public class QuarryBlockManager {
             return false;
         }
         this.globalCooldownTime = milliseconds;
+        dirty = true;
         return true;
     }
 
@@ -76,11 +78,12 @@ public class QuarryBlockManager {
             return false;
         }
         customCooldowns.put(new QuarryBlockKey(pos, dimension), milliseconds);
+        dirty = true;
         return true;
     }
 
     public void removeCustomCooldown(BlockPos pos, String dimension) {
-        customCooldowns.remove(new QuarryBlockKey(pos, dimension));
+        if (customCooldowns.remove(new QuarryBlockKey(pos, dimension)) != null) dirty = true;
     }
 
     private long getCooldownTime(BlockPos pos, String dimension) {
@@ -144,6 +147,7 @@ public class QuarryBlockManager {
             QuarryBlock added = new QuarryBlock(pos.immutable(), state, dimension);
             quarryBlocks.put(key, added);
             index(added);
+            dirty = true;
         }
     }
 
@@ -157,6 +161,7 @@ public class QuarryBlockManager {
         customCooldowns.remove(key);
         pendingRegenerations.remove(key);
         if (removed != null) unindex(removed);
+        dirty = true;
     }
 
     public ItemStack getDropForBlock(Block block) {
@@ -188,7 +193,9 @@ public class QuarryBlockManager {
 
         QuarryBlockKey key = new QuarryBlockKey(pos, dimension);
         long readyAt = System.currentTimeMillis() + getCooldownTime(pos, dimension);
-        return pendingRegenerations.putIfAbsent(key, readyAt) == null;
+        boolean claimed = pendingRegenerations.putIfAbsent(key, readyAt) == null;
+        if (claimed) dirty = true;
+        return claimed;
     }
 
     public void excavate(ServerLevel level, BlockPos pos) {
@@ -207,6 +214,8 @@ public class QuarryBlockManager {
     }
 
     public void tickRegenerations(MinecraftServer server) {
+        if (pendingRegenerations.isEmpty()) return;
+
         long now = System.currentTimeMillis();
         List<QuarryBlockKey> toRegenerate = new ArrayList<>();
         for (Map.Entry<QuarryBlockKey, Long> entry : pendingRegenerations.entrySet()) {
@@ -218,11 +227,14 @@ public class QuarryBlockManager {
             regenerate(server, key);
             pendingRegenerations.remove(key);
         }
+        if (!toRegenerate.isEmpty()) dirty = true;
     }
 
+    // WHY: измерение берётся из сохранённой строки, и new ResourceLocation на кривой строке бросал
+    // WHY: исключение в каждом тике сервера: разбор без исключения, неизвестное измерение пропускается
     private void regenerate(MinecraftServer server, QuarryBlockKey key) {
-        ResourceKey<Level> dimKey = ResourceKey.create(Registries.DIMENSION, new ResourceLocation(key.dimension()));
-        ServerLevel level = server.getLevel(dimKey);
+        ResourceLocation dimension = ResourceLocation.tryParse(key.dimension());
+        ServerLevel level = dimension == null ? null : server.getLevel(ResourceKey.create(Registries.DIMENSION, dimension));
         if (level == null) return;
 
         QuarryBlock quarryBlock = quarryBlocks.get(key);
@@ -377,6 +389,14 @@ public class QuarryBlockManager {
 
     public long getGlobalCooldownTime() {
         return globalCooldownTime;
+    }
+
+    // WHY: очередь регенерации писалась только на остановке, и после падения сервера выработка
+    // WHY: оставалась в мире навсегда: изменения копятся флагом и сбрасываются на диск раз в секунду
+    public boolean consumeDirty() {
+        boolean changed = dirty;
+        dirty = false;
+        return changed;
     }
 
     public Map<QuarryBlockKey, Long> getPendingRegenerations() {

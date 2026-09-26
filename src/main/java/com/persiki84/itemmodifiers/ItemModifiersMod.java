@@ -1,6 +1,7 @@
 package com.persiki84.itemmodifiers;
 
 import com.mojang.logging.LogUtils;
+import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -9,6 +10,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.config.ModConfigEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
 
 @Mod(ItemModifiersMod.MODID)
@@ -26,12 +28,16 @@ public class ItemModifiersMod {
     }
 
     // WHY: кеши сбрасывались только командой, и правка файла конфига руками или его перечитывание
-    // WHY: оставляли в игре прежние модификаторы до перезапуска
+    // WHY: оставляли в игре прежние модификаторы до перезапуска. Сброса кеша мало: надетое уже
+    // WHY: держит прежние модификаторы, поэтому они пересчитываются на потоке сервера - событие
+    // WHY: приходит с потока слежения за файлом
     private void onConfigChanged(ModConfigEvent event) {
         if (event.getConfig().getSpec() != ModifierConfig.SPEC) return;
 
         AttributeHandler.markDirty();
         EffectHandler.markDirty();
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server != null) server.execute(() -> AttributeHandler.reapplyAll(server));
     }
 
     @SubscribeEvent

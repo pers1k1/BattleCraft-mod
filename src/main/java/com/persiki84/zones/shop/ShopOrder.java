@@ -26,6 +26,19 @@ public final class ShopOrder {
         return true;
     }
 
+    public static <T> boolean moveTo(Map<String, T> keyed, String id, int position) {
+        List<String> order = new ArrayList<>(keyed.keySet());
+        int from = order.indexOf(id);
+        if (from < 0) return false;
+
+        int to = Math.max(0, Math.min(order.size() - 1, position));
+        if (to == from) return false;
+
+        order.add(to, order.remove(from));
+        rebuild(keyed, order);
+        return true;
+    }
+
     private static <T> void rebuild(Map<String, T> keyed, List<String> order) {
         Map<String, T> previous = new LinkedHashMap<>(keyed);
         keyed.clear();

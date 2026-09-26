@@ -22,7 +22,7 @@ public final class ShopPresence {
         if (event.phase != TickEvent.Phase.END) return;
         if (!(Minecraft.getInstance().screen instanceof ShopScreen shop)) return;
 
-        if (shop.editing()) return;
+        if (shop.previewing()) return;
 
         Zone zone = ZoneOccupancy.current();
         if (zone == null || zone.type() != ZoneType.SHOP) {

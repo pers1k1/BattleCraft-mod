@@ -66,9 +66,11 @@ public class BattleCraftManager {
     private final Map<UUID, Long> teamSwitchAt = new HashMap<>();
     private final Map<UUID, Long> readyToggleAt = new HashMap<>();
     private static final long REJOIN_CHOICE_MS = 10_000L;
+    private static final long GRACE_CEILING_WINDOWS = 2L;
 
     private final java.util.Set<java.util.UUID> graced = new java.util.HashSet<>();
     private long joinGraceUntil = 0;
+    private long lobbyOpenedAt = 0;
     private int lobbyTimer = 0;
     private int lobbyMaxTimer = 0;
     private boolean softDisabled = false;
@@ -160,7 +162,7 @@ public class BattleCraftManager {
             deny(player, Component.translatable("battlecraft.error.switch_cooldown", seconds(cooldown)));
             return false;
         }
-        if (!LobbyRoster.hasRoom(server, teamPool(server), teamName)) {
+        if (!LobbyRoster.hasRoom(server, teamPool(server), teamName, player)) {
             deny(player, Component.translatable("battlecraft.error.team_full", teamName));
             return false;
         }
@@ -261,6 +263,7 @@ public class BattleCraftManager {
         activeVotes.put(teamName, vote);
 
         broadcastToTeam(player.getServer(), teamName, Component.translatable("battlecraft.vote.started", player.getName().getString()).withStyle(ChatFormatting.GOLD));
+        checkVoteResults(player.getServer(), teamName);
         syncToAll(player.getServer());
     }
 
@@ -328,11 +331,13 @@ public class BattleCraftManager {
         matchStartTime = System.currentTimeMillis();
         KillRewardMod.setMatchActive(true);
 
+        // WHY: модули сбрасывают точки, склад и тайники по событию старта, поэтому оно идёт до команд
+        // WHY: старта: иначе владельцы и настройки, выставленные этими командами, тут же стирались
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new MatchEvent.Started(server));
         executeConsoleCommands(server, config.startCommands);
 
         persistMatch(server);
         syncToAll(server);
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new MatchEvent.Started(server));
         return true;
     }
 
@@ -381,12 +386,8 @@ public class BattleCraftManager {
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             com.persiki84.minimap.MapManager.syncMarkers(p);
             com.persiki84.minimap.network.PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> p), emptyPosPacket);
-            
-            PlayerTeam team = server.getScoreboard().getPlayersTeam(p.getScoreboardName());
-            if (team != null) {
-                server.getScoreboard().removePlayerFromTeam(p.getScoreboardName(), team);
-            }
         }
+        emptyMatchTeams(server);
 
         Component msg = winnerTeam != null 
             ? Component.translatable("battlecraft.match.ended.winner", winnerTeam).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)
@@ -398,6 +399,21 @@ public class BattleCraftManager {
          persistMatch(server);
          syncToAll(server);
          net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new MatchEvent.Ended(server));
+    }
+
+    // WHY: команды снимались только с тех, кто онлайн, а сессии вышедших стирает resetState: вышедший
+    // WHY: посреди матча входил уже в следующий матч в прежней команде, мимо выбора, баланса и
+    // WHY: запрета по адресу. Все команды скорборда здесь командные для матча, поэтому пустеют целиком
+    private static void emptyMatchTeams(MinecraftServer server) {
+        Scoreboard scoreboard = server.getScoreboard();
+        for (String teamName : LobbyRoster.pool(server)) {
+            PlayerTeam team = scoreboard.getPlayerTeam(teamName);
+            if (team == null) continue;
+
+            for (String member : List.copyOf(team.getPlayers())) {
+                scoreboard.removePlayerFromTeam(member, team);
+            }
+        }
     }
 
     private void executeConsoleCommands(MinecraftServer server, List<String> commands) {
@@ -419,6 +435,7 @@ public class BattleCraftManager {
         readyToggleAt.clear();
         graced.clear();
         joinGraceUntil = 0;
+        lobbyOpenedAt = 0;
         lobbyTimer = 0;
         lobbyMaxTimer = 0;
         KillRewardMod.setMatchActive(false);
@@ -494,10 +511,20 @@ public class BattleCraftManager {
         undecidedSince.merge(player.getUUID(), now, (stored, fresh) -> Math.max(stored, earliest));
         if (phase != GamePhase.LOBBY || !graced.add(player.getUUID())) return;
 
-        joinGraceUntil = now + config.joinGraceSeconds * 1000L;
+        extendJoinGrace(now);
         server.getPlayerList().broadcastSystemMessage(
                 Component.translatable("battlecraft.lobby.waiting_for", player.getName().getString())
                         .withStyle(ChatFormatting.YELLOW), false);
+    }
+
+    // WHY: каждый новый игрок заново ставил окно ожидания и обнулял отсчёт лобби, поэтому поток
+    // WHY: входов с новых аккаунтов держал лобби вечно. Окно продлевается, но не дальше двух своих
+    // WHY: длин от первого входа в это лобби
+    private void extendJoinGrace(long now) {
+        long window = config.joinGraceSeconds * 1000L;
+        if (lobbyOpenedAt == 0L) lobbyOpenedAt = now;
+
+        joinGraceUntil = Math.min(now + window, lobbyOpenedAt + GRACE_CEILING_WINDOWS * window);
     }
 
     private void assignOverduePlayers(MinecraftServer server) {

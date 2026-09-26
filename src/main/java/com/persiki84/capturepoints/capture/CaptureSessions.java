@@ -6,6 +6,7 @@ import com.persiki84.capturepoints.network.CaptureUpdatePacket;
 import com.persiki84.knockdown.cap.KnockdownCapability;
 import com.persiki84.knockdown.cap.KnockdownProvider;
 import com.persiki84.capturepoints.network.PacketHandler;
+import com.persiki84.immortality.event.ImmortalityHandler;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -116,7 +117,7 @@ public final class CaptureSessions {
 
             if (!team.equals(session.getAttackerTeam())) presentRivals++;
             if (heir == null && heirWanted(session, team)) heir = player;
-            if (admits(session, player, team)) session.mark(player.getUUID(), team);
+            if (admits(session, player, team)) enlist(session, player, team);
         }
 
         if (heir != null && needsCaptor(session)) adopt(session, heir, server);
@@ -155,7 +156,7 @@ public final class CaptureSessions {
         if (busyElsewhere(session, heir.getUUID())) return;
 
         session.setSoloCaptor(heir.getUUID());
-        session.mark(heir.getUUID(), CapturePointManager.teamOf(heir));
+        enlist(session, heir, CapturePointManager.teamOf(heir));
         session.setWipeAnnounced(false);
         glow(heir);
         announce(server, Component.translatable("capturepoints.capture.handed_over",
@@ -169,6 +170,13 @@ public final class CaptureSessions {
         if (session.getMode().solo()) return player.getUUID().equals(session.getSoloCaptor());
         if (session.getMode().teamWide()) return team.equals(session.getAttackerTeam());
         return true;
+    }
+
+    // WHY: бессмертие после возрождения дано для отхода с базы, а не чтобы неуязвимым стоять на
+    // WHY: точке: участник захвата его теряет, как при атаке
+    private static void enlist(CaptureSession session, ServerPlayer player, String team) {
+        session.mark(player.getUUID(), team);
+        ImmortalityHandler.revoke(player, "immortality.lost.capture");
     }
 
     private static boolean busyElsewhere(CaptureSession session, UUID playerId) {
@@ -269,8 +277,10 @@ public final class CaptureSessions {
         return true;
     }
 
+    // WHY: соперник на точке не участник сессии и в totalPresent не входит: без его учёта прогресс
+    // WHY: стоял, пока захватчик бегал вне зоны, и соперник не мог его откатить
     private static boolean frozen(CaptureSession session) {
-        return totalPresent() == 0 && session.anyOutside();
+        return totalPresent() == 0 && presentRivals == 0 && session.anyOutside();
     }
 
     private static float rate(CaptureSession session, int attackers) {
@@ -387,6 +397,7 @@ public final class CaptureSessions {
     }
 
     public static void startByKey(ServerPlayer player, CapturePoint point) {
+        if (player.isSpectator() || !player.isAlive()) return;
         if (!MatchState.running()) {
             player.sendSystemMessage(Component.translatable("capturepoints.capture.match_inactive")
                     .withStyle(ChatFormatting.RED));
@@ -418,7 +429,7 @@ public final class CaptureSessions {
     private static void open(ServerPlayer player, CapturePoint point, String team) {
         CaptureSession session = new CaptureSession(point, team, true);
         if (point.getMode().solo()) session.setSoloCaptor(player.getUUID());
-        session.mark(player.getUUID(), team);
+        enlist(session, player, team);
         sessions.put(point.getName(), session);
 
         glow(player);
@@ -453,7 +464,7 @@ public final class CaptureSessions {
             return;
         }
         session.setSoloCaptor(player.getUUID());
-        session.mark(player.getUUID(), team);
+        enlist(session, player, team);
         session.setWipeAnnounced(false);
         glow(player);
     }

@@ -55,7 +55,7 @@ public final class ModuleMenuStates {
     private ModuleMenuStates() {}
 
     public static void register() {
-        MenuStates.register(AIRDROP, 2, player -> AirDropMenuState.airdrop());
+        MenuStates.register(AIRDROP, 2, player -> AirDropMenuState.airdrop(player.server));
         MenuStates.register(LOOT, 2, player -> AirDropMenuState.loot());
         MenuStates.register(QUARRY, 2, player -> quarry());
         MenuStates.register(KILL_REWARD, 2, player -> killReward());

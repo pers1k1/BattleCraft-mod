@@ -70,10 +70,15 @@ public final class LobbyRoster {
         return neediest;
     }
 
-    public static boolean hasRoom(MinecraftServer server, List<String> teamNames, String teamName) {
+    // WHY: переходящий числился в своей нынешней команде, и переход в полную команду из равной
+    // WHY: проходил как «все команды не меньше»: после него было 1 против 3. Размеры считаются так,
+    // WHY: будто игрок уже вышел из своей
+    public static boolean hasRoom(MinecraftServer server, List<String> teamNames, String teamName,
+                                  ServerPlayer mover) {
         Map<String, List<ServerPlayer>> roster = byTeam(server, teamNames);
         List<ServerPlayer> members = roster.get(teamName);
         if (members == null) return false;
+        roster.values().forEach(team -> team.remove(mover));
 
         int slots = slotsPerTeam(server, teamNames);
         if (members.size() < slots) return true;

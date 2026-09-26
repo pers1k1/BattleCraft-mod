@@ -105,13 +105,18 @@ public class QuarryEventHandler {
     }
 
     // WHY: выдача через инвентарь молча съедала добычу при полных слотах, а награда карьера
-    // WHY: с множителем это десятки предметов: остаток обязан лечь под ноги, а не исчезнуть
+    // WHY: с множителем это десятки предметов: остаток обязан лечь под ноги, а не исчезнуть.
+    // WHY: Выдаётся стопками предельного размера: размер стака идёт по сети байтом, и брошенная
+    // WHY: куча больше 127 доходила до клиента пустой и терялась
     private void award(Player player, ItemStack drop) {
         if (drop.isEmpty() || player.isCreative()) return;
 
-        ItemStack given = drop.copy();
-        player.getInventory().add(given);
-        if (!given.isEmpty()) player.drop(given, false);
+        int perStack = Math.max(1, drop.getMaxStackSize());
+        for (int left = drop.getCount(); left > 0; left -= perStack) {
+            ItemStack given = drop.copyWithCount(Math.min(left, perStack));
+            player.getInventory().add(given);
+            if (!given.isEmpty()) player.drop(given, false);
+        }
     }
 
     // WHY: ломание отменено, и ваниль не тратит ни прочность, ни сытость: кирка копала карьер вечно

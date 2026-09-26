@@ -67,6 +67,7 @@ public final class ShopCommand {
     };
 
     private static final int KEEP_RESTOCK = -1;
+    private static final int TITLE_LIMIT = 48;
 
     private ShopCommand() {}
 
@@ -91,9 +92,16 @@ public final class ShopCommand {
                         .then(Commands.argument("section", StringArgumentType.word())
                                 .suggests(SECTIONS)
                                 .executes(ShopCommand::removeSection)))
+                .then(Commands.literal("rename")
+                        .then(Commands.argument("section", StringArgumentType.word()).suggests(SECTIONS)
+                                .then(Commands.argument("title", StringArgumentType.greedyString())
+                                        .executes(ShopCommand::renameSection))))
                 .then(Commands.literal("order")
                         .then(order(Commands.argument("section", StringArgumentType.word()).suggests(SECTIONS),
-                                ShopCommand::orderSection)));
+                                ShopCommand::orderSection)
+                                .then(Commands.literal("to")
+                                        .then(Commands.argument("position", IntegerArgumentType.integer(1))
+                                                .executes(ShopCommand::placeSection)))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> subsectionBranch() {
@@ -110,9 +118,17 @@ public final class ShopCommand {
                                 .then(Commands.argument("subsection", StringArgumentType.word())
                                         .suggests(CHILDREN)
                                         .executes(ShopCommand::removeSubsection))))
+                .then(Commands.literal("rename")
+                        .then(sectionNode(Commands.argument("subsection", StringArgumentType.word())
+                                .suggests(CHILDREN)
+                                .then(Commands.argument("title", StringArgumentType.greedyString())
+                                        .executes(ShopCommand::renameSubsection)))))
                 .then(Commands.literal("order")
                         .then(sectionNode(order(Commands.argument("subsection", StringArgumentType.word())
-                                .suggests(CHILDREN), ShopCommand::orderSubsection))))
+                                .suggests(CHILDREN), ShopCommand::orderSubsection)
+                                .then(Commands.literal("to")
+                                        .then(Commands.argument("position", IntegerArgumentType.integer(1))
+                                                .executes(ShopCommand::placeSubsection))))))
                 .then(Commands.literal("move")
                         .then(sectionNode(Commands.argument("subsection", StringArgumentType.word())
                                 .suggests(CHILDREN)
@@ -176,6 +192,60 @@ public final class ShopCommand {
 
         ShopCatalog.persist();
         return report(context, "zones.shop.success.moved", entryId);
+    }
+
+    private static int placeSection(CommandContext<CommandSourceStack> context) {
+        String id = StringArgumentType.getString(context, "section");
+        int position = IntegerArgumentType.getInteger(context, "position") - 1;
+        if (!ShopCatalog.moveSectionTo(id, position)) return fail(context, "zones.shop.error.no_move", id);
+        return report(context, "zones.shop.success.moved", id);
+    }
+
+    private static int placeSubsection(CommandContext<CommandSourceStack> context) {
+        ShopSection section = requireSection(context);
+        if (section == null) return 0;
+
+        String childId = StringArgumentType.getString(context, "subsection");
+        int position = IntegerArgumentType.getInteger(context, "position") - 1;
+        if (!ShopOrder.moveTo(section.children(), childId, position)) {
+            return fail(context, "zones.shop.error.no_move", childId);
+        }
+        ShopCatalog.persist();
+        return report(context, "zones.shop.success.moved", childId);
+    }
+
+    private static int renameSection(CommandContext<CommandSourceStack> context) {
+        ShopSection section = requireSection(context);
+        if (section == null) return 0;
+        return rename(context, section);
+    }
+
+    private static int renameSubsection(CommandContext<CommandSourceStack> context) {
+        ShopSection section = requireSection(context);
+        if (section == null) return 0;
+
+        String childId = StringArgumentType.getString(context, "subsection");
+        ShopSection child = section.child(childId);
+        if (child == null) return fail(context, "zones.shop.error.no_subsection", childId);
+        return rename(context, child);
+    }
+
+    private static int rename(CommandContext<CommandSourceStack> context, ShopSection target) {
+        String title = cleanTitle(context);
+        if (title == null) return 0;
+
+        target.rename(title);
+        ShopCatalog.persist();
+        return report(context, "zones.shop.success.renamed", target.id(), title);
+    }
+
+    private static String cleanTitle(CommandContext<CommandSourceStack> context) {
+        String title = StringArgumentType.getString(context, "title").trim();
+        if (title.isEmpty() || title.length() > TITLE_LIMIT) {
+            fail(context, "zones.shop.error.bad_title", TITLE_LIMIT);
+            return null;
+        }
+        return title;
     }
 
     private static int moveSubsection(CommandContext<CommandSourceStack> context) {
@@ -319,6 +389,10 @@ public final class ShopCommand {
                                 .then(Commands.argument("position", IntegerArgumentType.integer(1))
                                         .executes(ShopCommand::placeEntry))))))
                 .then(moveItemBranch())
+                .then(Commands.literal("count").then(sectionNode(entryNode()
+                        .then(Commands.argument("count", IntegerArgumentType.integer(1, ShopEntry.BUNDLE_LIMIT))
+                                .executes(ShopCommand::resizeEntry)))))
+                .then(Commands.literal("copy").then(sectionNode(entryNode().executes(ShopCommand::copyEntry))))
                 .then(stockBranch())
                 .then(restockBranch())
                 .then(scopeBranch());
@@ -354,6 +428,29 @@ public final class ShopCommand {
         target.place(placed);
         ShopCatalog.persist();
         return report(context, "zones.shop.success.item_moved", placed.id(), target.title());
+    }
+
+    private static int resizeEntry(CommandContext<CommandSourceStack> context) {
+        ShopEntry entry = requireEntry(context);
+        if (entry == null) return 0;
+
+        int count = IntegerArgumentType.getInteger(context, "count");
+        entry.setBundle(count);
+        ShopCatalog.persist();
+        return report(context, "zones.shop.success.resized", entry.id(), count);
+    }
+
+    private static int copyEntry(CommandContext<CommandSourceStack> context) {
+        ShopSection owner = entryOwner(context);
+        ShopSection top = owner == null ? null : requireSection(context);
+        if (top == null) return 0;
+
+        ShopEntry entry = owner.entry(StringArgumentType.getString(context, "entry"));
+        ShopEntry copy = entry.copied(freeEntryId(entry.stack(), top));
+        owner.place(copy);
+        ShopOrder.moveTo(owner.entries(), copy.id(), owner.entryIds().indexOf(entry.id()) + 1);
+        ShopCatalog.persist();
+        return report(context, "zones.shop.success.copied", entry.id(), copy.id());
     }
 
     private static RequiredArgumentBuilder<CommandSourceStack, String> entryNode() {
@@ -540,9 +637,16 @@ public final class ShopCommand {
         return owner;
     }
 
+    // WHY: занятый идентификатор отказывается, а не перезаписывается: новый раздел под тем же
+    // WHY: именем молча стирал весь прежний вместе с товарами, складом и доступом
     private static int addSection(CommandContext<CommandSourceStack> context) {
         String id = StringArgumentType.getString(context, "section");
-        ShopCatalog.createSection(id, StringArgumentType.getString(context, "title"));
+        if (ShopCatalog.section(id) != null) return fail(context, "zones.shop.error.section_taken", id);
+
+        String title = cleanTitle(context);
+        if (title == null) return 0;
+
+        ShopCatalog.createSection(id, title);
         return report(context, "zones.shop.success.section_added", id);
     }
 
@@ -557,7 +661,12 @@ public final class ShopCommand {
         if (section == null) return 0;
 
         String childId = StringArgumentType.getString(context, "subsection");
-        section.children().put(childId, new ShopSection(childId, StringArgumentType.getString(context, "title")));
+        if (section.child(childId) != null) return fail(context, "zones.shop.error.subsection_taken", childId);
+
+        String title = cleanTitle(context);
+        if (title == null) return 0;
+
+        section.children().put(childId, new ShopSection(childId, title));
         ShopCatalog.persist();
         return report(context, "zones.shop.success.subsection_added", childId);
     }

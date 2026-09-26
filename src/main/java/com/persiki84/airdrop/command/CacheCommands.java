@@ -69,7 +69,9 @@ public final class CacheCommands {
     private static LiteralArgumentBuilder<CommandSourceStack> tierBranch() {
         return Commands.literal("tier").then(Commands.argument("tier", StringArgumentType.word()).suggests(TIERS)
                 .executes(context -> {
-                    CacheTier tier = CacheTier.of(StringArgumentType.getString(context, "tier"));
+                    String written = StringArgumentType.getString(context, "tier");
+                    CacheTier tier = CacheTier.parse(written);
+                    if (tier == null) return fail(context, "airdrop.cache.bad_tier", written);
                     return change(context, cache -> cache.tier(tier), "airdrop.cache.tier_set",
                             Component.translatable(tier.label()));
                 }));
@@ -85,7 +87,9 @@ public final class CacheCommands {
     }
 
     private static int refill(CommandContext<CommandSourceStack> context, int seconds) {
-        RefillMode mode = RefillMode.of(StringArgumentType.getString(context, "mode"));
+        String written = StringArgumentType.getString(context, "mode");
+        RefillMode mode = RefillMode.parse(written);
+        if (mode == null) return fail(context, "airdrop.cache.bad_refill", written);
         return change(context, cache -> {
             cache.refill(mode);
             if (seconds > 0) cache.refillSeconds(seconds);
@@ -96,7 +100,7 @@ public final class CacheCommands {
         ServerLevel level = context.getSource().getLevel();
         BlockPos pos = BlockPosArgument.getLoadedBlockPos(context, "pos");
         if (!LootTables.exists(table)) return fail(context, "airdrop.loot.no_table", table);
-        if (!CacheContainers.isContainer(level, pos)) return fail(context, "airdrop.cache.not_container");
+        if (!CacheContainers.accepts(level, pos)) return fail(context, "airdrop.cache.not_container");
         if (CacheContainers.covering(level, pos) != null) return fail(context, "airdrop.cache.already");
         if (LootCaches.size() >= LootCaches.LIMIT) return fail(context, "airdrop.cache.limit", LootCaches.LIMIT);
 
@@ -111,6 +115,7 @@ public final class CacheCommands {
         LootCache cache = LootCaches.remove(IntegerArgumentType.getInteger(context, "id"));
         if (cache == null) return fail(context, "airdrop.cache.unknown");
 
+        CacheTicker.emptyIfLoaded(context.getSource().getServer(), cache);
         LootCaches.save();
         return report(context, "airdrop.cache.removed", ChatFormatting.YELLOW, cache.id());
     }
@@ -128,12 +133,19 @@ public final class CacheCommands {
     }
 
     private static int fillAll(CommandContext<CommandSourceStack> context) {
+        var server = context.getSource().getServer();
         int filled = 0;
+        int queued = 0;
         for (LootCache cache : LootCaches.all()) {
-            if (CacheTicker.fillNow(context.getSource().getServer(), cache)) filled++;
+            if (CacheTicker.queueIfUnloaded(server, cache)) {
+                queued++;
+            } else if (CacheTicker.fillNow(server, cache)) {
+                filled++;
+            }
         }
         LootCaches.save();
-        return report(context, "airdrop.cache.filled_all", ChatFormatting.GREEN, filled, LootCaches.size());
+        if (queued == 0) return report(context, "airdrop.cache.filled_all", ChatFormatting.GREEN, filled, LootCaches.size());
+        return report(context, "airdrop.cache.filled_all_queued", ChatFormatting.GREEN, filled, queued, LootCaches.size());
     }
 
     private static int teleport(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

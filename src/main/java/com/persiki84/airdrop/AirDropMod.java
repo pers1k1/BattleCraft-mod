@@ -6,6 +6,7 @@ import com.persiki84.airdrop.cache.LootCaches;
 import com.persiki84.airdrop.command.AirDropCommands;
 import com.persiki84.airdrop.config.AirDropConfig;
 import com.persiki84.airdrop.entity.AirDropEntity;
+import com.persiki84.airdrop.entity.DropTickets;
 import com.persiki84.airdrop.entity.ModEntities;
 import com.persiki84.airdrop.loot.LootTables;
 import com.persiki84.airdrop.network.CacheBroadcast;
@@ -52,7 +53,7 @@ public class AirDropMod {
     private void commonSetup(FMLCommonSetupEvent e) {
         e.enqueueWork(() -> {
             PacketHandler.register();
-            AirDropEntity.registerTickets();
+            DropTickets.register();
             LootTables.reload(FMLPaths.CONFIGDIR.get());
         });
     }
@@ -67,11 +68,15 @@ public class AirDropMod {
         LootCaches.save();
         LootCaches.clear();
         CacheBroadcast.clear();
+        DropTickets.clear();
     }
 
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || !enabled()) return;
+        if (event.phase != TickEvent.Phase.END) return;
+
+        DropTickets.tick(event.getServer());
+        if (!enabled()) return;
 
         CacheTicker.tick(event.getServer());
         CacheBroadcast.tick(event.getServer());
@@ -86,6 +91,7 @@ public class AirDropMod {
 
     @SubscribeEvent
     public void onMatchEnded(MatchEvent.Ended event) {
+        AirDropEntity.mapCleared();
         if (!enabled()) return;
 
         CacheTicker.settleLoaded(event.server());

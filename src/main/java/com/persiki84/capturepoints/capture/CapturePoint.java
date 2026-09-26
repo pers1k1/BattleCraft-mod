@@ -116,9 +116,11 @@ public class CapturePoint {
     public void setShape(ZoneShape shape) { this.area = area.withShape(shape); }
     public void setCaptureTime(int captureTime) { this.captureTime = captureTime; }
     public void setCooldown(int cooldown) { this.cooldown = cooldown; }
+    // WHY: счётчик дохода копился у прошлого владельца, и новый получал выплату сразу после захвата
     public void setOwnerTeam(String ownerTeam) {
         this.ownerTeam = ownerTeam;
         this.lastCaptureTime = System.currentTimeMillis();
+        this.incomeTimer = 0;
     }
     public void setReward(ItemStack reward) { this.reward = reward; }
     public void setRewardAmount(int amount) { this.rewardAmount = amount; }
@@ -184,6 +186,7 @@ public class CapturePoint {
     public void clearOwner() {
         this.ownerTeam = null;
         this.lastCaptureTime = 0;
+        this.incomeTimer = 0;
     }
 
     public ItemStack getIncomeItem() { return incomeItem; }

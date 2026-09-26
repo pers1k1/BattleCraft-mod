@@ -59,10 +59,39 @@ public final class ShopCatalog {
         return true;
     }
 
+    public static boolean moveSectionTo(String id, int position) {
+        if (!ShopOrder.moveTo(sections, id, position)) return false;
+        persist();
+        return true;
+    }
+
     public static ShopSection resolve(String sectionId, String childId) {
         ShopSection section = sections.get(sectionId);
         if (section == null) return null;
         return childId == null || childId.isEmpty() ? section : section.child(childId);
+    }
+
+    // WHY: остатки и отсчёты завоза принадлежат матчу: без сброса команда, выкупившая товар в
+    // WHY: прошлом матче, начинала следующий с пустым складом, а соперник - с полным
+    public static boolean refillAll() {
+        boolean changed = false;
+        for (ShopSection section : sections.values()) {
+            changed |= refillSection(section);
+        }
+        if (changed) persist();
+        return changed;
+    }
+
+    private static boolean refillSection(ShopSection section) {
+        boolean changed = false;
+        for (ShopEntry entry : section.entries().values()) {
+            changed |= !entry.poolKeys().isEmpty();
+            entry.refill();
+        }
+        for (ShopSection child : section.children().values()) {
+            changed |= refillSection(child);
+        }
+        return changed;
     }
 
     public static boolean restockDue(long now) {

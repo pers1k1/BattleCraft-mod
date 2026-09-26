@@ -8,10 +8,12 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 public class C2SClientReportPacket {
     public static final int MAX_PACKS = 16;
     public static final int MAX_NAME = 64;
+    private static final Pattern UNPRINTABLE = Pattern.compile("[\\p{Cntrl}§]");
 
     public final List<String> dropped;
     public final List<String> kept;
@@ -45,8 +47,14 @@ public class C2SClientReportPacket {
         int count = Math.min(names.size(), MAX_PACKS);
         buffer.writeVarInt(count);
         for (int index = 0; index < count; index++) {
-            buffer.writeUtf(names.get(index), MAX_NAME);
+            buffer.writeUtf(clipped(names.get(index)), MAX_NAME);
         }
+    }
+
+    // WHY: writeUtf с пределом бросает на длинной строке, а имя папки пака выбирает игрок: без
+    // WHY: обрезки отчёт не уходил вовсе, и сервер кикал честного игрока как молчащего
+    private static String clipped(String name) {
+        return name.length() <= MAX_NAME ? name : name.substring(0, MAX_NAME);
     }
 
     // WHY: список приходит от клиента, поэтому длина зажимается до чтения строк: иначе заявленный
@@ -55,8 +63,14 @@ public class C2SClientReportPacket {
         int count = Math.min(buffer.readVarInt(), MAX_PACKS);
         List<String> names = new ArrayList<>(Math.max(count, 0));
         for (int index = 0; index < count; index++) {
-            names.add(buffer.readUtf(MAX_NAME));
+            names.add(printable(buffer.readUtf(MAX_NAME)));
         }
         return names;
+    }
+
+    // WHY: имя пака уходит в лог сервера и в чат операторов, а перевод строки и символ цвета в
+    // WHY: нём дорисовывали поддельные строки лога и чужое оформление сообщения
+    private static String printable(String name) {
+        return UNPRINTABLE.matcher(name).replaceAll("");
     }
 }

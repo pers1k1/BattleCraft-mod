@@ -17,6 +17,8 @@ import com.persiki84.battlecraft.rules.ConfigGuardCommand;
 import com.persiki84.battlecraft.rules.GameRulesCommand;
 import com.persiki84.battlecraft.rules.MarkerRangeCommand;
 import com.persiki84.battlecraft.rules.GameRulesEvents;
+import com.persiki84.itemmodifiers.AttributeHandler;
+import com.persiki84.knockdown.events.ModEvents;
 import com.persiki84.minimap.command.MapCommand;
 import com.persiki84.shared.menu.MenuNetwork;
 import com.persiki84.battlecraft.announce.AnnounceCommand;
@@ -30,7 +32,9 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
 
 import java.util.List;
 import java.util.function.BiConsumer;
@@ -110,8 +114,10 @@ public class BattleCraftCommands {
                 }))
                 .then(Commands.literal("yes").executes(context -> castVote(context, true)))
                 .then(Commands.literal("no").executes(context -> castVote(context, false)))
-                .then(Commands.literal("info").executes(context ->
-                        listCommands(context, "Surrender Commands:", config().surrenderCommands)))
+                .then(Commands.literal("info")
+                        .requires(source -> source.hasPermission(2))
+                        .executes(context ->
+                                listCommands(context, "Surrender Commands:", config().surrenderCommands)))
                 .then(addCommandBranch("surrender", config -> config.surrenderCommands))
                 .then(removeCommandBranch(SURRENDER_CMD_SUGGESTIONS, config -> config.surrenderCommands));
     }
@@ -133,6 +139,10 @@ public class BattleCraftCommands {
     private static int lobbyHere(CommandContext<CommandSourceStack> context)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
+        if (player.level().dimension() != Level.OVERWORLD) {
+            context.getSource().sendFailure(Component.translatable("battlecraft.config.lobby_overworld_only"));
+            return 0;
+        }
         BattleCraftConfig config = config();
 
         config.lobbyX = player.getBlockX();
@@ -319,11 +329,20 @@ public class BattleCraftCommands {
     private static int switchModule(CommandContext<CommandSourceStack> context, ModuleId module, boolean enabled) {
         ModuleSwitches.set(module, enabled);
         ModuleEvents.syncToAll(context.getSource().getServer());
+        settleSwitchedModule(context.getSource().getServer(), module, enabled);
 
         context.getSource().sendSuccess(() -> Component.translatable(
                 enabled ? "battlecraft.module.switched_on" : "battlecraft.module.switched_off",
                 Component.translatable(module.label())), true);
         return 1;
+    }
+
+    // WHY: модуль с живым состоянием на игроках не гаснет сам: ваниль сверяет модификаторы
+    // WHY: атрибутов только на смене снаряжения, а сбитых тикает сам нокдаун, и выключенный он
+    // WHY: оставлял их лежать с 1 HP навсегда
+    private static void settleSwitchedModule(MinecraftServer server, ModuleId module, boolean enabled) {
+        if (module == ModuleId.ITEM_MODIFIERS) AttributeHandler.reapplyAll(server);
+        if (module == ModuleId.KNOCKDOWN && !enabled) ModEvents.reviveEveryone(server);
     }
 
     private static int listModules(CommandContext<CommandSourceStack> context) {

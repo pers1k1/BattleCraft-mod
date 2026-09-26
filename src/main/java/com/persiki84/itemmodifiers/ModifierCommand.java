@@ -43,6 +43,7 @@ public class ModifierCommand {
                             boolean v = !ModifierConfig.MOD_ENABLED.get();
                             ModifierConfig.MOD_ENABLED.set(v);
                             ModifierConfig.save();
+                            refresh(ctx);
                             ctx.getSource().sendSuccess(() -> Component.translatable("itemmodifiers.command.toggle", v).withStyle(ChatFormatting.YELLOW), true);
                             return 1;
                         })

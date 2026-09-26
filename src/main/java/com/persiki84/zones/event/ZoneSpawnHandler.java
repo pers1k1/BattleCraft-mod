@@ -13,7 +13,8 @@ import net.minecraft.server.level.ServerLevel;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.phys.AABB;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -24,6 +25,7 @@ import java.util.Random;
 public class ZoneSpawnHandler {
     private static final Random RANDOM = new Random();
     private static final int PLACEMENT_ATTEMPTS = 8;
+    private static final int HEADROOM_BLOCKS = 2;
 
     @SubscribeEvent
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
@@ -34,9 +36,7 @@ public class ZoneSpawnHandler {
         if (spawn == null) return;
 
         ServerLevel level = levelOf(player, spawn);
-        BlockPos target = spawn.spawnsAtAnchor()
-                ? surfaceAt(level, spawn.spawnAnchor())
-                : pickPlacement(level, spawn.area());
+        BlockPos target = spawnTarget(level, player, spawn);
         player.teleportTo(level, target.getX() + 0.5, target.getY(), target.getZ() + 0.5,
                 player.getYRot(), player.getXRot());
     }
@@ -60,13 +60,28 @@ public class ZoneSpawnHandler {
         return null;
     }
 
-    private static BlockPos pickPlacement(ServerLevel level, ZoneArea area) {
-        BlockPos fallback = surfaceAt(level, area.center());
-        for (int attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt++) {
-            BlockPos candidate = surfaceAt(level, randomInside(area));
-            if (area.contains(candidate.getX() + 0.5, candidate.getY(), candidate.getZ() + 0.5)) return candidate;
+    // WHY: высоту якоря задал оператор, и она значима: поиск по карте высот уводил из бункера
+    // WHY: на крышу, а в Незере на бедрок потолка; клетка выше спасает якорь, поставленный на ковре
+    private static BlockPos spawnTarget(ServerLevel level, ServerPlayer player, Zone spawn) {
+        if (spawn.spawnsAtAnchor()) {
+            BlockPos anchor = spawn.spawnAnchor();
+            level.getChunkAt(anchor);
+            if (fitsPlayer(level, player, anchor)) return anchor;
+            if (fitsPlayer(level, player, anchor.above())) return anchor.above();
         }
-        return fallback;
+        return pickPlacement(level, player, spawn.area());
+    }
+
+    private static BlockPos pickPlacement(ServerLevel level, ServerPlayer player, ZoneArea area) {
+        for (int attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt++) {
+            BlockPos column = randomInside(area);
+            if (!area.containsHorizontally(column.getX() + 0.5, column.getZ() + 0.5)) continue;
+
+            BlockPos standing = standingSpotIn(level, player, area, column);
+            if (standing != null) return standing;
+        }
+        BlockPos central = standingSpotIn(level, player, area, area.center());
+        return central != null ? central : area.center();
     }
 
     private static BlockPos randomInside(ZoneArea area) {
@@ -75,9 +90,32 @@ public class ZoneSpawnHandler {
         return BlockPos.containing(area.centerX() + offsetX, area.center().getY(), area.centerZ() + offsetZ);
     }
 
-    private static BlockPos surfaceAt(ServerLevel level, BlockPos pos) {
-        level.getChunkAt(pos);
-        BlockPos surface = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, pos);
-        return surface.getY() > level.getMinBuildHeight() ? surface : pos;
+    // WHY: скан сверху зоны вниз, но не выше логической высоты мира: в Незере зона, уходящая
+    // WHY: выше потолка, иначе первой свободной клеткой отдавала крышу над бедроком
+    private static BlockPos standingSpotIn(ServerLevel level, ServerPlayer player, ZoneArea area, BlockPos column) {
+        level.getChunkAt(column);
+        int ceiling = level.getMinBuildHeight() + level.getLogicalHeight() - HEADROOM_BLOCKS;
+        int top = Math.min((int) Math.floor(area.maxY()), ceiling);
+        int bottom = Math.max((int) Math.ceil(area.minY()), level.getMinBuildHeight() + 1);
+
+        BlockPos.MutableBlockPos feet = new BlockPos.MutableBlockPos(column.getX(), top, column.getZ());
+        for (int y = top; y >= bottom; y--) {
+            feet.setY(y);
+            if (standable(level, feet) && fitsPlayer(level, player, feet)) return feet.immutable();
+        }
+        return null;
+    }
+
+    private static boolean standable(ServerLevel level, BlockPos feet) {
+        BlockPos below = feet.below();
+        if (level.getBlockState(below).getCollisionShape(level, below).isEmpty()) return false;
+        if (!level.getFluidState(feet).isEmpty()) return false;
+        return level.getBlockState(feet).getCollisionShape(level, feet).isEmpty();
+    }
+
+    private static boolean fitsPlayer(ServerLevel level, ServerPlayer player, BlockPos feet) {
+        AABB body = player.getDimensions(Pose.STANDING)
+                .makeBoundingBox(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5);
+        return level.noCollision(player, body);
     }
 }

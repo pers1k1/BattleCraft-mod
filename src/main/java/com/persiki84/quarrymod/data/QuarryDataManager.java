@@ -13,11 +13,17 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
 public class QuarryDataManager {
     private static final String FILE_NAME = "quarry_blocks.dat";
+    private static final String BROKEN_SUFFIX = ".broken-";
+    private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private static final int COMPOUND = 10;
 
     private final File dataFile;
     private final QuarryBlockManager blockManager;
@@ -29,6 +35,10 @@ public class QuarryDataManager {
         this.blockManager = new QuarryBlockManager();
     }
 
+    public void saveIfDirty() {
+        if (blockManager.consumeDirty()) save();
+    }
+
     public void save() {
         CompoundTag compound = new CompoundTag();
 
@@ -37,19 +47,7 @@ public class QuarryDataManager {
             blockList.add(block.toNBT());
         }
         compound.put("quarryBlocks", blockList);
-
-        ListTag customCooldownList = new ListTag();
-        for (Map.Entry<QuarryBlockKey, Long> entry : blockManager.getCustomCooldowns().entrySet()) {
-            CompoundTag cdTag = new CompoundTag();
-            cdTag.putInt("x", entry.getKey().pos().getX());
-            cdTag.putInt("y", entry.getKey().pos().getY());
-            cdTag.putInt("z", entry.getKey().pos().getZ());
-            cdTag.putString("dimension", entry.getKey().dimension());
-            cdTag.putLong("cooldown_ms", entry.getValue());
-            customCooldownList.add(cdTag);
-        }
-        compound.put("customCooldowns", customCooldownList);
-
+        compound.put("customCooldowns", writeTimes(blockManager.getCustomCooldowns(), "cooldown_ms"));
         compound.putLong("globalCooldownTime", blockManager.getGlobalCooldownTime());
 
         ListTag ruleList = new ListTag();
@@ -57,20 +55,23 @@ public class QuarryDataManager {
             ruleList.add(rule.toNBT());
         }
         compound.put("blockRules", ruleList);
-
-        ListTag pendingRegenList = new ListTag();
-        for (Map.Entry<QuarryBlockKey, Long> entry : blockManager.getPendingRegenerations().entrySet()) {
-            CompoundTag regenTag = new CompoundTag();
-            regenTag.putInt("x", entry.getKey().pos().getX());
-            regenTag.putInt("y", entry.getKey().pos().getY());
-            regenTag.putInt("z", entry.getKey().pos().getZ());
-            regenTag.putString("dimension", entry.getKey().dimension());
-            regenTag.putLong("target_time", entry.getValue());
-            pendingRegenList.add(regenTag);
-        }
-        compound.put("pendingRegenerations", pendingRegenList);
+        compound.put("pendingRegenerations", writeTimes(blockManager.getPendingRegenerations(), "target_time"));
 
         store(compound);
+    }
+
+    private static ListTag writeTimes(Map<QuarryBlockKey, Long> times, String field) {
+        ListTag list = new ListTag();
+        for (Map.Entry<QuarryBlockKey, Long> entry : times.entrySet()) {
+            CompoundTag tag = new CompoundTag();
+            tag.putInt("x", entry.getKey().pos().getX());
+            tag.putInt("y", entry.getKey().pos().getY());
+            tag.putInt("z", entry.getKey().pos().getZ());
+            tag.putString("dimension", entry.getKey().dimension());
+            tag.putLong(field, entry.getValue());
+            list.add(tag);
+        }
+        return list;
     }
 
     // WHY: запись шла прямо в целевой файл, и падение посреди неё оставляло обрубок вместо карьера
@@ -97,48 +98,60 @@ public class QuarryDataManager {
         if (!dataFile.exists()) return;
 
         try {
-            CompoundTag compound = NbtIo.readCompressed(dataFile);
-
-            ListTag blockList = compound.getList("quarryBlocks", 10);
-            Map<QuarryBlockKey, QuarryBlock> blocks = new HashMap<>();
-            for (int i = 0; i < blockList.size(); i++) {
-                QuarryBlock block = QuarryBlock.fromNBT(blockList.getCompound(i));
-                QuarryBlockKey key = new QuarryBlockKey(block.getPos(), block.getDimension());
-                blocks.put(key, block);
-            }
-
-            Map<QuarryBlockKey, Long> customCooldowns = new HashMap<>();
-            ListTag customCooldownList = compound.getList("customCooldowns", 10);
-            for (int i = 0; i < customCooldownList.size(); i++) {
-                CompoundTag cdTag = customCooldownList.getCompound(i);
-                BlockPos pos = new BlockPos(cdTag.getInt("x"), cdTag.getInt("y"), cdTag.getInt("z"));
-                String dimension = cdTag.getString("dimension");
-                long cooldownMs = cdTag.getLong("cooldown_ms");
-                customCooldowns.put(new QuarryBlockKey(pos, dimension), cooldownMs);
-            }
-
-            long globalCooldown = compound.contains("globalCooldownTime") ? compound.getLong("globalCooldownTime") : 20000;
-
-            Map<QuarryBlockKey, Long> pendingRegenerations = new HashMap<>();
-            ListTag pendingRegenList = compound.getList("pendingRegenerations", 10);
-            for (int i = 0; i < pendingRegenList.size(); i++) {
-                CompoundTag regenTag = pendingRegenList.getCompound(i);
-                BlockPos pos = new BlockPos(regenTag.getInt("x"), regenTag.getInt("y"), regenTag.getInt("z"));
-                String dimension = regenTag.getString("dimension");
-                long targetTime = regenTag.getLong("target_time");
-                pendingRegenerations.put(new QuarryBlockKey(pos, dimension), targetTime);
-            }
-
-            blockManager.loadData(blocks, customCooldowns, pendingRegenerations, globalCooldown);
-            blockManager.loadRules(readRules(compound));
+            apply(NbtIo.readCompressed(dataFile));
         } catch (IOException | RuntimeException error) {
             QuarryMod.LOGGER.warn("[quarry] cannot read {}: {}", FILE_NAME, error.toString());
+            quarantine();
         }
+    }
+
+    private void apply(CompoundTag compound) {
+        long globalCooldown = compound.contains("globalCooldownTime") ? compound.getLong("globalCooldownTime") : 20000;
+        blockManager.loadData(readBlocks(compound), readTimes(compound, "customCooldowns", "cooldown_ms"),
+                readTimes(compound, "pendingRegenerations", "target_time"), globalCooldown);
+        blockManager.loadRules(readRules(compound));
+    }
+
+    // WHY: после битого чтения карьер пуст, и первая же запись легла бы пустотой поверх всех блоков
+    // WHY: и очереди регенерации: файл уезжает в сторону, чтобы его можно было восстановить руками,
+    // WHY: а сохранение ждёт настоящей правки - флаг изменений после загрузки чист
+    private void quarantine() {
+        Path source = dataFile.toPath();
+        Path spoiled = source.resolveSibling(FILE_NAME + BROKEN_SUFFIX + LocalDateTime.now().format(STAMP));
+        try {
+            Files.move(source, spoiled, StandardCopyOption.REPLACE_EXISTING);
+            QuarryMod.LOGGER.warn("[quarry] unreadable {} moved to {}", FILE_NAME, spoiled.getFileName());
+        } catch (IOException error) {
+            QuarryMod.LOGGER.warn("[quarry] cannot set aside {}: {}", FILE_NAME, error.toString());
+        }
+    }
+
+    // WHY: одна запись с неизвестным блоком роняла чтение целиком, и следующая запись стирала весь
+    // WHY: карьер: такая запись пропускается, остальные читаются
+    private static Map<QuarryBlockKey, QuarryBlock> readBlocks(CompoundTag compound) {
+        Map<QuarryBlockKey, QuarryBlock> blocks = new HashMap<>();
+        ListTag blockList = compound.getList("quarryBlocks", COMPOUND);
+        for (int index = 0; index < blockList.size(); index++) {
+            QuarryBlock block = QuarryBlock.fromNBT(blockList.getCompound(index));
+            if (block != null) blocks.put(new QuarryBlockKey(block.getPos(), block.getDimension()), block);
+        }
+        return blocks;
+    }
+
+    private static Map<QuarryBlockKey, Long> readTimes(CompoundTag compound, String list, String field) {
+        Map<QuarryBlockKey, Long> times = new HashMap<>();
+        ListTag stored = compound.getList(list, COMPOUND);
+        for (int index = 0; index < stored.size(); index++) {
+            CompoundTag tag = stored.getCompound(index);
+            BlockPos pos = new BlockPos(tag.getInt("x"), tag.getInt("y"), tag.getInt("z"));
+            times.put(new QuarryBlockKey(pos, tag.getString("dimension")), tag.getLong(field));
+        }
+        return times;
     }
 
     private static java.util.List<QuarryBlockRule> readRules(CompoundTag compound) {
         java.util.List<QuarryBlockRule> rules = new java.util.ArrayList<>();
-        ListTag stored = compound.getList("blockRules", 10);
+        ListTag stored = compound.getList("blockRules", COMPOUND);
         for (int index = 0; index < stored.size(); index++) {
             QuarryBlockRule rule = QuarryBlockRule.fromNBT(stored.getCompound(index));
             if (rule != null) rules.add(rule);

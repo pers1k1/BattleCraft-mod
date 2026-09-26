@@ -12,6 +12,7 @@ import java.util.Map;
 public final class ShopEntry {
     public static final int UNLIMITED = -1;
     public static final int DESCRIPTION_LIMIT = 160;
+    public static final int BUNDLE_LIMIT = 64;
     public static final String OWN_POOL = "";
 
     private final String id;
@@ -79,8 +80,19 @@ public final class ShopEntry {
         pools.clear();
     }
 
+    // WHY: распроданный без завоза склад стоит с нулевой отметкой готовности, и включённый потом
+    // WHY: завоз его не оживлял: пустые склады получают отсчёт от момента включения
     public void setRestockSeconds(int seconds) {
         this.restockSeconds = Math.max(0, seconds);
+        if (restockSeconds <= 0) return;
+        long due = System.currentTimeMillis() + restockSeconds * 1000L;
+        for (StockPool pool : pools.values()) {
+            pool.scheduleIfIdle(due);
+        }
+    }
+
+    public void refill() {
+        pools.clear();
     }
 
     // WHY: склады разных областей несопоставимы: личный остаток нельзя выдать команде,
@@ -100,6 +112,21 @@ public final class ShopEntry {
             copy.pools.put(pool.getKey(), new StockPool(pool.getValue().available(), pool.getValue().readyAt()));
         }
         return copy;
+    }
+
+    public ShopEntry copied(String newId) {
+        ShopEntry copy = new ShopEntry(newId, stack.copy(), price, description);
+        copy.access.restore(access.list());
+        copy.stock = stock;
+        copy.restockSeconds = restockSeconds;
+        copy.scope = scope;
+        return copy;
+    }
+
+    // WHY: запас хранится связками, поэтому смена размера покупки сохраняет число связок,
+    // WHY: а не штук: иначе остаток разный у тех, кто уже покупал, и у тех, кто ещё нет
+    public void setBundle(int count) {
+        stack.setCount(Math.max(1, count));
     }
 
     public void restorePool(String key, int available, long readyAt) {

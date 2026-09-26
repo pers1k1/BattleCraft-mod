@@ -2,6 +2,7 @@ package com.persiki84.zones.mark;
 
 import net.minecraft.server.level.ServerLevel;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -12,19 +13,31 @@ public final class MarkRegistry {
     private static final Map<String, MapMark> marks = new ConcurrentHashMap<>();
 
     private static ServerLevel currentLevel;
+    private static boolean loadFailed;
 
     private MarkRegistry() {}
 
     public static void bind(ServerLevel level) {
         currentLevel = level;
         marks.clear();
-        for (MapMark mark : MarkStorage.load(level)) {
+        loadFailed = false;
+        for (MapMark mark : readStored(level)) {
             marks.put(mark.id(), mark);
+        }
+    }
+
+    private static List<MapMark> readStored(ServerLevel level) {
+        try {
+            return MarkStorage.load(level);
+        } catch (IOException unreadable) {
+            loadFailed = true;
+            return List.of();
         }
     }
 
     public static void unbind() {
         marks.clear();
+        loadFailed = false;
         currentLevel = null;
     }
 
@@ -57,6 +70,17 @@ public final class MarkRegistry {
     }
 
     public static void persist() {
+        loadFailed = false;
+        save();
+    }
+
+    // WHY: после проваленного чтения в памяти пусто, и запись при остановке затёрла бы файл,
+    // WHY: если его не удалось отодвинуть; запрет снимает первая правка оператора через persist()
+    public static void flush() {
+        if (!loadFailed) save();
+    }
+
+    private static void save() {
         if (currentLevel == null) return;
         MarkStorage.save(currentLevel, marks.values());
     }

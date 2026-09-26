@@ -2,12 +2,20 @@ package com.persiki84.zones.event;
 
 import com.persiki84.zones.Zone;
 import com.persiki84.zones.ZoneLookup;
+import com.persiki84.zones.ZoneRegistry;
 import com.persiki84.zones.ZoneRule;
 import com.persiki84.zones.ZonesMod;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.decoration.HangingEntity;
+import net.minecraft.world.entity.vehicle.ContainerEntity;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.piston.PistonStructureResolver;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -25,10 +33,12 @@ import net.minecraftforge.event.entity.player.FillBucketEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
 import net.minecraftforge.event.entity.living.MobSpawnEvent;
+import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ExplosionEvent;
+import net.minecraftforge.event.level.PistonEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -123,6 +133,84 @@ public final class ZoneRuleGuard {
         refuse(player, zone, "zones.rule.denied.interact");
     }
 
+    // WHY: рамки, картины, стойки и сундуки на колёсах это сущности, и запрет ломать блоки их не
+    // WHY: касался: разметку зоны сносили ударом, а содержимое забирали правым кликом
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void onDecorAttack(AttackEntityEvent event) {
+        Player player = event.getEntity();
+        if (player.level().isClientSide || player.isCreative() || muted() || !isDecor(event.getTarget())) return;
+
+        Entity target = event.getTarget();
+        Zone zone = ZoneLookup.barring(ZoneRule.BLOCK_BREAK, player, ZoneLookup.dimensionOf(target),
+                target.getX(), target.getY(), target.getZ());
+        if (zone == null) return;
+
+        event.setCanceled(true);
+        refuse(player, zone, "zones.rule.denied.block_break");
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void onDecorInteract(PlayerInteractEvent.EntityInteract event) {
+        if (refusesDecorUse(event.getEntity(), event.getTarget())) event.setCanceled(true);
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void onDecorInteractAt(PlayerInteractEvent.EntityInteractSpecific event) {
+        if (refusesDecorUse(event.getEntity(), event.getTarget())) event.setCanceled(true);
+    }
+
+    private static boolean refusesDecorUse(Player player, Entity target) {
+        if (player.level().isClientSide || player.isCreative() || muted() || !isDecor(target)) return false;
+
+        Zone zone = ZoneLookup.forbidding(ZoneLookup.dimensionOf(target), ZoneRule.INTERACT,
+                target.getX(), target.getY(), target.getZ());
+        if (zone == null) return false;
+
+        refuse(player, zone, "zones.rule.denied.interact");
+        return true;
+    }
+
+    private static boolean isDecor(Entity entity) {
+        return entity instanceof HangingEntity || entity instanceof ArmorStand || entity instanceof ContainerEntity;
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void onPistonMove(PistonEvent.Pre event) {
+        if (!(event.getLevel() instanceof Level level) || level.isClientSide || muted()) return;
+        if (!ZoneRegistry.anyZoneForbids(ZoneRule.BLOCK_BREAK) && !ZoneRegistry.anyZoneForbids(ZoneRule.BLOCK_PLACE)) {
+            return;
+        }
+        if (pistonTrespasses(level, event)) event.setCanceled(true);
+    }
+
+    // WHY: поршень, стоящий там, где ставить блоки запрещено, поставила сама карта или оператор:
+    // WHY: это механизм зоны, и его двери обязаны работать; проверяем только чужие поршни
+    private static boolean pistonTrespasses(Level level, PistonEvent.Pre event) {
+        if (zoneForbiddingAt(ZoneRule.BLOCK_PLACE, level, event.getPos()) != null) return false;
+
+        boolean extending = event.getPistonMoveType().isExtend;
+        if (!extending && !event.getState().is(Blocks.STICKY_PISTON)) return false;
+
+        PistonStructureResolver structure = event.getStructureHelper();
+        if (structure == null || !structure.resolve()) return false;
+
+        ResourceLocation here = ZoneLookup.dimensionOf(level);
+        if (extending && forbidsAt(here, ZoneRule.BLOCK_PLACE, event.getFaceOffsetPos())) return true;
+        return movesProtectedBlocks(here, structure);
+    }
+
+    private static boolean movesProtectedBlocks(ResourceLocation here, PistonStructureResolver structure) {
+        Direction push = structure.getPushDirection();
+        for (BlockPos moved : structure.getToPush()) {
+            if (forbidsAt(here, ZoneRule.BLOCK_BREAK, moved)) return true;
+            if (forbidsAt(here, ZoneRule.BLOCK_PLACE, moved.relative(push))) return true;
+        }
+        for (BlockPos destroyed : structure.getToDestroy()) {
+            if (forbidsAt(here, ZoneRule.BLOCK_BREAK, destroyed)) return true;
+        }
+        return false;
+    }
+
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onItemToss(ItemTossEvent event) {
         Player player = event.getPlayer();
@@ -186,6 +274,10 @@ public final class ZoneRuleGuard {
     @SubscribeEvent
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         lastDenial.remove(event.getEntity().getUUID());
+    }
+
+    private static boolean forbidsAt(ResourceLocation here, ZoneRule rule, BlockPos pos) {
+        return ZoneLookup.forbids(here, rule, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
     }
 
     private static Zone zoneForbiddingAt(ZoneRule rule, LevelAccessor level, BlockPos pos) {

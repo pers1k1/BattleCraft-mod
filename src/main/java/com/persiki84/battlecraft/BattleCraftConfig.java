@@ -2,12 +2,21 @@ package com.persiki84.battlecraft;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.persiki84.shared.WorldFiles;
 import net.minecraft.core.BlockPos;
 import net.minecraftforge.fml.loading.FMLPaths;
 
+
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Writer;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,20 +52,39 @@ public class BattleCraftConfig {
     public List<String> stopCommands = new ArrayList<>();
     public List<String> surrenderCommands = new ArrayList<>();
 
+    // WHY: нечитаемый файл откладывается в сторону, а не затирается заводскими значениями: в нём
+    // WHY: лежат координаты лобби и команды старта, и ошибка в одной запятой стирала бы их молча
     public static BattleCraftConfig load() {
-        if (!FILE.exists()) {
-            BattleCraftConfig config = new BattleCraftConfig();
-            config.save();
-            return config;
+        if (FILE.exists()) {
+            try {
+                BattleCraftConfig stored = GSON.fromJson(readText(FILE.toPath()), BattleCraftConfig.class);
+                if (stored != null) return stored.withoutMissingLists();
+            } catch (IOException | RuntimeException unreadable) {
+                setAside();
+            }
         }
-        try (FileReader reader = new FileReader(FILE)) {
-            BattleCraftConfig stored = GSON.fromJson(reader, BattleCraftConfig.class);
-            if (stored != null) return stored.withoutMissingLists();
-        } catch (Exception ignored) {}
-
         BattleCraftConfig config = new BattleCraftConfig();
         config.save();
         return config;
+    }
+
+    // WHY: прежние версии писали файл кодировкой системы, на Windows это cp1251: строгое чтение
+    // WHY: UTF-8 откатывается на неё, иначе кириллица в командах старта превратилась бы в мусор
+    private static String readText(Path path) throws IOException {
+        byte[] bytes = Files.readAllBytes(path);
+        try {
+            return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
+        } catch (CharacterCodingException legacy) {
+            return new String(bytes, Charset.defaultCharset());
+        }
+    }
+
+    private static void setAside() {
+        try {
+            Files.move(FILE.toPath(), FILE.toPath().resolveSibling("battlecraft.json.broken-" + System.currentTimeMillis()));
+        } catch (IOException ignored) {
+        }
     }
 
     private BattleCraftConfig withoutMissingLists() {
@@ -67,9 +95,15 @@ public class BattleCraftConfig {
     }
 
     public void save() {
-        try (FileWriter writer = new FileWriter(FILE)) {
-            GSON.toJson(this, writer);
-        } catch (Exception ignored) {}
+        Path target = FILE.toPath();
+        Path temporary = target.resolveSibling("battlecraft.json.tmp");
+        try {
+            try (Writer writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
+                GSON.toJson(this, writer);
+            }
+            WorldFiles.moveIntoPlace(temporary, target);
+        } catch (IOException ignored) {
+        }
     }
 
     public BlockPos getLobbySpawn() {

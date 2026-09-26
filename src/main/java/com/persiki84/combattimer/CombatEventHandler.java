@@ -2,13 +2,17 @@ package com.persiki84.combattimer;
 
 import com.persiki84.knockdown.cap.KnockdownProvider;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerBossEvent;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
 import com.persiki84.battlecraft.network.PacketHandler;
 import com.persiki84.battlecraft.network.S2CCombatStatePacket;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.BossEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
@@ -18,13 +22,17 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class CombatEventHandler {
 
     private static final Map<UUID, Long> combatTimers = new HashMap<>();
     private static final Map<UUID, ServerBossEvent> bossBars = new HashMap<>();
+    private static final Map<UUID, UUID> lastAttackers = new HashMap<>();
+    private static final Set<UUID> punishing = new HashSet<>();
 
     @SubscribeEvent
     public void onDamage(LivingAttackEvent event) {
@@ -32,9 +40,12 @@ public class CombatEventHandler {
         if (!ModuleSwitches.allows(ModuleId.COMBAT_TIMER)) return;
 
         if (event.getEntity() instanceof ServerPlayer victim) {
+            if (punishing.contains(victim.getUUID())) return;
+            if (event.getSource().is(DamageTypeTags.BYPASSES_INVULNERABILITY)) return;
             if (event.getSource().getEntity() instanceof ServerPlayer attacker) {
                 startCombat(victim);
                 startCombat(attacker);
+                if (attacker != victim) lastAttackers.put(victim.getUUID(), attacker.getUUID());
             }
         }
     }
@@ -77,6 +88,7 @@ public class CombatEventHandler {
             if (now >= endTime) {
                 if (bar != null) endCombat(bar);
                 bossBars.remove(uuid);
+                lastAttackers.remove(uuid);
                 iterator.remove();
                 continue;
             }
@@ -106,8 +118,9 @@ public class CombatEventHandler {
 
         UUID uuid = player.getUUID();
         Long endTime = combatTimers.remove(uuid);
+        UUID attackerId = lastAttackers.remove(uuid);
         if (endTime != null && System.currentTimeMillis() < endTime) {
-            punishCombatLog(player);
+            punishCombatLog(player, attackerId);
         }
 
         ServerBossEvent bar = bossBars.remove(uuid);
@@ -125,17 +138,46 @@ public class CombatEventHandler {
         }
         bossBars.clear();
         combatTimers.clear();
+        lastAttackers.clear();
     }
 
-    private void punishCombatLog(ServerPlayer player) {
+    private void punishCombatLog(ServerPlayer player, UUID attackerId) {
         if (!CombatTimerMod.killOnLogout()) {
             announce(player, "combattimer.logout.warning", ChatFormatting.YELLOW);
             return;
         }
 
+        if (executeDeserter(player, attackerId)) {
+            announce(player, "combattimer.logout.killed", ChatFormatting.RED);
+        }
+    }
+
+    // WHY: смерть без атакующего не давала убийце ни награды, ни веса в захвате, хотя бой он выиграл:
+    // WHY: вышедшего добивает тот, кто бил его последним, а безликий kill остаётся запасным путём
+    private boolean executeDeserter(ServerPlayer player, UUID attackerId) {
         player.getCapability(KnockdownProvider.KNOCKDOWN_CAP).ifPresent(cap -> cap.setKnocked(false));
-        player.kill();
-        announce(player, "combattimer.logout.killed", ChatFormatting.RED);
+
+        ServerPlayer attacker = attackerId == null ? null : player.server.getPlayerList().getPlayer(attackerId);
+        if (attacker != null) finishedBy(player, attacker);
+
+        if (!player.isDeadOrDying()) player.kill();
+        return player.isDeadOrDying();
+    }
+
+    // WHY: тип урона тот же GENERIC_KILL, что у kill(): он так же пробивает нокдаун, бессмертие и
+    // WHY: защиту зон, а атакующий в источнике отдаёт зачёт убийства. Удар playerAttack нокдаун
+    // WHY: превращал бы в сбитие, и запасной kill съедал бы награду
+    private void finishedBy(ServerPlayer player, ServerPlayer attacker) {
+        UUID uuid = player.getUUID();
+        DamageSource blow = new DamageSource(player.level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE)
+                .getHolderOrThrow(DamageTypes.GENERIC_KILL), attacker);
+
+        punishing.add(uuid);
+        try {
+            player.hurt(blow, Float.MAX_VALUE);
+        } finally {
+            punishing.remove(uuid);
+        }
     }
 
     private void announce(ServerPlayer player, String key, ChatFormatting color) {
@@ -149,6 +191,7 @@ public class CombatEventHandler {
     public void onPlayerDeath(LivingDeathEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             UUID uuid = player.getUUID();
+            lastAttackers.remove(uuid);
             if (combatTimers.remove(uuid) != null) {
                 ServerBossEvent bar = bossBars.remove(uuid);
                 if (bar != null) endCombat(bar);
@@ -162,6 +205,7 @@ public class CombatEventHandler {
             UUID uuid = player.getUUID();
             bossBars.remove(uuid);
             combatTimers.remove(uuid);
+            lastAttackers.remove(uuid);
         }
     }
 }

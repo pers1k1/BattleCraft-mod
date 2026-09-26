@@ -32,21 +32,55 @@ public final class ShopStorage {
 
     private ShopStorage() {}
 
+    // WHY: каталог, прочитанный не целиком, при первой же записи ляжет поверх файла: поэтому
+    // WHY: нечитаемый файл откладывается в сторону, а при потере отдельных товаров (правка руками,
+    // WHY: предмет из снятого мода) остаётся копия исходника, из которой их можно вернуть
     public static List<ShopSection> load(ServerLevel level) {
         List<ShopSection> result = new ArrayList<>();
         Path path = WorldFiles.pathFor(level, FOLDER, FILE);
         if (path == null || !Files.exists(path)) return result;
 
+        List<StoredSection> stored = read(path);
+        if (stored == null) return result;
+
+        int[] lost = {0};
+        for (StoredSection section : stored) {
+            if (section == null || section.id == null) {
+                lost[0]++;
+                continue;
+            }
+            result.add(section.toSection(lost));
+        }
+        if (lost[0] > 0) keepCopy(path, ".partial-", lost[0]);
+        return result;
+    }
+
+    private static List<StoredSection> read(Path path) {
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             List<StoredSection> stored = GSON.fromJson(reader, SECTION_LIST);
-            if (stored == null) return result;
-            for (StoredSection entry : stored) {
-                result.add(entry.toSection());
-            }
+            return stored == null ? List.of() : stored;
         } catch (IOException | RuntimeException e) {
-            LOGGER.error("Failed to read {}", path, e);
+            LOGGER.error("Failed to read {}, setting it aside", path, e);
+            setAside(path);
+            return null;
         }
-        return result;
+    }
+
+    private static void setAside(Path path) {
+        try {
+            Files.move(path, path.resolveSibling(FILE + ".broken-" + System.currentTimeMillis()));
+        } catch (IOException e) {
+            LOGGER.error("Failed to set aside {}", path, e);
+        }
+    }
+
+    private static void keepCopy(Path path, String suffix, int lost) {
+        LOGGER.warn("{} shop records in {} were unreadable, the original is kept next to it", lost, path);
+        try {
+            Files.copy(path, path.resolveSibling(FILE + suffix + System.currentTimeMillis()));
+        } catch (IOException e) {
+            LOGGER.error("Failed to copy {}", path, e);
+        }
     }
 
     public static void save(ServerLevel level, Collection<ShopSection> sections) {
@@ -94,21 +128,31 @@ public final class ShopStorage {
             return stored;
         }
 
-        private ShopSection toSection() {
+        private ShopSection toSection(int[] lost) {
             ShopSection section = new ShopSection(id, title);
             section.access().restore(teams);
             if (children != null) {
                 for (StoredSection child : children) {
-                    section.children().put(child.id, child.toSection());
+                    if (child == null || child.id == null) {
+                        lost[0]++;
+                        continue;
+                    }
+                    section.children().put(child.id, child.toSection(lost));
                 }
             }
-            if (entries != null) {
-                for (StoredEntry entry : entries) {
-                    ShopEntry built = entry.toEntry();
-                    if (built != null) section.entries().put(built.id(), built);
-                }
-            }
+            if (entries != null) restoreEntries(section, lost);
             return section;
+        }
+
+        private void restoreEntries(ShopSection section, int[] lost) {
+            for (StoredEntry entry : entries) {
+                ShopEntry built = entry == null ? null : entry.toEntry();
+                if (built == null) {
+                    lost[0]++;
+                    continue;
+                }
+                section.entries().put(built.id(), built);
+            }
         }
     }
 
@@ -179,6 +223,7 @@ public final class ShopStorage {
         }
 
         private ShopEntry toEntry() {
+            if (id == null || stackNbt == null) return null;
             try {
                 ItemStack stack = ItemStack.of(TagParser.parseTag(stackNbt));
                 if (stack.isEmpty()) return null;
@@ -189,7 +234,7 @@ public final class ShopStorage {
                 restorePools(entry);
                 entry.access().restore(teams);
                 return entry;
-            } catch (CommandSyntaxException e) {
+            } catch (CommandSyntaxException | RuntimeException e) {
                 LOGGER.warn("Skipping shop entry {} with unreadable item", id, e);
                 return null;
             }

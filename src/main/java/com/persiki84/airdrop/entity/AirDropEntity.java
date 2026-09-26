@@ -46,6 +46,8 @@ public class AirDropEntity extends Entity {
     private static final long NEVER = -1L;
     private static final long NO_CHUNK = Long.MIN_VALUE;
 
+    private static int mapGeneration;
+
     private static final EntityDataAccessor<Float> FALL_SPEED =
             SynchedEntityData.defineId(AirDropEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Boolean> LANDED =
@@ -72,6 +74,7 @@ public class AirDropEntity extends Entity {
     private boolean warnedDespawn;
     private boolean matchSpawned;
     private boolean marked;
+    private int markedGeneration = mapGeneration;
     private long landedAt = NEVER;
     private long emptiedAt = NEVER;
     private long heldChunk = NO_CHUNK;
@@ -80,9 +83,10 @@ public class AirDropEntity extends Entity {
         super(type, level);
     }
 
-    public static void registerTickets() {
-        ForgeChunkManager.setForcedChunkLoadingCallback(AirDropMod.MOD_ID, (level, helper) ->
-                new ArrayList<>(helper.getEntityTickets().keySet()).forEach(helper::removeAllTickets));
+    // WHY: конец матча чистит все метки карты разом, мимо ящиков: уцелевший ящик считал свою
+    // WHY: метку стоящей и пропадал с карты до конца жизни. Смена поколения заставляет поставить её снова
+    public static void mapCleared() {
+        mapGeneration++;
     }
 
     public static int discardAll(MinecraftServer server) {
@@ -150,10 +154,13 @@ public class AirDropEntity extends Entity {
         if (chunk == heldChunk) return;
 
         releaseChunk();
+        ServerLevel server = (ServerLevel) level();
         ChunkPos pos = new ChunkPos(chunk);
-        if (ForgeChunkManager.forceChunk((ServerLevel) level(), AirDropMod.MOD_ID, this, pos.x, pos.z, true, true)) {
-            heldChunk = chunk;
-        }
+        // WHY: false здесь значит «тикет уже стоит» - он пережил перезапуск вместе с ящиком, и
+        // WHY: повторять запрос каждый тик незачем: чанк держится тем же владельцем
+        ForgeChunkManager.forceChunk(server, AirDropMod.MOD_ID, this, pos.x, pos.z, true, true);
+        heldChunk = chunk;
+        DropTickets.claim(server, getUUID(), chunk);
     }
 
     private void releaseChunk() {
@@ -172,9 +179,15 @@ public class AirDropEntity extends Entity {
     }
 
     // WHY: метка ставится при смене состояния, а не каждый тик: каждая установка помечала весь
-    // WHY: список меток грязным, и он уходил всем игрокам на каждой рассылке, пока ящик жив
+    // WHY: список меток грязным, и он уходил всем игрокам на каждой рассылке, пока ящик жив.
+    // WHY: Точка на карте это те же координаты, что скрывает тихое объявление, поэтому без
+    // WHY: объявления координат метки нет
     private void traceOnMap() {
-        boolean wanted = !isLooted();
+        if (markedGeneration != mapGeneration) {
+            markedGeneration = mapGeneration;
+            marked = false;
+        }
+        boolean wanted = !isLooted() && AirDropConfig.SERVER.announceCoords.get();
         if (wanted == marked) return;
 
         marked = wanted;

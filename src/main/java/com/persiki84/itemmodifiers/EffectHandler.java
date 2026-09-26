@@ -29,6 +29,7 @@ public class EffectHandler {
     private static final int PERIOD = 10;
     private static final int DURATION = 45;
     private static final int TICKS_PER_SECOND = 20;
+    private static final int MAX_AMPLIFIER = 9;
     private static final String DEBUFF = "DEBUFF";
 
     private static volatile Map<String, List<PotionEntry>> cache = Map.of();
@@ -101,10 +102,9 @@ public class EffectHandler {
         Map<MobEffect, Integer> debuffs = new HashMap<>();
         for (Map.Entry<String, ItemStack> item : worn.entrySet()) {
             boolean warm = warmup.getOrDefault(item.getKey(), 0) >= ready;
-            for (PotionEntry entry : configured(item.getKey())) {
-                collect(buffs, debuffs, entry.effect(), entry.level(), entry.debuff(), warm);
+            for (PotionEntry entry : granted(item.getKey(), item.getValue()).values()) {
+                collect(buffs, debuffs, entry, warm);
             }
-            collectStored(buffs, debuffs, item.getValue(), warm);
         }
 
         linger(player, debuffs);
@@ -141,8 +141,19 @@ public class EffectHandler {
         return entries().getOrDefault(item, List.of());
     }
 
-    private static void collectStored(Map<MobEffect, Integer> buffs, Map<MobEffect, Integer> debuffs,
-                                      ItemStack stack, boolean warm) {
+    // WHY: запись в NBT предмета и запись в конфиге его вида складывались, и предмет, настроенный
+    // WHY: и командой, и из меню, давал эффект вдвое сильнее. Своя запись предмета перекрывает
+    // WHY: общую для того же эффекта, как и у атрибутов
+    private static Map<MobEffect, PotionEntry> granted(String item, ItemStack stack) {
+        Map<MobEffect, PotionEntry> granted = new HashMap<>();
+        for (PotionEntry entry : configured(item)) {
+            granted.put(entry.effect(), entry);
+        }
+        addStored(granted, item, stack);
+        return granted;
+    }
+
+    private static void addStored(Map<MobEffect, PotionEntry> granted, String item, ItemStack stack) {
         if (!stack.hasTag() || !stack.getTag().contains("ItemModifiersEffects", Tag.TAG_LIST)) return;
 
         ListTag list = stack.getTag().getList("ItemModifiersEffects", Tag.TAG_COMPOUND);
@@ -152,18 +163,30 @@ public class EffectHandler {
                     ResourceLocation.tryParse(compound.getString("Effect")));
             if (effect == null) continue;
 
-            collect(buffs, debuffs, effect, compound.getInt("Level"),
-                    DEBUFF.equals(compound.getString("Type")), warm);
+            granted.put(effect, new PotionEntry(item, effect, compound.getInt("Level"),
+                    DEBUFF.equals(compound.getString("Type"))));
         }
     }
 
     private static void collect(Map<MobEffect, Integer> buffs, Map<MobEffect, Integer> debuffs,
-                                MobEffect effect, int level, boolean debuff, boolean warm) {
-        if (debuff) {
-            debuffs.merge(effect, level, Integer::sum);
+                                PotionEntry entry, boolean warm) {
+        int amplifier = clamped(entry.level());
+        if (entry.debuff()) {
+            debuffs.merge(entry.effect(), amplifier, EffectHandler::stacked);
         } else if (warm) {
-            buffs.merge(effect, level, Integer::sum);
+            buffs.merge(entry.effect(), amplifier, EffectHandler::stacked);
         }
+    }
+
+    // WHY: в записи лежит амплификатор, а уровень на единицу больше: два источника первого уровня
+    // WHY: (0 и 0) обязаны дать второй (1), а простая сумма оставляла первый. Потолок держит сумму
+    // WHY: многих вещей от уровней, при которых эффект перестаёт быть игровым
+    private static int stacked(int held, int added) {
+        return clamped(held + added + 1);
+    }
+
+    private static int clamped(int amplifier) {
+        return Math.max(0, Math.min(MAX_AMPLIFIER, amplifier));
     }
 
     // WHY: остаток дебафа держал только срок, а уровень терял: снятая броня роняла дебаф третьего

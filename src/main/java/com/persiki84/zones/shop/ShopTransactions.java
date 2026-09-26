@@ -1,5 +1,7 @@
 package com.persiki84.zones.shop;
 
+import com.persiki84.knockdown.cap.KnockdownCapability;
+import com.persiki84.knockdown.cap.KnockdownProvider;
 import com.persiki84.sellmod.SellManager;
 import com.persiki84.shared.ActionGate;
 import com.persiki84.zones.Zone;
@@ -44,7 +46,18 @@ public final class ShopTransactions {
             deny(player, "zones.shop.error.not_in_shop");
             return false;
         }
+        if (player.isSpectator() || knocked(player)) {
+            deny(player, "zones.shop.error.downed");
+            return false;
+        }
         return ActionGate.allow(player, DEAL_KEY, DEAL_INTERVAL_TICKS);
+    }
+
+    // WHY: сбитый открывал магазин клавишей зоны, покупал шприц и поднимал себя сам, а зритель
+    // WHY: закупался впрок, пролетая через зону: торговля только стоящему на ногах игроку
+    private static boolean knocked(ServerPlayer player) {
+        KnockdownCapability state = player.getCapability(KnockdownProvider.KNOCKDOWN_CAP).orElse(null);
+        return state != null && state.isKnocked();
     }
 
     public static void purchase(ServerPlayer player, String sectionId, String childId, String entryId, int amount) {

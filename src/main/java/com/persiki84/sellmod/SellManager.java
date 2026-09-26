@@ -2,10 +2,16 @@ package com.persiki84.sellmod;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.persiki84.shared.WorldFiles;
+import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +30,12 @@ import net.minecraftforge.registries.ForgeRegistries;
 
 public class SellManager {
 
+    private static final String CONFIG_FILE = "sellmod.json";
+    private static final String BROKEN_SUFFIX = ".broken-";
+    private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Map<String, SellPrice> SELL_PRICES = new HashMap<>();
+    private static boolean configUnreadable;
 
     public static void init() {
         SELL_PRICES.put("minecraft:coal", new SellPrice("minecraft:coal", 1));
@@ -134,44 +145,85 @@ public class SellManager {
     }
 
     public static void loadConfig() {
-        Path path = FMLPaths.CONFIGDIR.get().resolve("sellmod.json");
-        if (Files.exists(path)) {
-            try (Reader reader = Files.newBufferedReader(path)) {
-                SellConfig config = new Gson().fromJson(reader, SellConfig.class);
-                if (config != null) {
-                    currencyItemName = config.currencyItem;
-                    currencyGuard = config.currencyGuard;
-                    if (config.customPrices != null) {
-                        SELL_PRICES.clear();
-                        for (Map.Entry<String, Integer> entry : config.customPrices.entrySet()) {
-                            SELL_PRICES.put(entry.getKey(), new SellPrice(entry.getKey(), entry.getValue()));
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                SellMod.LOGGER.error("Failed to load SellMod config", e);
-            }
-        } else {
+        Path path = configPath();
+        if (!Files.exists(path)) {
             saveConfig();
+            return;
+        }
+        try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            apply(new Gson().fromJson(reader, SellConfig.class));
+        } catch (Exception e) {
+            SellMod.LOGGER.error("Failed to load SellMod config", e);
+            configUnreadable = true;
         }
     }
 
+    // WHY: таблица чистилась до разбора, и файл, упавший на середине, оставлял магазин без цен:
+    // WHY: цены собираются в новую карту и подменяют старые целиком только после разбора
+    private static void apply(SellConfig config) {
+        if (config == null) return;
+
+        if (config.currencyItem != null) currencyItemName = config.currencyItem;
+        currencyGuard = config.currencyGuard;
+        if (config.customPrices == null) return;
+
+        Map<String, SellPrice> parsed = parsePrices(config.customPrices);
+        SELL_PRICES.clear();
+        SELL_PRICES.putAll(parsed);
+    }
+
+    // WHY: null вместо цены ронял чтение NPE, а нулевая и отрицательная цена забирали предметы
+    // WHY: при продаже, ничего не давая взамен: такие записи отбрасываются
+    private static Map<String, SellPrice> parsePrices(Map<String, Integer> written) {
+        Map<String, SellPrice> parsed = new HashMap<>();
+        for (Map.Entry<String, Integer> entry : written.entrySet()) {
+            Integer price = entry.getValue();
+            if (entry.getKey() == null || price == null || price <= 0) continue;
+
+            parsed.put(entry.getKey(), new SellPrice(entry.getKey(), price));
+        }
+        return parsed;
+    }
+
+    // WHY: запись шла прямо в файл, и падение посреди неё оставляло обрубок, который при следующем
+    // WHY: старте не читался. Нечитаемый файл не перезаписывается: первая правка откладывает его
+    // WHY: в сторону, чтобы цены можно было восстановить руками
     public static void saveConfig() {
-        Path path = FMLPaths.CONFIGDIR.get().resolve("sellmod.json");
+        Path path = configPath();
+        Path temporary = path.resolveSibling(CONFIG_FILE + ".tmp");
         try {
             Files.createDirectories(path.getParent());
-            SellConfig config = new SellConfig();
-            config.currencyItem = currencyItemName;
-            config.currencyGuard = currencyGuard;
-            for (Map.Entry<String, SellPrice> entry : SELL_PRICES.entrySet()) {
-                config.customPrices.put(entry.getKey(), entry.getValue().price);
+            if (configUnreadable) setAside(path);
+            try (Writer writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
+                GSON.toJson(snapshot(), writer);
             }
-            try (Writer writer = Files.newBufferedWriter(path)) {
-                new GsonBuilder().setPrettyPrinting().create().toJson(config, writer);
-            }
+            WorldFiles.moveIntoPlace(temporary, path);
         } catch (Exception e) {
             SellMod.LOGGER.error("Failed to save SellMod config", e);
         }
+    }
+
+    private static SellConfig snapshot() {
+        SellConfig config = new SellConfig();
+        config.currencyItem = currencyItemName;
+        config.currencyGuard = currencyGuard;
+        for (Map.Entry<String, SellPrice> entry : SELL_PRICES.entrySet()) {
+            config.customPrices.put(entry.getKey(), entry.getValue().price);
+        }
+        return config;
+    }
+
+    private static void setAside(Path path) throws IOException {
+        Path spoiled = path.resolveSibling(CONFIG_FILE + BROKEN_SUFFIX + LocalDateTime.now().format(STAMP));
+        if (Files.exists(path)) {
+            Files.move(path, spoiled, StandardCopyOption.REPLACE_EXISTING);
+            SellMod.LOGGER.warn("Unreadable SellMod config moved to {}", spoiled.getFileName());
+        }
+        configUnreadable = false;
+    }
+
+    private static Path configPath() {
+        return FMLPaths.CONFIGDIR.get().resolve(CONFIG_FILE);
     }
 
     // WHY: выручка выдавалась одной кучей, а writeItem пишет размер стака байтом: полный инвентарь

@@ -11,7 +11,6 @@ import com.persiki84.airdrop.loot.LootTable;
 import com.persiki84.shared.gunsmith.GunSlot;
 import com.persiki84.shared.gunsmith.GunSmith;
 import com.persiki84.shared.gunsmith.Outcome;
-import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;

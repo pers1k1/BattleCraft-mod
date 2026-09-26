@@ -4,6 +4,7 @@
   "immortality.error.no_held_item": "You must hold an item in your hand",
   "immortality.respawn.given": "✦ You gained immortality for %s seconds!",
   "immortality.lost.attack": "Attacking removed your immortality",
+  "immortality.lost.capture": "Joining a capture removed your immortality",
   "immortality.command.enable": "Immortality mod ENABLED!",
   "immortality.command.disable": "Immortality mod DISABLED!",
   "immortality.command.status": "Immortality mod: %s ",

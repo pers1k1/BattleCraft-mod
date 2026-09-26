@@ -20,9 +20,14 @@ public enum RefillMode {
     }
 
     public static RefillMode of(String id) {
+        RefillMode known = parse(id);
+        return known == null ? MATCH : known;
+    }
+
+    public static RefillMode parse(String id) {
         for (RefillMode mode : values()) {
-            if (mode.id().equals(id)) return mode;
+            if (mode.id().equalsIgnoreCase(id)) return mode;
         }
-        return MATCH;
+        return null;
     }
 }

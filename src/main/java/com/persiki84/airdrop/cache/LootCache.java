@@ -19,6 +19,7 @@ public final class LootCache {
     private RefillMode refill = RefillMode.MATCH;
     private int refillSeconds = REFILL_DEFAULT;
     private int filledMatch;
+    private int stocked;
     private long filledAt = NEVER;
     private long emptiedAt = NEVER;
     private boolean cleared = true;
@@ -39,6 +40,7 @@ public final class LootCache {
     public RefillMode refill() { return refill; }
     public int refillSeconds() { return refillSeconds; }
     public int filledMatch() { return filledMatch; }
+    public int stocked() { return stocked; }
     public long filledAt() { return filledAt; }
     public long emptiedAt() { return emptiedAt; }
     public boolean cleared() { return cleared; }
@@ -53,17 +55,24 @@ public final class LootCache {
         refillSeconds = Math.max(REFILL_MIN, Math.min(REFILL_MAX, seconds));
     }
 
-    public void filled(int match, long now, boolean nothing) {
+    public void filled(int match, long now, int placed) {
+        boolean nothing = placed == 0;
         filledMatch = match;
         filledAt = now;
+        stocked = placed;
         emptiedAt = nothing ? now : NEVER;
         cleared = false;
         empty = nothing;
     }
 
+    public void queueFill(int match) {
+        filledMatch = match;
+    }
+
     public void clearedOut() {
         cleared = true;
         empty = true;
+        stocked = 0;
         emptiedAt = NEVER;
     }
 
@@ -100,6 +109,7 @@ public final class LootCache {
         object.addProperty("refill", refill.id());
         object.addProperty("refillSeconds", refillSeconds);
         object.addProperty("filledMatch", filledMatch);
+        object.addProperty("stocked", stocked);
         object.addProperty("filledAt", filledAt);
         object.addProperty("emptiedAt", emptiedAt);
         object.addProperty("cleared", cleared);
@@ -132,6 +142,8 @@ public final class LootCache {
     private void readState(JsonObject object) {
         Float match = JsonRead.number(object, "filledMatch");
         filledMatch = match == null ? 0 : match.intValue();
+        Float placed = JsonRead.number(object, "stocked");
+        stocked = placed == null ? 0 : Math.max(0, placed.intValue());
         filledAt = stamp(object, "filledAt");
         emptiedAt = stamp(object, "emptiedAt");
         Boolean wasCleared = JsonRead.flag(object, "cleared");

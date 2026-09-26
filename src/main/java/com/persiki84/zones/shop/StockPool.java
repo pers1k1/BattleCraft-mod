@@ -38,6 +38,10 @@ public final class StockPool {
         return true;
     }
 
+    public void scheduleIfIdle(long due) {
+        if (available <= 0 && readyAt <= 0L) readyAt = due;
+    }
+
     public int remainingSeconds(long now) {
         if (readyAt <= 0L || now >= readyAt) return 0;
         return (int) Math.ceil((readyAt - now) / 1000.0);

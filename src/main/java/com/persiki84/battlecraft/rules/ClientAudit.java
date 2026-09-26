@@ -1,6 +1,7 @@
 package com.persiki84.battlecraft.rules;
 
 import com.persiki84.battlecraft.BattleCraftMod;
+import com.persiki84.shared.ActionGate;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -17,6 +18,8 @@ public final class ClientAudit {
     private static final int SWEEP_TICKS = 20;
     private static final int ADMIN_LEVEL = 2;
     private static final String NAME_SEPARATOR = ", ";
+    private static final String REPORT_GATE_KEY = "battlecraft_client_report";
+    private static final int REPORT_GATE_TICKS = 20;
 
     private static final Map<UUID, Integer> awaited = new HashMap<>();
 
@@ -63,8 +66,13 @@ public final class ClientAudit {
         }
     }
 
+    // WHY: ждём отчёт один раз на рассылку правил, а клиент шлёт его ещё и сам, когда снимает пак
+    // WHY: посреди матча. Непрошеный отчёт режется сторожем, и снятые паки из него не идут ни в
+    // WHY: лог, ни операторам: иначе любой клиент писал бы туда свои строки раз в тик
     public static void accept(ServerPlayer player, List<String> dropped, List<String> kept, boolean glintLoose) {
-        awaited.remove(player.getUUID());
+        boolean asked = awaited.remove(player.getUUID()) != null;
+        if (!asked && !ActionGate.allow(player, REPORT_GATE_KEY, REPORT_GATE_TICKS)) return;
+
         if (glintLoose && GameRules.allows(GameRule.NO_ENCHANT_GLINT)) {
             report(player.server, player, "battlecraft.glint.refused", List.of());
             kick(player, Component.translatable("battlecraft.glint.kicked"));
@@ -81,7 +89,7 @@ public final class ClientAudit {
 
         player.sendSystemMessage(Component.translatable("battlecraft.packs.dropped", names(dropped))
                 .withStyle(ChatFormatting.YELLOW));
-        report(player.server, player, "battlecraft.packs.report", dropped);
+        if (asked) report(player.server, player, "battlecraft.packs.report", dropped);
     }
 
     private static boolean watched() {

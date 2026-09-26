@@ -24,7 +24,11 @@ public final class IslandGlyph {
     private static final float[] BAND_DECIBELS = {-1.277f, -3.687f, 1.353f, -0.083f, -1.338f, -3.379f};
     private static final float LEVEL_POWER = 0.759f;
     private static final float LEVEL_FLOOR = 0.002f;
+    // WHY: у айфона высота срезается о край, и громкий кусок (дроп) ставил полоски столбом в
+    // WHY: потолок. Выше 0.6 высота сжимается плавно и не доходит до края, полоски продолжают плясать
+    private static final float SOFT_TOP = 0.6f;
 
+    private static final float[] weighted = new float[BARS];
     private static final float[] start = new float[BARS];
     private static final float[] goal = new float[BARS];
     private static final float[] reach = new float[BARS];
@@ -98,9 +102,14 @@ public final class IslandGlyph {
     }
 
     private static void listen(float energy) {
-        float scale = MediaGain.scale(loudestBand()) * HudConfig.visualizerGain();
+        float loudest = 0.0f;
         for (int index = 0; index < BARS; index++) {
-            heard[index] = level(weighted(index) * scale) * energy;
+            weighted[index] = MediaWatch.band(index) * bandGain[index];
+            loudest = Math.max(loudest, weighted[index]);
+        }
+        float scale = MediaGain.scale(loudest) * HudConfig.visualizerGain();
+        for (int index = 0; index < BARS; index++) {
+            heard[index] = level(weighted[index] * scale) * energy;
         }
     }
 
@@ -120,21 +129,13 @@ public final class IslandGlyph {
         }
     }
 
-    private static float weighted(int index) {
-        return MediaWatch.band(index) * bandGain[index];
-    }
-
-    private static float loudestBand() {
-        float loudest = 0.0f;
-        for (int index = 0; index < BARS; index++) {
-            loudest = Math.max(loudest, weighted(index));
-        }
-        return loudest;
-    }
-
     private static float level(float amplitude) {
         float lifted = (float) Math.pow(Math.max(0.0f, amplitude), LEVEL_POWER);
-        return UiAnim.clamp01((lifted - floorPower) / (1.0f - floorPower));
+        float height = Math.max(0.0f, (lifted - floorPower) / (1.0f - floorPower));
+        if (height <= SOFT_TOP) return height;
+
+        float room = 1.0f - SOFT_TOP;
+        return SOFT_TOP + room * (float) Math.tanh((height - SOFT_TOP) / room);
     }
 
     private static void glide() {

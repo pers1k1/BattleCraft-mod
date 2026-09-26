@@ -98,8 +98,8 @@ public class CapturePointCommand {
                 .then(Commands.argument("name", StringArgumentType.string())
                         .then(Commands.argument("position", BlockPosArgument.blockPos())
                                 .then(Commands.argument("radius", IntegerArgumentType.integer(1, 100))
-                                        .then(Commands.argument("captureTimeSeconds", IntegerArgumentType.integer(1))
-                                                .then(Commands.argument("cooldownSeconds", IntegerArgumentType.integer(0))
+                                        .then(Commands.argument("captureTimeSeconds", IntegerArgumentType.integer(1, PointCommands.MAX_SECONDS))
+                                                .then(Commands.argument("cooldownSeconds", IntegerArgumentType.integer(0, PointCommands.MAX_SECONDS))
                                                         .executes(CapturePointCommand::createPoint)
                                                         .then(Commands.argument(ShapeArguments.ARGUMENT_NAME, StringArgumentType.word())
                                                                 .suggests(ShapeArguments.SUGGESTIONS)
@@ -143,7 +143,7 @@ public class CapturePointCommand {
         return Commands.literal("setcapturetime")
                 .then(Commands.argument("name", StringArgumentType.string())
                         .suggests(POINT_SUGGESTIONS)
-                        .then(Commands.argument("seconds", IntegerArgumentType.integer(1))
+                        .then(Commands.argument("seconds", IntegerArgumentType.integer(1, PointCommands.MAX_SECONDS))
                                 .executes(CapturePointCommand::setCaptureTime)));
     }
 
@@ -151,7 +151,7 @@ public class CapturePointCommand {
         return Commands.literal("setcooldown")
                 .then(Commands.argument("name", StringArgumentType.string())
                         .suggests(POINT_SUGGESTIONS)
-                        .then(Commands.argument("seconds", IntegerArgumentType.integer(0))
+                        .then(Commands.argument("seconds", IntegerArgumentType.integer(0, PointCommands.MAX_SECONDS))
                                 .executes(CapturePointCommand::setCooldown)));
     }
 
@@ -342,6 +342,7 @@ public class CapturePointCommand {
         if (point != null) {
             point.setSize(radius);
             CapturePointManager.persist();
+            CapturePointManager.syncPoints();
             context.getSource().sendSuccess(() ->
                     Component.translatable("capturepoints.success.radius_updated").withStyle(ChatFormatting.GREEN), true);
             return 1;
@@ -443,6 +444,7 @@ public class CapturePointCommand {
         point.setHeightUp(up);
         point.setHeightDown(down);
         CapturePointManager.persist();
+        CapturePointManager.syncPoints();
 
         context.getSource().sendSuccess(() ->
                 Component.translatable("capturepoints.success.height_set",
@@ -466,6 +468,7 @@ public class CapturePointCommand {
 
         point.resetHeight();
         CapturePointManager.persist();
+        CapturePointManager.syncPoints();
 
         context.getSource().sendSuccess(() ->
                 Component.translatable("capturepoints.success.height_reset",

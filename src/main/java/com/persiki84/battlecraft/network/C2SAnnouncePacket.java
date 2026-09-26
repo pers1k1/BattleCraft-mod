@@ -16,7 +16,7 @@ public class C2SAnnouncePacket {
     private static final String GATE_KEY = "battlecraft_announce";
     private static final int GATE_TICKS = 20;
     private static final int MAX_TARGETS = 64;
-    private static final int MAX_NAME = 32;
+    private static final int MAX_NAME = 64;
 
     public final boolean everyone;
     public final List<String> teams;
@@ -57,12 +57,14 @@ public class C2SAnnouncePacket {
         int size = Math.min(MAX_TARGETS, values.size());
         buffer.writeVarInt(size);
         for (int index = 0; index < size; index++) {
-            buffer.writeUtf(values.get(index), MAX_NAME);
+            String value = values.get(index);
+            buffer.writeUtf(value.length() > MAX_NAME ? value.substring(0, MAX_NAME) : value, MAX_NAME);
         }
     }
 
+    // WHY: размер списка приходит от клиента: отрицательный ронял new ArrayList ещё при разборе
     private static List<String> readList(FriendlyByteBuf buffer) {
-        int size = Math.min(MAX_TARGETS, buffer.readVarInt());
+        int size = Math.max(0, Math.min(MAX_TARGETS, buffer.readVarInt()));
         List<String> values = new ArrayList<>(size);
         for (int index = 0; index < size; index++) {
             values.add(buffer.readUtf(MAX_NAME));

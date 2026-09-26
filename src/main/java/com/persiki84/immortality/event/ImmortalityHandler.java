@@ -191,11 +191,19 @@ public class ImmortalityHandler {
         return isImmortal(player) && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY);
     }
 
+    // WHY: неблокируемый урон с атакующим в источнике это добивание истёкшего нокдауна, а не
+    // WHY: атака: бессмертие снималось бы у игрока, который в этот момент может быть на другом конце карты
     private static void forfeit(DamageSource source, LivingEntity target) {
         if (!(source.getEntity() instanceof ServerPlayer attacker) || attacker == target) return;
-        if (!isImmortal(attacker)) return;
+        if (source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)) return;
 
-        removeImmortality(attacker);
-        attacker.sendSystemMessage(Component.translatable("immortality.lost.attack").withStyle(ChatFormatting.RED));
+        revoke(attacker, "immortality.lost.attack");
+    }
+
+    public static void revoke(ServerPlayer player, String reasonKey) {
+        if (!isImmortal(player)) return;
+
+        removeImmortality(player);
+        player.sendSystemMessage(Component.translatable(reasonKey).withStyle(ChatFormatting.RED));
     }
 }

@@ -21,6 +21,7 @@
   "killreward.yes": "Yes",
   "killreward.no": "No",
   "killreward.kill_rewarded": "Killed %s, received %sx %s",
+  "killreward.repeat_kill": "No reward for killing %s again for another %s s",
   "killreward.menu.title": "KILL REWARD",
   "killreward.menu.tab.reward": "Reward",
   "killreward.menu.enabled": "Mod enabled",

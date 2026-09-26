@@ -3,6 +3,7 @@ package com.persiki84.capturepoints.network;
 import com.persiki84.capturepoints.capture.CapturePoint;
 import com.persiki84.capturepoints.capture.CapturePointManager;
 import com.persiki84.capturepoints.capture.FinalCapturePoint;
+import com.persiki84.shared.ActionGate;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
@@ -10,6 +11,8 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 public class CaptureStartPacket {
+    private static final String GATE_KEY = "captureStartTick";
+    private static final int GATE_TICKS = 5;
 
     public CaptureStartPacket() {
     }
@@ -24,7 +27,7 @@ public class CaptureStartPacket {
     public static void handle(CaptureStartPacket packet, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
             ServerPlayer player = ctx.get().getSender();
-            if (player == null) return;
+            if (player == null || !ActionGate.allow(player, GATE_KEY, GATE_TICKS)) return;
 
             CapturePoint nearest = nearestPointAt(player);
             if (nearest != null) {

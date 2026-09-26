@@ -24,5 +24,6 @@
   "knockdown.menu.bleed_time": "Истечение кровью, с",
   "knockdown.menu.revive_time": "Подъём руками, с",
   "knockdown.menu.injector_time": "Шприц, с",
-  "knockdown.menu.cooldown_time": "Усталость, с"
+  "knockdown.menu.cooldown_time": "Усталость, с",
+  "death.attack.genericKill.item": "%1$s убит в схватке с %2$s, оружие: %3$s"
 }

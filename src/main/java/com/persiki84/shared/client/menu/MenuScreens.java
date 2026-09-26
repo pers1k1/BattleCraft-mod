@@ -1,5 +1,6 @@
 package com.persiki84.shared.client.menu;
 
+import com.persiki84.shared.client.menu.studio.StudioScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 
@@ -40,6 +41,9 @@ public final class MenuScreens {
         Screen screen = factory.get();
         if (parent != null && screen instanceof ManagerScreen manager) {
             manager.returnTo(parent);
+        }
+        if (parent != null && screen instanceof StudioScreen studio) {
+            studio.returnTo(parent);
         }
         Minecraft.getInstance().setScreen(screen);
     }

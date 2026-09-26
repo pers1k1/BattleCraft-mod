@@ -84,12 +84,12 @@ public class FinalPointCommand {
         root.then(Commands.literal("setcapturetime")
                         .then(Commands.argument("name", StringArgumentType.string())
                                 .suggests(FINAL_POINT_SUGGESTIONS)
-                                .then(Commands.argument("seconds", IntegerArgumentType.integer(1))
+                                .then(Commands.argument("seconds", IntegerArgumentType.integer(1, PointCommands.MAX_SECONDS))
                                         .executes(FinalPointCommand::setCaptureTime))))
                 .then(Commands.literal("setcooldown")
                         .then(Commands.argument("name", StringArgumentType.string())
                                 .suggests(FINAL_POINT_SUGGESTIONS)
-                                .then(Commands.argument("seconds", IntegerArgumentType.integer(0))
+                                .then(Commands.argument("seconds", IntegerArgumentType.integer(0, PointCommands.MAX_SECONDS))
                                         .executes(FinalPointCommand::setCooldown))));
     }
 
@@ -138,8 +138,8 @@ public class FinalPointCommand {
                 .then(Commands.argument("name", StringArgumentType.string())
                         .then(Commands.argument("position", BlockPosArgument.blockPos())
                                 .then(Commands.argument("radius", IntegerArgumentType.integer(1, 100))
-                                        .then(Commands.argument("captureTimeSeconds", IntegerArgumentType.integer(1))
-                                                .then(Commands.argument("cooldownSeconds", IntegerArgumentType.integer(0))
+                                        .then(Commands.argument("captureTimeSeconds", IntegerArgumentType.integer(1, PointCommands.MAX_SECONDS))
+                                                .then(Commands.argument("cooldownSeconds", IntegerArgumentType.integer(0, PointCommands.MAX_SECONDS))
                                                         .executes(FinalPointCommand::createPoint)
                                                         .then(Commands.argument(ShapeArguments.ARGUMENT_NAME, StringArgumentType.word())
                                                                 .suggests(ShapeArguments.SUGGESTIONS)

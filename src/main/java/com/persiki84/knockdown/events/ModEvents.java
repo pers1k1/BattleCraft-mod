@@ -8,7 +8,9 @@ import com.persiki84.knockdown.config.KnockdownConfig;
 import com.persiki84.knockdown.network.NetworkHandler;
 import com.persiki84.knockdown.network.PacketSyncKnockdown;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageTypes;
@@ -202,24 +204,54 @@ public class ModEvents {
         return false;
     }
 
+    // WHY: сбитие снимается до удара, и если удар отменит чужая защита (база, лобби), жертва
+    // WHY: встанет с 1 HP бесплатно; поэтому неудавшийся удар всегда дожимается kill()
     private static void finishOff(Player player, KnockdownCapability cap) {
         cap.setKnocked(false);
         cap.setNextKnockdownTimer(0);
         send(player, new PacketSyncKnockdown(player.getId(), false, 0, 0, 0, false, 0, false));
 
-        UUID attackerId = cap.getLastAttackerUUID();
-        Player attacker = attackerId == null ? null : player.level().getPlayerByUUID(attackerId);
-
         finishing.add(player.getUUID());
         try {
-            if (attacker != null) {
-                player.hurt(player.damageSources().playerAttack(attacker), Float.MAX_VALUE);
-            } else {
-                player.kill();
-            }
+            player.hurt(finishingBlow(player, cap), Float.MAX_VALUE);
+            if (player.isAlive()) player.kill();
         } finally {
             finishing.remove(player.getUUID());
         }
+    }
+
+    // WHY: GENERIC_KILL пробивает неуязвимость зон и бессмертия, а атакующий в источнике
+    // WHY: сохраняет зачёт убийства для награды и доли захвата
+    private static DamageSource finishingBlow(Player player, KnockdownCapability cap) {
+        UUID attackerId = cap.getLastAttackerUUID();
+        Player attacker = attackerId == null ? null : player.level().getPlayerByUUID(attackerId);
+        if (attacker == null) return player.damageSources().genericKill();
+
+        return new DamageSource(player.level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE)
+                .getHolderOrThrow(DamageTypes.GENERIC_KILL), attacker);
+    }
+
+    // WHY: выключенный модуль перестаёт тикать сбитых, и без подъёма они навсегда лежат с 1 HP
+    public static void reviveEveryone(MinecraftServer server) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            player.getCapability(KnockdownProvider.KNOCKDOWN_CAP).ifPresent(cap -> {
+                if (cap.isKnocked()) standUp(player, cap);
+            });
+        }
+    }
+
+    private static void standUp(ServerPlayer player, KnockdownCapability cap) {
+        int bleedTicks = KnockdownConfig.BLEED_TIME_SECONDS.get() * 20;
+        cap.setKnocked(false);
+        cap.setReviveProgress(0);
+        cap.setSelfReviving(false);
+        cap.setSurrendering(false);
+        cap.setSurrenderProgress(0);
+        cap.setDeathTimer(bleedTicks);
+        player.getPersistentData().remove(REVIVE_GRACE);
+        player.setSwimming(false);
+        player.setPose(Pose.STANDING);
+        send(player, new PacketSyncKnockdown(player.getId(), false, 0, bleedTicks, 0, false, 0, false));
     }
 
     private static void restrainPose(Player player) {
@@ -240,40 +272,51 @@ public class ModEvents {
         NetworkHandler.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> (ServerPlayer) player), packet);
     }
 
+    // WHY: запреты сбитого обязаны гаснуть вместе с модулем, иначе игрок с флагом, оставшимся
+    // WHY: от включённого модуля, не может ни бить, ни лечиться, ни открыть дверь
+    private static boolean knockedWhileEnabled(Entity entity) {
+        if (!(entity instanceof Player player) || !ModuleSwitches.allows(ModuleId.KNOCKDOWN)) return false;
+
+        KnockdownCapability cap = player.getCapability(KnockdownProvider.KNOCKDOWN_CAP).orElse(null);
+        return cap != null && cap.isKnocked();
+    }
+
     @SubscribeEvent
     public static void onKnockedStrike(LivingAttackEvent event) {
         if (!(event.getSource().getEntity() instanceof Player striker) || striker == event.getEntity()) return;
         if (finishing.contains(event.getEntity().getUUID())) return;
 
-        striker.getCapability(KnockdownProvider.KNOCKDOWN_CAP).ifPresent(c -> { if (c.isKnocked()) event.setCanceled(true); });
+        if (knockedWhileEnabled(striker)) event.setCanceled(true);
     }
 
     @SubscribeEvent
     public static void onAttack(AttackEntityEvent event) {
-        event.getEntity().getCapability(KnockdownProvider.KNOCKDOWN_CAP).ifPresent(c -> { if (c.isKnocked()) event.setCanceled(true); });
+        if (knockedWhileEnabled(event.getEntity())) event.setCanceled(true);
     }
+
     @SubscribeEvent
     public static void onInteractBlock(PlayerInteractEvent.RightClickBlock event) {
-        event.getEntity().getCapability(KnockdownProvider.KNOCKDOWN_CAP).ifPresent(c -> { if (c.isKnocked()) event.setCanceled(true); });
+        if (knockedWhileEnabled(event.getEntity())) event.setCanceled(true);
     }
+
     @SubscribeEvent
     public static void onInteractBlockLeft(PlayerInteractEvent.LeftClickBlock event) {
-        event.getEntity().getCapability(KnockdownProvider.KNOCKDOWN_CAP).ifPresent(c -> { if (c.isKnocked()) event.setCanceled(true); });
+        if (knockedWhileEnabled(event.getEntity())) event.setCanceled(true);
     }
+
     @SubscribeEvent
     public static void onInteractEntity(PlayerInteractEvent.EntityInteract event) {
-        event.getEntity().getCapability(KnockdownProvider.KNOCKDOWN_CAP).ifPresent(c -> { if (c.isKnocked()) event.setCanceled(true); });
+        if (knockedWhileEnabled(event.getEntity())) event.setCanceled(true);
     }
+
     @SubscribeEvent
     public static void onHeal(LivingHealEvent event) {
-        if (event.getEntity() instanceof Player p) p.getCapability(KnockdownProvider.KNOCKDOWN_CAP).ifPresent(c -> { if (c.isKnocked()) event.setCanceled(true); });
+        if (knockedWhileEnabled(event.getEntity())) event.setCanceled(true);
     }
+
     @SubscribeEvent
     public static void onInteractItem(PlayerInteractEvent.RightClickItem event) {
-        event.getEntity().getCapability(KnockdownProvider.KNOCKDOWN_CAP).ifPresent(cap -> {
-            if (cap.isKnocked()) {
-                if (event.getItemStack().getItem() != ModItems.INJECTOR.get()) event.setCanceled(true);
-            }
-        });
+        if (!knockedWhileEnabled(event.getEntity())) return;
+        if (event.getItemStack().getItem() != ModItems.INJECTOR.get()) event.setCanceled(true);
     }
 }

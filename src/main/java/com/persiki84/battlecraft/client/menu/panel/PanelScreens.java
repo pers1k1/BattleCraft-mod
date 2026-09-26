@@ -1,5 +1,7 @@
 package com.persiki84.battlecraft.client.menu.panel;
 
+import com.persiki84.airdrop.loot.LootTables;
+import com.persiki84.battlecraft.client.menu.panel.loot.AirDropStudioScreen;
 import com.persiki84.battlecraft.menu.AnnounceMenuState;
 import com.persiki84.battlecraft.menu.ConfigMenuState;
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
@@ -10,14 +12,14 @@ public final class PanelScreens {
     private PanelScreens() {}
 
     public static void register() {
-        MenuScreens.register(ModuleMenuStates.AIRDROP, AirDropScreen::new);
-        MenuScreens.register(ModuleMenuStates.LOOT, () -> new com.persiki84.battlecraft.client.menu.panel.loot.LootEditorScreen(null, null));
+        MenuScreens.register(ModuleMenuStates.AIRDROP, () -> new AirDropStudioScreen(null, null));
+        MenuScreens.register(ModuleMenuStates.LOOT, () -> new AirDropStudioScreen(LootTables.AIRDROP, null));
         MenuScreens.register(ModuleMenuStates.QUARRY, QuarryScreen::new);
         MenuScreens.register(ModuleMenuStates.KILL_REWARD, KillRewardScreen::new);
         MenuScreens.register(ModuleMenuStates.IMMORTALITY, ImmortalityScreen::new);
         MenuScreens.register(ModuleMenuStates.KNOCKDOWN, KnockdownScreen::new);
         MenuScreens.register(ModuleMenuStates.COMBAT, CombatScreen::new);
-        MenuScreens.register(ModuleMenuStates.SELL, SellScreen::new);
+        MenuScreens.register(ModuleMenuStates.SELL, SellStudioScreen::new);
         MenuScreens.register(ModuleMenuStates.MODIFIERS, ModifierScreen::new);
         MenuScreens.register(ModuleMenuStates.GAME_RULES, GameRulesScreen::new);
         MenuScreens.register(ModuleMenuStates.TEAMS, TeamsScreen::new);

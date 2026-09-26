@@ -21,6 +21,7 @@
   "killreward.yes": "Да",
   "killreward.no": "Нет",
   "killreward.kill_rewarded": "Убит %s, получено %sx %s",
+  "killreward.repeat_kill": "За повторное убийство %s награды не будет ещё %s с",
   "killreward.menu.title": "НАГРАДА ЗА УБИЙСТВО",
   "killreward.menu.tab.reward": "Награда",
   "killreward.menu.enabled": "Мод включён",

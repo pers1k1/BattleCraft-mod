@@ -1,6 +1,7 @@
 package com.persiki84.capturepoints;
 
 import com.mojang.logging.LogUtils;
+import com.persiki84.battlecraft.MatchEvent;
 import com.persiki84.capturepoints.capture.CapturePoint;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
@@ -79,7 +80,14 @@ public class CapturePointsMod {
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
         CapturePointManager.cleanupAllHolograms();
-        CapturePointManager.persist();
+        CapturePointManager.flush();
+    }
+
+    // WHY: точки сбрасывает только конец матча, а матч, прерванный выключением ядра или сменой
+    // WHY: фазы в обход stopMatch, начинал следующий с чужими точками и накопленным доходом
+    @SubscribeEvent
+    public void onMatchStarted(MatchEvent.Started event) {
+        CapturePointManager.resetAllPoints();
     }
 
     // WHY: выключенный модуль просто переставал тикать, и захваты замирали живыми: участники

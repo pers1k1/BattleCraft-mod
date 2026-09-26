@@ -4,6 +4,7 @@ import com.persiki84.shared.client.menu.MenuCommands;
 import com.persiki84.shared.client.menu.gunsmith.GunBench;
 import com.persiki84.shared.gunsmith.GunSmith;
 import com.persiki84.zones.client.ClientShopData;
+import com.persiki84.zones.client.menu.studio.ShopStudioScreen;
 import com.persiki84.zones.network.PacketHandler;
 import com.persiki84.zones.network.ShopRefreshPacket;
 import com.persiki84.zones.shop.ShopEntry;
@@ -75,7 +76,7 @@ public final class ShopGunBench implements GunBench {
         guns();
         if (gun < 0 || gun >= ids.size()) return;
         MenuCommands.run("battlecraft shop item " + verb + " " + sectionId + " " + ids.get(gun) + " " + tail,
-                ShopAdminScreen.MENU_ID);
+                ShopStudioScreen.MENU_ID);
     }
 
     @Override

@@ -1,7 +1,5 @@
-package com.persiki84.battlecraft.client.menu.panel.loot;
+package com.persiki84.shared.client.menu.studio;
 
-import com.persiki84.airdrop.loot.LootEntry;
-import com.persiki84.airdrop.loot.LootTable;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
@@ -14,13 +12,12 @@ import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public final class LootGrid {
+public final class StudioGrid {
     public static final int TILE = 58;
     public static final int GAP = 6;
 
@@ -44,14 +41,19 @@ public final class LootGrid {
     private static final float CARRY_LIFT = 1.12f;
     private static final float CARRY_ALPHA = 0.92f;
     private static final float LIFT_SPEED = 13.0f;
-    private static final int UNKNOWN_SCRIM = 0xB0301014;
+    private static final float BORN_MS = 900.0f;
+    private static final float GAP_SPEED = 14.0f;
+    private static final int FADED_SCRIM = 0x9A0C0C12;
 
     private final List<Smooth> hover = new ArrayList<>();
     private final List<Smooth> slideX = new ArrayList<>();
     private final List<Smooth> slideY = new ArrayList<>();
     private final Smooth choice = new Smooth(1.0f, CHOICE_SPEED);
     private final Smooth carryLift = new Smooth(0.0f, LIFT_SPEED);
+    private final Smooth gapGlow = new Smooth(0.0f, GAP_SPEED);
     private long shownAt = System.currentTimeMillis();
+    private long bornAt;
+    private int born = -1;
     private float left;
     private float top;
     private float width;
@@ -60,6 +62,8 @@ public final class LootGrid {
     private int chosen = -1;
     private int carriedFrom = -1;
     private int carriedTo = -1;
+    private int gap = -1;
+    private boolean holding;
     private float carryX;
     private float carryY;
 
@@ -73,17 +77,23 @@ public final class LootGrid {
     public void reset() {
         scroll = 0;
         shownAt = System.currentTimeMillis();
-        slideX.clear();
-        slideY.clear();
+        settle();
     }
 
-    // WHY: после ответа сервера номера записей уже в новом порядке, и сглаживание по номеру
+    // WHY: после ответа сервера номера плиток уже в новом порядке, и сглаживание по номеру
     // WHY: повело бы плитку от места чужой записи: места защёлкиваются на новом составе
     public void settle() {
         carriedFrom = -1;
         carriedTo = -1;
+        holding = false;
+        gap = -1;
         slideX.clear();
         slideY.clear();
+    }
+
+    public void flash(int index) {
+        born = index;
+        bornAt = System.currentTimeMillis();
     }
 
     public int columns() {
@@ -100,7 +110,16 @@ public final class LootGrid {
         scroll = Math.max(0, Math.min(lastRow, scroll / columns() + step)) * columns();
     }
 
+    public void reveal(int index, int total) {
+        if (index < 0) return;
+        int row = index / columns();
+        int first = scroll / columns();
+        if (row < first) scrollBy(row - first, total);
+        if (row >= first + rows()) scrollBy(row - first - rows() + 1, total);
+    }
+
     public int pick(double mouseX, double mouseY, int total) {
+        if (!over(mouseX, mouseY)) return -1;
         for (int index = scroll; index < Math.min(total, scroll + columns() * rows()); index++) {
             float x = tileX(index);
             float y = tileY(index);
@@ -116,25 +135,44 @@ public final class LootGrid {
     public void carry(int index, double mouseX, double mouseY) {
         carriedFrom = index;
         carriedTo = index;
+        holding = true;
         carryX = (float) mouseX;
         carryY = (float) mouseY;
         carryLift.snap(0.0f);
     }
 
     public boolean carrying() {
-        return carriedFrom >= 0;
+        return holding;
     }
 
-    public void carryTo(double mouseX, double mouseY, int total) {
+    public void carryTo(double mouseX, double mouseY, int total, boolean reorder) {
         carryX = (float) mouseX;
         carryY = (float) mouseY;
-        carriedTo = Math.min(total - 1, slotAt(mouseX, mouseY, total));
+        boolean placing = reorder && over(mouseX, mouseY);
+        carriedTo = placing ? Math.min(total - 1, slotAt(mouseX, mouseY, total)) : carriedFrom;
     }
 
+    // WHY: отпущенная плитка едет в своё место от курсора, а не возникает там из прежнего слота;
+    // WHY: порядок соседей держится до ответа сервера, иначе сетка на полсекунды вернулась бы назад
     public int[] drop() {
         int[] move = {carriedFrom, carriedTo};
+        holding = false;
         carryLift.snap(0.0f);
+        if (carriedFrom >= 0 && carriedFrom < slideX.size()) {
+            slideX.get(carriedFrom).snap(carryX - TILE / 2.0f);
+            slideY.get(carriedFrom).snap(carryY - TILE / 2.0f);
+        }
         return move;
+    }
+
+    // WHY: предмет, который несут с полки, раздвигает соседей там, куда ляжет: без просвета игрок
+    // WHY: не видит, встанет ли он перед плиткой под курсором или после неё
+    public void openGap(double mouseX, double mouseY, int total) {
+        gap = over(mouseX, mouseY) ? slotAt(mouseX, mouseY, total) : -1;
+    }
+
+    public void closeGap() {
+        gap = -1;
     }
 
     public int slotAt(double mouseX, double mouseY, int total) {
@@ -145,31 +183,41 @@ public final class LootGrid {
     }
 
     private int slotOf(int index) {
+        int slot = carriedSlot(index);
+        return gap >= 0 && slot >= gap ? slot + 1 : slot;
+    }
+
+    private int carriedSlot(int index) {
         if (carriedFrom < 0 || carriedTo == carriedFrom) return index;
         if (index == carriedFrom) return carriedTo;
         if (carriedFrom < carriedTo) return index > carriedFrom && index <= carriedTo ? index - 1 : index;
         return index >= carriedTo && index < carriedFrom ? index + 1 : index;
     }
 
-    public void render(GuiGraphics graphics, LootTable table, int selected, int mouseX, int mouseY, boolean held) {
-        int total = table.entries().size();
+    public void render(GuiGraphics graphics, List<? extends StudioTile> tiles, int selected, int mouseX, int mouseY) {
+        int total = tiles.size();
         grow(total);
+        follow(selected);
+        UiRender.clip(graphics, left, top, width, height);
+        try {
+            paintGap(graphics);
+            for (int index = 0; index < total; index++) {
+                if (carrying() && index == carriedFrom) continue;
+                paintSlot(graphics, tiles.get(index), index, mouseX, mouseY);
+            }
+            if (carrying() && carriedFrom < total) paintCarried(graphics, tiles.get(carriedFrom));
+            graphics.flush();
+        } finally {
+            graphics.disableScissor();
+        }
+    }
+
+    private void follow(int selected) {
         if (selected != chosen) {
             chosen = selected;
             choice.snap(0.0f);
         }
         choice.to(1.0f, UiFrame.delta());
-        UiRender.clip(graphics, left, top, width, height);
-        try {
-            for (int index = 0; index < total; index++) {
-                if (held && index == carriedFrom) continue;
-                paintSlot(graphics, table, index, mouseX, mouseY);
-            }
-            if (held && carriedFrom >= 0 && carriedFrom < total) paintCarried(graphics, table);
-            graphics.flush();
-        } finally {
-            graphics.disableScissor();
-        }
     }
 
     private void grow(int total) {
@@ -183,7 +231,17 @@ public final class LootGrid {
         }
     }
 
-    private void paintSlot(GuiGraphics graphics, LootTable table, int index, int mouseX, int mouseY) {
+    private void paintGap(GuiGraphics graphics) {
+        float glow = UiAnim.easeOut(gapGlow.to(gap >= 0 ? 1.0f : 0.0f, UiFrame.delta()));
+        if (gap < 0 || glow <= 0.01f) return;
+
+        float x = tileX(gap);
+        float y = tileY(gap);
+        UiGlass.sunken(graphics, x, y, TILE, TILE, RADIUS, 0.8f * glow);
+        UiRender.rim(graphics, x, y, TILE, TILE, RADIUS, 1.2f, UiTheme.alpha(UiAccent.color(), 0.6f * glow));
+    }
+
+    private void paintSlot(GuiGraphics graphics, StudioTile tile, int index, int mouseX, int mouseY) {
         int slot = slotOf(index);
         float delta = UiFrame.delta();
         float x = slideX.get(index).to(tileX(slot), delta);
@@ -191,42 +249,50 @@ public final class LootGrid {
         if (y + TILE < top || y > top + height) return;
 
         float appear = UiAnim.easeOut((System.currentTimeMillis() - shownAt - slot * STAGGER_MS) / APPEAR_MS);
-        boolean hovered = mouseX >= x && mouseX < x + TILE && mouseY >= y && mouseY < y + TILE && over(mouseX, mouseY);
+        boolean hovered = !carrying() && mouseX >= x && mouseX < x + TILE && mouseY >= y && mouseY < y + TILE
+                && over(mouseX, mouseY);
         float focus = hover.get(index).to(hovered ? 1.0f : 0.0f, delta);
-        paintTile(graphics, table, index, x, y + (1.0f - appear) * APPEAR_LIFT - focus, appear, focus);
+        paintTile(graphics, tile, index, x, y + (1.0f - appear) * APPEAR_LIFT - focus, appear, focus);
     }
 
-    private void paintCarried(GuiGraphics graphics, LootTable table) {
+    private void paintCarried(GuiGraphics graphics, StudioTile tile) {
         float lift = carryLift.to(1.0f, UiFrame.delta());
         float scale = 1.0f + (CARRY_LIFT - 1.0f) * lift;
-        float x = carryX - TILE / 2.0f;
-        float y = carryY - TILE / 2.0f;
         graphics.pose().pushPose();
         graphics.pose().translate(carryX, carryY, 50.0f);
         graphics.pose().scale(scale, scale, 1.0f);
         graphics.pose().translate(-carryX, -carryY, 0.0f);
         try {
-            paintTile(graphics, table, carriedFrom, x, y, CARRY_ALPHA, lift);
+            paintTile(graphics, tile, carriedFrom, carryX - TILE / 2.0f, carryY - TILE / 2.0f, CARRY_ALPHA, lift);
         } finally {
             graphics.pose().popPose();
         }
     }
 
-    private void paintTile(GuiGraphics graphics, LootTable table, int index, float x, float y, float appear, float focus) {
-        LootEntry entry = table.entries().get(index);
+    private void paintTile(GuiGraphics graphics, StudioTile tile, int index, float x, float y, float appear, float focus) {
         float taken = index == chosen ? choice.get() : 0.0f;
         UiGlass.panel(graphics, x, y, TILE, TILE, RADIUS, appear, 0.35f * taken + focus * 0.5f);
         if (taken > 0.01f) {
             UiRender.rim(graphics, x, y, TILE, TILE, RADIUS, 1.2f, UiTheme.alpha(UiAccent.color(), 0.75f * taken));
         }
-        ItemStack stack = LootSnapshot.stack(entry);
-        paintIcon(graphics, stack, x + TILE / 2.0f - 8.0f * ICON_SCALE, y + ICON_TOP);
-        paintBadge(graphics, entry, x, y);
-        UiRender.textTrackedFit(graphics, font(), stack.isEmpty() ? Component.literal(entry.itemId().toString())
-                        : stack.getHoverName(), x + TILE / 2.0f, y + NAME_TOP, PLATE_HEIGHT, TILE - 8.0f,
-                NAME_SCALE, 0.0f, UiAccent.text(), false);
-        paintChance(graphics, table, index, entry, x, y, Math.max(taken, focus));
-        if (stack.isEmpty()) UiRender.panel(graphics, x, y, TILE, TILE, RADIUS, UNKNOWN_SCRIM);
+        paintBorn(graphics, index, x, y);
+        paintIcon(graphics, tile.icon(), x + TILE / 2.0f - 8.0f * ICON_SCALE, y + ICON_TOP);
+        paintCorners(graphics, tile, x, y);
+        UiRender.textTrackedFit(graphics, font(), tile.name(), x + TILE / 2.0f, y + NAME_TOP, PLATE_HEIGHT,
+                TILE - 8.0f, NAME_SCALE, 0.0f, UiAccent.text(), false);
+        paintPlate(graphics, tile, x, y, Math.max(taken, focus));
+        if (tile.faded()) UiRender.panel(graphics, x, y, TILE, TILE, RADIUS, FADED_SCRIM);
+    }
+
+    private void paintBorn(GuiGraphics graphics, int index, float x, float y) {
+        if (index != born) return;
+        float age = (System.currentTimeMillis() - bornAt) / BORN_MS;
+        if (age >= 1.0f) return;
+
+        float glow = 1.0f - UiAnim.easeOut(age);
+        float spread = UiAnim.easeOut(age) * 4.0f;
+        UiRender.rim(graphics, x - spread, y - spread, TILE + spread * 2.0f, TILE + spread * 2.0f,
+                RADIUS + spread, 1.4f, UiTheme.alpha(UiAccent.color(), glow));
     }
 
     private static void paintIcon(GuiGraphics graphics, ItemStack stack, float x, float y) {
@@ -242,29 +308,25 @@ public final class LootGrid {
         }
     }
 
-    private static void paintBadge(GuiGraphics graphics, LootEntry entry, float x, float y) {
-        String count = entry.min() == entry.max() ? "x" + entry.min() : entry.min() + "-" + entry.max();
-        UiRender.textTrackedBox(graphics, font(), Component.literal(count), x + 4.0f, y + 3.0f, 8.0f, TILE - 8.0f,
+    private static void paintCorners(GuiGraphics graphics, StudioTile tile, float x, float y) {
+        UiRender.textTrackedBox(graphics, font(), tile.corner(), x + 4.0f, y + 3.0f, 8.0f, TILE - 8.0f,
                 BADGE_SCALE, 0.0f, UiAccent.textDim(), false, 0.0f);
+        UiRender.textTrackedBox(graphics, font(), tile.mark(), x + 4.0f, y + 3.0f, 8.0f, TILE - 8.0f,
+                BADGE_SCALE, 0.0f, UiPalette.alert(), false, 1.0f);
     }
 
-    private static void paintChance(GuiGraphics graphics, LootTable table, int index, LootEntry entry,
-                                    float x, float y, float lit) {
+    private static void paintPlate(GuiGraphics graphics, StudioTile tile, float x, float y, float lit) {
         float plateX = x + UiMetrics.GAP;
         float plateWidth = TILE - UiMetrics.GAP * 2.0f;
         float plateY = y + TILE - PLATE_HEIGHT - PLATE_BOTTOM;
         UiGlass.sunken(graphics, plateX, plateY, plateWidth, PLATE_HEIGHT, UiMetrics.radius(PLATE_HEIGHT), 0.9f);
-        float real = LootOdds.appears(table, index);
-        UiRender.rect(graphics, plateX + 2.0f, plateY + PLATE_HEIGHT - BAR_HEIGHT - 1.0f,
-                (plateWidth - 4.0f) * real, BAR_HEIGHT, UiTheme.alpha(chanceColor(entry), 0.8f));
-        Component text = Component.literal(LootChance.shown(entry.chance() * 100.0f) + " %");
-        UiRender.textTrackedFit(graphics, font(), text, x + TILE / 2.0f, plateY - 0.5f, PLATE_HEIGHT,
+        float meter = tile.meter();
+        if (meter >= 0.0f) {
+            UiRender.rect(graphics, plateX + 2.0f, plateY + PLATE_HEIGHT - BAR_HEIGHT - 1.0f,
+                    (plateWidth - 4.0f) * Math.min(1.0f, meter), BAR_HEIGHT, UiTheme.alpha(tile.meterColor(), 0.8f));
+        }
+        UiRender.textTrackedFit(graphics, font(), tile.plate(), x + TILE / 2.0f, plateY - 0.5f, PLATE_HEIGHT,
                 plateWidth - 2.0f, PLATE_SCALE, 0.0f, UiTheme.mix(UiAccent.text(), UiAccent.color(), lit), false);
-    }
-
-    private static int chanceColor(LootEntry entry) {
-        return entry.guaranteed() ? UiAccent.color() : UiTheme.mix(UiPalette.alert(), UiAccent.color(),
-                (float) LootChance.toSlider(entry.chance() * 100.0f));
     }
 
     private float tileX(int slot) {

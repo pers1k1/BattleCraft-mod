@@ -113,7 +113,7 @@ public class SellEvents {
 
     private static LiteralArgumentBuilder<CommandSourceStack> priceSetNode(CommandBuildContext build) {
         return Commands.literal("set").then(Commands.argument("item", ItemArgument.item(build))
-                .then(Commands.argument("price", IntegerArgumentType.integer(0)).executes(context -> {
+                .then(Commands.argument("price", IntegerArgumentType.integer(1)).executes(context -> {
                     ResourceLocation id = itemId(ItemArgument.getItem(context, "item").getItem());
                     int price = IntegerArgumentType.getInteger(context, "price");
                     if (id == null) {

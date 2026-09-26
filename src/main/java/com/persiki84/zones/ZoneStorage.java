@@ -33,22 +33,30 @@ public final class ZoneStorage {
 
     private ZoneStorage() {}
 
-    public static List<Zone> load(ServerLevel level) {
+    public static List<Zone> load(ServerLevel level) throws IOException {
         List<Zone> zones = new ArrayList<>();
         Path path = WorldFiles.pathFor(level, FOLDER, FILE);
         if (path == null || !Files.exists(path)) return zones;
 
+        try {
+            readInto(path, zones);
+        } catch (IOException | RuntimeException e) {
+            LOGGER.error("Failed to read {}", path, e);
+            UnreadableFiles.setAside(path, LOGGER);
+            throw new IOException("Unreadable " + path, e);
+        }
+        return zones;
+    }
+
+    private static void readInto(Path path, List<Zone> zones) throws IOException {
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             List<StoredZone> stored = GSON.fromJson(reader, ENTRY_LIST);
-            if (stored == null) return zones;
+            if (stored == null) return;
             for (StoredZone entry : stored) {
                 Zone zone = entry.toZone();
                 if (zone != null) zones.add(zone);
             }
-        } catch (IOException | RuntimeException e) {
-            LOGGER.error("Failed to read {}", path, e);
         }
-        return zones;
     }
 
     public static void save(ServerLevel level, Collection<Zone> zones) {

@@ -32,6 +32,10 @@ public class KillRewardMod {
         matchActive = active;
     }
 
+    public static boolean matchActive() {
+        return matchActive;
+    }
+
     public static boolean rewardsEnabled() {
         return modEnabled && matchActive && ModuleSwitches.allows(ModuleId.KILL_REWARD);
     }
@@ -72,6 +76,7 @@ public class KillRewardMod {
     @SubscribeEvent
     public void onServerStopping(net.minecraftforge.event.server.ServerStoppingEvent event) {
         lastRewards.clear();
+        RepeatKillGuard.clear();
     }
 
     // WHY: id приходит строкой из команды и конфига, а ResourceLocation бросает на кривом вводе:

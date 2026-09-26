@@ -59,14 +59,6 @@ public final class LootSnapshot {
         return stacks.computeIfAbsent(entry, LootEntry::template);
     }
 
-    public static List<LootTable> tables() {
-        List<LootTable> tables = new ArrayList<>();
-        for (Table table : all()) {
-            tables.add(table.table());
-        }
-        return tables;
-    }
-
     public static List<String> names() {
         List<String> names = new ArrayList<>();
         for (Table table : all()) {

@@ -11,13 +11,17 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.HopperBlock;
+import net.minecraft.world.level.block.piston.PistonStructureResolver;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ExplosionEvent;
+import net.minecraftforge.event.level.PistonEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+
+import java.util.List;
 
 public final class CacheGuard {
 
@@ -48,6 +52,25 @@ public final class CacheGuard {
 
         Level level = event.getLevel();
         event.getAffectedBlocks().removeIf(pos -> CacheContainers.covering(level, pos) != null);
+    }
+
+    // WHY: поршень ломает шалкер и рассыпает лут под ноги: такие тайники остались от версий, где
+    // WHY: тайником заводился любой контейнер, и новый запрет на их заведение их не защищает
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public void onPiston(PistonEvent.Pre event) {
+        if (!AirDropMod.enabled() || !(event.getLevel() instanceof Level level) || !LootCaches.anyIn(level)) return;
+
+        PistonStructureResolver structure = event.getStructureHelper();
+        if (structure == null || !structure.resolve()) return;
+
+        if (touches(level, structure.getToPush()) || touches(level, structure.getToDestroy())) event.setCanceled(true);
+    }
+
+    private static boolean touches(Level level, List<BlockPos> positions) {
+        for (BlockPos pos : positions) {
+            if (CacheContainers.covering(level, pos) != null) return true;
+        }
+        return false;
     }
 
     // WHY: воронка под тайником с пополнением по таймеру это ферма без игрока: она выкачивает

@@ -4,6 +4,7 @@
   "immortality.error.no_held_item": "Вы должны держать предмет в руке",
   "immortality.respawn.given": "✦ Вы получили бессмертие на %s секунд!",
   "immortality.lost.attack": "Атака сняла бессмертие",
+  "immortality.lost.capture": "Участие в захвате сняло бессмертие",
   "immortality.command.enable": "Мод бессмертия ВКЛЮЧЁН!",
   "immortality.command.disable": "Мод бессмертия ВЫКЛЮЧЕН!",
   "immortality.command.status": "Мод бессмертия: %s ",

@@ -41,8 +41,11 @@ public class QuarryBlock {
     }
 
     public static QuarryBlock fromNBT(CompoundTag tag) {
+        ResourceLocation id = ResourceLocation.tryParse(tag.getString("block"));
+        if (id == null || !BuiltInRegistries.BLOCK.containsKey(id)) return null;
+
         BlockPos pos = new BlockPos(tag.getInt("x"), tag.getInt("y"), tag.getInt("z"));
-        Block block = BuiltInRegistries.BLOCK.get(new ResourceLocation(tag.getString("block")));
+        Block block = BuiltInRegistries.BLOCK.get(id);
         String dimension = tag.getString("dimension");
         return new QuarryBlock(pos, block.defaultBlockState(), dimension);
     }

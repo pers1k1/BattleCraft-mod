@@ -5,12 +5,14 @@ import com.persiki84.quarrymod.block.QuarryBlocks;
 import com.persiki84.quarrymod.commands.QuarryCommands;
 import com.persiki84.quarrymod.network.PacketHandler;
 import com.persiki84.quarrymod.network.QuarryBroadcast;
+import com.persiki84.quarrymod.data.QuarryBlockManager;
 import com.persiki84.quarrymod.data.QuarryDataManager;
 import com.persiki84.quarrymod.events.QuarryEventHandler;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
+import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
@@ -25,6 +27,7 @@ import org.slf4j.Logger;
 public class QuarryMod {
     public static final String MODID = "quarrymod";
     public static final Logger LOGGER = LogUtils.getLogger();
+    private static final int SAVE_TICKS = 20;
     private static QuarryMod instance;
     private QuarryDataManager dataManager;
 
@@ -52,7 +55,7 @@ public class QuarryMod {
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
         if (dataManager != null) {
-            dataManager.save();
+            dataManager.saveIfDirty();
         }
         QuarryBroadcast.clear();
     }
@@ -61,12 +64,18 @@ public class QuarryMod {
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || dataManager == null) return;
 
+        tickQuarry(event.getServer());
+        if (event.getServer().getTickCount() % SAVE_TICKS == 0) dataManager.saveIfDirty();
+    }
+
+    private void tickQuarry(MinecraftServer server) {
+        QuarryBlockManager manager = dataManager.getBlockManager();
         if (!ModuleSwitches.allows(ModuleId.QUARRY)) {
-            dataManager.getBlockManager().restoreAllPending(event.getServer());
+            manager.restoreAllPending(server);
             return;
         }
-        dataManager.getBlockManager().tickRegenerations(event.getServer());
-        QuarryBroadcast.tick(event.getServer(), dataManager.getBlockManager());
+        manager.tickRegenerations(server);
+        QuarryBroadcast.tick(server, manager);
     }
 
     @SubscribeEvent
