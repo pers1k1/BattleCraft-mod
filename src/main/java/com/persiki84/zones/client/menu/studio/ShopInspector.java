@@ -73,6 +73,9 @@ final class ShopInspector {
     private HeadingRow shelfHeading;
     private NumberRow newPriceRow;
     private NumberRow newCountRow;
+    private HeadingRow bulkHeading;
+    private NumberRow bulkPriceRow;
+    private List<ShopEntry> bulkEntries = List.of();
     private int newPrice = 100;
     private int newCount = 1;
     private boolean filling;
@@ -87,6 +90,7 @@ final class ShopInspector {
         createNoteRows();
         createNodeRows();
         createShelfRows();
+        createBulkRows();
     }
 
     private void createTradeRows() {
@@ -129,6 +133,13 @@ final class ShopInspector {
                 () -> screen.isArmed(DROP_NODE) ? SURE : DELETE, this::pressDropNode).alerting();
         dropChildRow = new ActionRow(0, 0, 10, ROW, Component.translatable("zones.shopadmin.remove_subsection"),
                 () -> screen.isArmed(DROP_NODE) ? SURE : DELETE, this::pressDropNode).alerting();
+    }
+
+    private void createBulkRows() {
+        bulkHeading = heading("studio.bulk.group");
+        bulkPriceRow = hinted(new NumberRow(0, 0, 10, ROW, Component.translatable("studio.bulk.price"),
+                () -> bulkEntries.isEmpty() ? 0 : bulkEntries.get(0).price(),
+                value -> screen.bulkPrice(bulkEntries, value), 0, MAX_PRICE, 5), "studio.bulk.price");
     }
 
     private void createShelfRows() {
@@ -308,6 +319,14 @@ final class ShopInspector {
         screen.setFocused(titleRow);
         titleRow.box().moveCursorToEnd();
         titleRow.box().setHighlightPos(0);
+    }
+
+    // WHY: общая цена показывает цену первой из выбранных и ставит её всем: так видно, от чего
+    // WHY: отталкиваются стрелки, а разные цены группы выравниваются одним числом
+    void bulk(StudioStack stack, int x, int width, List<ShopEntry> entries) {
+        bulkEntries = entries;
+        stack.add(sized(bulkHeading, width), x);
+        stack.add(sized(bulkPriceRow, width), x);
     }
 
     void shelf(StudioStack stack, int x, int width) {

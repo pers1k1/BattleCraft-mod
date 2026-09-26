@@ -26,6 +26,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 // WHY: аирдроп, тайники и таблицы лута это один раздел: тайник смотрит в таблицу, аирдроп смотрит
@@ -474,6 +475,82 @@ public final class AirDropStudioScreen extends StudioScreen {
         now(prefix + "remove");
         selectedCache = -1;
         layout();
+    }
+
+    @Override
+    protected String tileKey(int index) {
+        List<? extends StudioTile> shown = tiles();
+        if (index >= shown.size()) return null;
+        if (shown.get(index) instanceof CacheTile cache) return "cache:" + cache.id();
+        return "entry:" + index;
+    }
+
+    @Override
+    protected List<StudioMenu.Action> bulkActions(List<Integer> indices) {
+        int count = indices.size();
+        if (tableName() == null) return cacheBulk(indices, count);
+        return List.of(
+                new StudioMenu.Action(Component.translatable("studio.menu.copy_many", count),
+                        () -> eachDescending(indices, " duplicate"), false, false, true),
+                new StudioMenu.Action(Component.translatable("studio.menu.delete_many", count),
+                        () -> removeEntries(indices), true, true, true));
+    }
+
+    private List<StudioMenu.Action> cacheBulk(List<Integer> indices, int count) {
+        return List.of(
+                new StudioMenu.Action(Component.translatable("studio.menu.fill_many", count),
+                        () -> eachCache(indices, "fill"), false, false, true),
+                new StudioMenu.Action(Component.translatable("studio.menu.empty_many", count),
+                        () -> eachCache(indices, "empty"), false, false, true),
+                new StudioMenu.Action(Component.translatable("studio.menu.remove_caches", count),
+                        () -> removeCaches(indices), true, true, true));
+    }
+
+    // WHY: записи лута адресуются номером, а удаление и копия сдвигают номера всех, кто после:
+    // WHY: идём с конца, тогда каждая следующая команда видит свой номер нетронутым
+    private void eachDescending(List<Integer> indices, String verb) {
+        flushCommits();
+        List<Integer> order = new ArrayList<>(indices);
+        order.sort(Comparator.reverseOrder());
+        for (int index : order) {
+            send(base() + index + verb);
+        }
+        marks.clear();
+        layout();
+    }
+
+    private void removeEntries(List<Integer> indices) {
+        selectedEntry = -1;
+        eachDescending(indices, " remove");
+    }
+
+    @Override
+    protected void deleteMarked(List<Integer> indices) {
+        if (tableName() != null) removeEntries(indices);
+    }
+
+    private void eachCache(List<Integer> indices, String verb) {
+        for (int index : indices) {
+            if (tiles.get(index) instanceof CacheTile cache) now("airdrop cache " + cache.id() + " " + verb);
+        }
+    }
+
+    private void removeCaches(List<Integer> indices) {
+        eachCache(indices, "remove");
+        selectedCache = -1;
+        marks.clear();
+        layout();
+    }
+
+    @Override
+    protected void buildBulk(StudioStack stack, int x, int width, List<Integer> indices) {
+        if (tableName() != null) lootRows.bulk(stack, x, width, indices);
+    }
+
+    void bulkChance(List<Integer> indices, int hundredths) {
+        for (int index : indices) {
+            later("chance:" + index, base() + index + " chance " + LootChance.argument(hundredths / 100.0f));
+        }
     }
 
     @Override

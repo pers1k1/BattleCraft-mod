@@ -15,10 +15,10 @@ public final class IslandGlyph {
     private static final float GAP_SHARE = 0.69f;
     private static final float REST_SHARE = 0.078f;
     private static final float TICK_SECONDS = 1.0f / 15.0f;
-    // WHY: подъём 40 мс и спад 60 мс подобраны на живом захвате Spotify: рывок между кадрами на 39 %
-    // WHY: мягче, чем при 30 мс в обе стороны, а отставание от звука 37 мс вместо 29
-    private static final float RISE_SECONDS = 0.04f;
-    private static final float FALL_SECONDS = 0.06f;
+    // WHY: подъём 40 мс и спад 60 мс с живого захвата Spotify владелец счёл резковатыми на слух:
+    // WHY: спад смягчён на четверть, подъём на пятую часть, чтобы удар оставался быстрее затухания
+    private static final float RISE_SECONDS = 0.048f;
+    private static final float FALL_SECONDS = 0.075f;
     private static final float ONSET_RISE = 0.17f;
     private static final float ONSET_SPACING = 0.025f;
     private static final float[] BAND_DECIBELS = {-1.277f, -3.687f, 1.353f, -0.083f, -1.338f, -3.379f};

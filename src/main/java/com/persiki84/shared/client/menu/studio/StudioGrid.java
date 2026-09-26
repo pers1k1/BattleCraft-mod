@@ -15,6 +15,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.List;
 
 public final class StudioGrid {
@@ -44,6 +45,13 @@ public final class StudioGrid {
     private static final float BORN_MS = 900.0f;
     private static final float GAP_SPEED = 14.0f;
     private static final int FADED_SCRIM = 0x9A0C0C12;
+    private static final float MARK_SPEED = 15.0f;
+    private static final float BAND_SPEED = 18.0f;
+    private static final float CHECK_RADIUS = 5.0f;
+    private static final float CHECK_INSET = 7.0f;
+    private static final float GROUP_DIM = 0.6f;
+    private static final float STACK_STEP = 3.5f;
+    private static final float BADGE_RADIUS = 7.0f;
 
     private final List<Smooth> hover = new ArrayList<>();
     private final List<Smooth> slideX = new ArrayList<>();
@@ -51,6 +59,15 @@ public final class StudioGrid {
     private final Smooth choice = new Smooth(1.0f, CHOICE_SPEED);
     private final Smooth carryLift = new Smooth(0.0f, LIFT_SPEED);
     private final Smooth gapGlow = new Smooth(0.0f, GAP_SPEED);
+    private final List<Smooth> marks = new ArrayList<>();
+    private final Smooth bandShown = new Smooth(0.0f, BAND_SPEED);
+    private BitSet marked = new BitSet();
+    private int groupCount;
+    private boolean banding;
+    private float bandX0;
+    private float bandY0;
+    private float bandX1;
+    private float bandY1;
     private long shownAt = System.currentTimeMillis();
     private long bornAt;
     private int born = -1;
@@ -194,6 +211,36 @@ public final class StudioGrid {
         return index >= carriedTo && index < carriedFrom ? index + 1 : index;
     }
 
+    public void mark(BitSet flags) {
+        marked = flags;
+    }
+
+    public void group(int count) {
+        groupCount = count;
+    }
+
+    public void band(double x0, double y0, double x1, double y1) {
+        banding = true;
+        bandX0 = (float) Math.min(x0, x1);
+        bandY0 = (float) Math.min(y0, y1);
+        bandX1 = (float) Math.max(x0, x1);
+        bandY1 = (float) Math.max(y0, y1);
+    }
+
+    public void endBand() {
+        banding = false;
+    }
+
+    // WHY: рамка отбирает плитки по их месту на экране, поэтому считаются только видимые ряды:
+    // WHY: невидимую плитку рамкой не накрыть, как бы далеко её ни растянули
+    public void collect(int total, BitSet out) {
+        for (int index = scroll; index < Math.min(total, scroll + columns() * rows()); index++) {
+            float x = tileX(index);
+            float y = tileY(index);
+            if (x < bandX1 && x + TILE > bandX0 && y < bandY1 && y + TILE > bandY0) out.set(index);
+        }
+    }
+
     public void render(GuiGraphics graphics, List<? extends StudioTile> tiles, int selected, int mouseX, int mouseY) {
         int total = tiles.size();
         grow(total);
@@ -206,6 +253,7 @@ public final class StudioGrid {
                 paintSlot(graphics, tiles.get(index), index, mouseX, mouseY);
             }
             if (carrying() && carriedFrom < total) paintCarried(graphics, tiles.get(carriedFrom));
+            paintBand(graphics);
             graphics.flush();
         } finally {
             graphics.disableScissor();
@@ -223,6 +271,9 @@ public final class StudioGrid {
     private void grow(int total) {
         while (hover.size() < total) {
             hover.add(new Smooth(0.0f, HOVER_SPEED));
+        }
+        while (marks.size() < total) {
+            marks.add(new Smooth(0.0f, MARK_SPEED));
         }
         while (slideX.size() < total) {
             int index = slideX.size();
@@ -252,7 +303,10 @@ public final class StudioGrid {
         boolean hovered = !carrying() && mouseX >= x && mouseX < x + TILE && mouseY >= y && mouseY < y + TILE
                 && over(mouseX, mouseY);
         float focus = hover.get(index).to(hovered ? 1.0f : 0.0f, delta);
-        paintTile(graphics, tile, index, x, y + (1.0f - appear) * APPEAR_LIFT - focus, appear, focus);
+        float mark = marks.get(index).to(marked.get(index) ? 1.0f : 0.0f, delta);
+        float gathered = groupCount > 1 && carrying() && marked.get(index) ? carryLift.get() * GROUP_DIM : 0.0f;
+        paintTile(graphics, tile, index, x, y + (1.0f - appear) * APPEAR_LIFT - focus, appear * (1.0f - gathered),
+                focus, mark);
     }
 
     private void paintCarried(GuiGraphics graphics, StudioTile tile) {
@@ -263,13 +317,56 @@ public final class StudioGrid {
         graphics.pose().scale(scale, scale, 1.0f);
         graphics.pose().translate(-carryX, -carryY, 0.0f);
         try {
-            paintTile(graphics, tile, carriedFrom, carryX - TILE / 2.0f, carryY - TILE / 2.0f, CARRY_ALPHA, lift);
+            if (groupCount > 1) paintStack(graphics, lift);
+            paintTile(graphics, tile, carriedFrom, carryX - TILE / 2.0f, carryY - TILE / 2.0f, CARRY_ALPHA, lift, 1.0f);
+            if (groupCount > 1) paintCount(graphics, lift);
         } finally {
             graphics.pose().popPose();
         }
     }
 
-    private void paintTile(GuiGraphics graphics, StudioTile tile, int index, float x, float y, float appear, float focus) {
+    // WHY: пачка при переносе видна стопкой карточек под курсором и числом: иначе группа выглядит
+    // WHY: как одна плитка, и непонятно, уедет ли в раздел всё выделенное или только она
+    private void paintStack(GuiGraphics graphics, float lift) {
+        int layers = Math.min(2, groupCount - 1);
+        for (int layer = layers; layer >= 1; layer--) {
+            float shift = STACK_STEP * layer * lift;
+            UiGlass.panel(graphics, carryX - TILE / 2.0f + shift, carryY - TILE / 2.0f + shift, TILE, TILE, RADIUS,
+                    CARRY_ALPHA * (1.0f - 0.25f * layer), 0.2f);
+        }
+    }
+
+    private void paintCount(GuiGraphics graphics, float lift) {
+        float pop = UiAnim.easeOutBack(lift);
+        float cx = carryX + TILE / 2.0f - 2.0f;
+        float cy = carryY - TILE / 2.0f + 2.0f;
+        UiRender.dot(graphics, cx, cy, BADGE_RADIUS * pop, UiAccent.color());
+        UiRender.textCentered(graphics, font(), String.valueOf(groupCount), cx, cy - 3.5f * pop, 0.75f * pop,
+                UiTheme.WHITE, false);
+    }
+
+    private void paintBand(GuiGraphics graphics) {
+        float shownBand = UiAnim.easeOut(bandShown.to(banding ? 1.0f : 0.0f, UiFrame.delta()));
+        if (shownBand <= 0.01f) return;
+        float w = bandX1 - bandX0;
+        float h = bandY1 - bandY0;
+        UiRender.panel(graphics, bandX0, bandY0, w, h, 3.0f, UiTheme.alpha(UiAccent.color(), 0.12f * shownBand));
+        UiRender.rim(graphics, bandX0, bandY0, w, h, 3.0f, 1.0f, UiTheme.alpha(UiAccent.color(), 0.7f * shownBand));
+    }
+
+    private void paintMark(GuiGraphics graphics, float x, float y, float mark) {
+        if (mark <= 0.01f) return;
+        UiRender.panel(graphics, x, y, TILE, TILE, RADIUS, UiTheme.alpha(UiAccent.color(), 0.1f * mark));
+        UiRender.rim(graphics, x, y, TILE, TILE, RADIUS, 1.5f, UiTheme.alpha(UiAccent.color(), 0.9f * mark));
+        float pop = UiAnim.easeOutBack(mark);
+        float cx = x + TILE - CHECK_INSET;
+        float cy = y + CHECK_INSET;
+        UiRender.dot(graphics, cx, cy, CHECK_RADIUS * pop, UiAccent.color());
+        UiRender.check(graphics, cx, cy, CHECK_RADIUS * pop, UiTheme.WHITE);
+    }
+
+    private void paintTile(GuiGraphics graphics, StudioTile tile, int index, float x, float y, float appear, float focus,
+                           float mark) {
         float taken = index == chosen ? choice.get() : 0.0f;
         UiGlass.panel(graphics, x, y, TILE, TILE, RADIUS, appear, 0.35f * taken + focus * 0.5f);
         if (taken > 0.01f) {
@@ -282,6 +379,7 @@ public final class StudioGrid {
                 TILE - 8.0f, NAME_SCALE, 0.0f, UiAccent.text(), false);
         paintPlate(graphics, tile, x, y, Math.max(taken, focus));
         if (tile.faded()) UiRender.panel(graphics, x, y, TILE, TILE, RADIUS, FADED_SCRIM);
+        paintMark(graphics, x, y, mark);
     }
 
     private void paintBorn(GuiGraphics graphics, int index, float x, float y) {

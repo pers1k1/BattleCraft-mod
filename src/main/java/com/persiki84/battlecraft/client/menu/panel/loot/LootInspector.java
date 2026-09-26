@@ -22,6 +22,8 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.List;
+
 final class LootInspector {
     private static final int ROW = 22;
     private static final int CONTROL = 16;
@@ -57,6 +59,9 @@ final class LootInspector {
     private ActionRow deleteRow;
     private HeadingRow shelfHeading;
     private NumberRow newChanceRow;
+    private HeadingRow bulkHeading;
+    private NumberRow bulkChanceRow;
+    private List<Integer> bulkIndices = List.of();
     private int newPercent = DEFAULT_PERCENT;
     private boolean focusName;
     private boolean shownArmed;
@@ -66,6 +71,27 @@ final class LootInspector {
         createEntryRows();
         createTableRows();
         createMakingRows();
+        createBulkRows();
+    }
+
+    private void createBulkRows() {
+        bulkHeading = heading("studio.bulk.group");
+        bulkChanceRow = hinted(new NumberRow(0, 0, 10, ROW, Component.translatable("studio.bulk.chance"),
+                this::bulkChance, value -> screen.bulkChance(bulkIndices, value), 1,
+                (int) LootChance.HIGHEST * PERCENT_SCALE, PERCENT_SCALE / 2).scaledBy(PERCENT_SCALE).trimmed(),
+                "studio.bulk.chance");
+    }
+
+    private int bulkChance() {
+        LootTable table = screen.table();
+        if (bulkIndices.isEmpty() || !table.contains(bulkIndices.get(0))) return 0;
+        return Math.round(table.entries().get(bulkIndices.get(0)).chance() * 100.0f * PERCENT_SCALE);
+    }
+
+    void bulk(StudioStack stack, int x, int width, List<Integer> indices) {
+        bulkIndices = indices;
+        stack.add(sized(bulkHeading, width), x);
+        stack.add(sized(bulkChanceRow, width), x);
     }
 
     private void createEntryRows() {

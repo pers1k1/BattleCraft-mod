@@ -459,6 +459,88 @@ public final class ShopStudioScreen extends StudioScreen {
     }
 
     @Override
+    protected String tileKey(int index) {
+        ensureCache();
+        return index < tiles.size() ? tiles.get(index).entry().id() : null;
+    }
+
+    private List<ShopEntry> entriesAt(List<Integer> indices) {
+        List<ShopEntry> picked = new ArrayList<>();
+        for (int index : indices) {
+            if (index < tiles.size()) picked.add(tiles.get(index).entry());
+        }
+        return picked;
+    }
+
+    @Override
+    protected List<StudioMenu.Action> bulkActions(List<Integer> indices) {
+        int count = indices.size();
+        return List.of(
+                new StudioMenu.Action(Component.translatable("studio.menu.copy_many", count), () -> copyAll(indices),
+                        false, false, true),
+                new StudioMenu.Action(Component.translatable("studio.menu.show_all_many", count),
+                        () -> openAllToAll(indices), false, false, true),
+                new StudioMenu.Action(Component.translatable("studio.menu.delete_many", count),
+                        () -> deleteAll(indices), true, true, true));
+    }
+
+    @Override
+    protected void buildBulk(StudioStack stack, int x, int width, List<Integer> indices) {
+        inspectorRows.bulk(stack, x, width, entriesAt(indices));
+    }
+
+    private void copyAll(List<Integer> indices) {
+        ShopNode node = node();
+        if (node == null) return;
+        for (ShopEntry entry : entriesAt(indices)) {
+            send(COMMAND + "item copy " + node.section() + " " + entry.id());
+        }
+        clearMarks();
+    }
+
+    private void openAllToAll(List<Integer> indices) {
+        for (ShopEntry entry : entriesAt(indices)) {
+            if (!entry.access().everyone()) openToAll(entry);
+        }
+    }
+
+    private void deleteAll(List<Integer> indices) {
+        flushCommits();
+        deleteMarked(indices);
+        marks.clear();
+        layout();
+    }
+
+    @Override
+    protected void deleteMarked(List<Integer> indices) {
+        ShopNode node = node();
+        if (node == null) return;
+        for (ShopEntry entry : entriesAt(indices)) {
+            send(COMMAND + "item remove " + node.section() + " " + entry.id());
+        }
+        entryId = null;
+    }
+
+    @Override
+    protected void dropTiles(StudioNav.Node target, List<Integer> indices) {
+        ShopNode node = node();
+        ShopNode to = target == null ? null : ShopNode.parse(target.key());
+        if (node == null || to == null || target.key().equals(nodeKey)) return;
+        for (ShopEntry entry : entriesAt(indices)) {
+            send(COMMAND + "item move " + node.section() + " " + entry.id() + " " + to.section() + to.childSuffix());
+        }
+        entryId = null;
+    }
+
+    void bulkPrice(List<ShopEntry> entries, int price) {
+        ShopNode node = node();
+        if (node == null) return;
+        for (ShopEntry entry : entries) {
+            later("price:" + entry.id(), COMMAND + "item price " + node.section() + " " + entry.id() + " " + price);
+        }
+    }
+
+    @Override
     protected List<StudioMenu.Action> nodeActions(StudioNav.Node picked) {
         ShopNode node = ShopNode.parse(picked.key());
         if (node == null) return List.of();

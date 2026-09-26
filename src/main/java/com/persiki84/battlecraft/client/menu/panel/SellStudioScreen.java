@@ -59,6 +59,9 @@ public final class SellStudioScreen extends StudioScreen {
     private final NumberRow newPriceRow;
     private final ToggleRow guardRow;
     private final ActionRow removeRow;
+    private final HeadingRow bulkHeading = heading("studio.bulk.group");
+    private final NumberRow bulkPriceRow;
+    private List<SellTile> bulkTiles = List.of();
     private String nodeKey = PRICES;
     private String selectedItem;
     private boolean adding;
@@ -94,6 +97,9 @@ public final class SellStudioScreen extends StudioScreen {
         priceRow = new NumberRow(0, 0, 10, ROW, Component.translatable("sellmod.menu.price"), this::selectedPrice,
                 value -> later("price", priceCommand(value)), 1, MAX_PRICE, 1);
         priceRow.hint("studio.sell.price_row.hint");
+        bulkPriceRow = new NumberRow(0, 0, 10, ROW, Component.translatable("studio.bulk.price"),
+                () -> bulkTiles.isEmpty() ? 0 : bulkTiles.get(0).price(), this::bulkPrice, 1, MAX_PRICE, 1);
+        bulkPriceRow.hint("studio.bulk.price.hint");
         newPriceRow = new NumberRow(0, 0, 10, ROW, Component.translatable("studio.sell.new_price"), () -> newPrice,
                 value -> newPrice = value, 1, MAX_PRICE, 1);
         newPriceRow.hint("studio.sell.new_price.hint");
@@ -388,6 +394,54 @@ public final class SellStudioScreen extends StudioScreen {
     protected List<StudioMenu.Action> tileActions(int index) {
         if (currencyNode()) return List.of(StudioMenu.Action.of("studio.menu.change_currency", this::openShelf));
         return List.of(StudioMenu.Action.danger("studio.menu.remove_price", this::removeSelected));
+    }
+
+    @Override
+    protected String tileKey(int index) {
+        ensureBuilt();
+        if (currencyNode() || index >= tiles.size()) return null;
+        return tiles.get(index).item();
+    }
+
+    private List<SellTile> tilesAt(List<Integer> indices) {
+        List<SellTile> picked = new ArrayList<>();
+        for (int index : indices) {
+            if (index < tiles.size()) picked.add(tiles.get(index));
+        }
+        return picked;
+    }
+
+    @Override
+    protected List<StudioMenu.Action> bulkActions(List<Integer> indices) {
+        return List.of(new StudioMenu.Action(Component.translatable("studio.menu.remove_prices", indices.size()),
+                () -> removeAll(indices), true, true, true));
+    }
+
+    private void removeAll(List<Integer> indices) {
+        deleteMarked(indices);
+        marks.clear();
+        layout();
+    }
+
+    @Override
+    protected void deleteMarked(List<Integer> indices) {
+        for (SellTile tile : tilesAt(indices)) {
+            send(COMMAND + "price remove " + tile.item());
+        }
+        selectedItem = null;
+    }
+
+    @Override
+    protected void buildBulk(StudioStack stack, int x, int width, List<Integer> indices) {
+        bulkTiles = tilesAt(indices);
+        stack.add(sized(bulkHeading, width), x);
+        stack.add(sized(bulkPriceRow, width), x);
+    }
+
+    private void bulkPrice(int price) {
+        for (SellTile tile : bulkTiles) {
+            later("price:" + tile.item(), COMMAND + "price set " + tile.item() + " " + price);
+        }
     }
 
     @Override

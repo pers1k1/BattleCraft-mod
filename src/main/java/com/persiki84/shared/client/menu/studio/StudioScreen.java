@@ -13,6 +13,7 @@ import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiTheme;
 import com.persiki84.shared.client.ui.UiTitle;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -25,6 +26,8 @@ import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +62,7 @@ public abstract class StudioScreen extends GlassScreen {
     private static final float ART_SLIDE = 12.0f;
     private static final float CARRIED_SCALE = 1.5f;
     private static final int SHELF_HINT = 14;
+    private static final int BULK_ART = 32;
 
     protected final StudioNav nav = new StudioNav();
     protected final StudioGrid grid = new StudioGrid();
@@ -66,6 +70,9 @@ public abstract class StudioScreen extends GlassScreen {
     protected final StudioStack canvas = new StudioStack();
     protected final StudioShelf shelf = new StudioShelf(this::layout);
     protected final StudioMenu contextMenu = new StudioMenu();
+    protected final StudioMarks marks = new StudioMarks();
+    private final Map<String, UiButton> bulkButtons = new HashMap<>();
+    private final Map<UiButton, StudioMenu.Action> bulkActionsByButton = new IdentityHashMap<>();
     private final Map<String, String> due = new LinkedHashMap<>();
     private final Smooth artShown = new Smooth(0.0f, ART_SPEED);
     private Screen parent;
@@ -86,10 +93,14 @@ public abstract class StudioScreen extends GlassScreen {
     private double pressY;
     private double pointerX;
     private double pointerY;
+    private boolean banding;
+    private boolean bandMoved;
+    private boolean pressedMarked;
 
     protected StudioScreen(Component title, Screen parent) {
         super(title);
         this.parent = parent;
+        grid.mark(marks.bits());
     }
 
     public void returnTo(Screen screen) {
@@ -229,6 +240,79 @@ public abstract class StudioScreen extends GlassScreen {
 
     protected List<StudioMenu.Action> canvasActions() {
         return List.of();
+    }
+
+    protected String tileKey(int index) {
+        return null;
+    }
+
+    protected List<StudioMenu.Action> bulkActions(List<Integer> indices) {
+        return List.of();
+    }
+
+    protected void buildBulk(StudioStack stack, int x, int width, List<Integer> indices) {
+    }
+
+    protected void dropTiles(StudioNav.Node node, List<Integer> indices) {
+    }
+
+    protected void deleteMarked(List<Integer> indices) {
+    }
+
+    private boolean multiSelect() {
+        return gridCanvas() && !tiles().isEmpty() && tileKey(0) != null;
+    }
+
+    protected boolean bulk() {
+        return marks.group() && !shelfOpen();
+    }
+
+    protected void clearMarks() {
+        if (marks.size() == 0) return;
+        marks.clear();
+        layout();
+    }
+
+    // WHY: действия над группой в колонке справа те же, что в меню по правой кнопке: один список,
+    // WHY: два входа. Кнопки живут по подписи и переживают пересборку, иначе обрывался бы их переход
+    private void placeBulkButtons(int x, int width) {
+        List<StudioMenu.Action> actions = bulkActions(marks.indices());
+        int half = (width - ROW_GAP) / 2;
+        for (int index = 0; index < actions.size(); index++) {
+            StudioMenu.Action action = actions.get(index);
+            UiButton button = bulkButton(action);
+            button.active = action.enabled();
+            button.setWidth(index % 2 == 0 && index == actions.size() - 1 ? width : half);
+            if (index % 2 == 0) {
+                inspector.add(button, x, index == 0 ? ROW_GAP * 2 : 0);
+            } else {
+                inspector.beside(button, x + half + ROW_GAP);
+            }
+        }
+    }
+
+    private UiButton bulkButton(StudioMenu.Action action) {
+        String key = action.label().getString();
+        UiButton button = bulkButtons.computeIfAbsent(key, unused ->
+                new UiButton(0, 0, 10, CONTROL, action.label(), pressed -> pressBulk(pressed)));
+        bulkActionsByButton.put(button, action);
+        button.setMessage(armed("bulk:" + key) ? Component.translatable("studio.menu.sure") : action.label());
+        return button;
+    }
+
+    private void pressBulk(UiButton button) {
+        StudioMenu.Action action = bulkActionsByButton.get(button);
+        if (action == null || !action.enabled()) return;
+        String key = "bulk:" + action.label().getString();
+        if (action.confirm() && !confirm(key)) {
+            button.setMessage(Component.translatable("studio.menu.sure"));
+            return;
+        }
+        action.run().run();
+    }
+
+    private void refreshMarks() {
+        marks.refresh(tiles().size(), this::tileKey);
     }
 
     protected int contentWidth() {
@@ -378,14 +462,19 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     private void placeInspector() {
-        int top = contentTop() + (int) UiMetrics.PAD + artHeight();
+        int top = contentTop() + (int) UiMetrics.PAD + (bulk() ? BULK_ART : artHeight());
         int bottom = panelBottom() - (int) UiMetrics.PAD;
         if (shelfOpen()) {
             placeShelf(top);
             return;
         }
-        inspector.begin(top, bottom, ROW_GAP, inspectorSubject());
-        buildInspector(inspector, inspectorRowsLeft(), inspectorRowsWidth());
+        inspector.begin(top, bottom, ROW_GAP, bulk() ? "bulk" : inspectorSubject());
+        if (bulk()) {
+            buildBulk(inspector, inspectorRowsLeft(), inspectorRowsWidth(), marks.indices());
+            placeBulkButtons(inspectorRowsLeft(), inspectorRowsWidth());
+        } else {
+            buildInspector(inspector, inspectorRowsLeft(), inspectorRowsWidth());
+        }
         inspector.end();
         for (AbstractWidget widget : inspector.placed()) {
             addRenderableWidget(widget);
@@ -429,6 +518,7 @@ public abstract class StudioScreen extends GlassScreen {
         pendingSince = -1;
         grid.settle();
         refreshed();
+        refreshMarks();
         layout();
     }
 
@@ -505,7 +595,7 @@ public abstract class StudioScreen extends GlassScreen {
             renderShelf(graphics, mouseX, mouseY);
             return;
         }
-        Object subject = inspectorSubject();
+        Object subject = bulk() ? "bulk" : inspectorSubject();
         if (subject == null ? artSubject != null : !subject.equals(artSubject)) {
             artSubject = subject;
             artShown.snap(0.0f);
@@ -514,10 +604,21 @@ public abstract class StudioScreen extends GlassScreen {
         graphics.pose().pushPose();
         graphics.pose().translate((1.0f - appear) * ART_SLIDE, 0.0f, 0.0f);
         try {
-            renderArt(graphics, left, contentTop() + UiMetrics.PAD_WIDE, width, appear, mouseX, mouseY);
+            if (bulk()) {
+                renderBulkArt(graphics, left, contentTop() + UiMetrics.PAD_WIDE, width, appear);
+            } else {
+                renderArt(graphics, left, contentTop() + UiMetrics.PAD_WIDE, width, appear, mouseX, mouseY);
+            }
         } finally {
             graphics.pose().popPose();
         }
+    }
+
+    private void renderBulkArt(GuiGraphics graphics, float left, float top, float width, float appear) {
+        UiRender.textTrackedFit(graphics, this.font, Component.translatable("studio.bulk.count", marks.size()),
+                left + width / 2.0f, top, 14.0f, width, 0.95f, 0.0f, UiTheme.alpha(UiAccent.text(), appear), false);
+        UiRender.textTrackedFit(graphics, this.font, Component.translatable("studio.bulk.hint"), left + width / 2.0f,
+                top + 16.0f, 10.0f, width, LINE_SCALE, 0.0f, UiTheme.alpha(UiAccent.textDim(), appear), false);
     }
 
     private void renderShelf(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -600,7 +701,7 @@ public abstract class StudioScreen extends GlassScreen {
         }
         if (button == 1 && openContext(x, y)) return true;
         if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
-        if (pressArt(x, y)) return dropFocus();
+        if (!bulk() && pressArt(x, y)) return dropFocus();
         if (nav.over(x, y)) return dropFocus() && pressNav(x, y);
         if (gridCanvas() && grid.over(x, y)) return dropFocus() && pressGrid(x, y);
         if (shelfOpen() && shelf.over(x, y)) return dropFocus() && pressShelf(x, y);
@@ -623,6 +724,7 @@ public abstract class StudioScreen extends GlassScreen {
             if (node == null) return List.of();
             if (!node.key().equals(selectedNode())) {
                 flushCommits();
+                marks.clear();
                 selectNode(node);
                 layout();
             }
@@ -631,6 +733,8 @@ public abstract class StudioScreen extends GlassScreen {
         if (!gridCanvas() || !grid.over(x, y)) return null;
         int index = grid.pick(x, y, tiles().size());
         if (index < 0) return canvasActions();
+        if (bulk() && marks.has(index)) return bulkActions(marks.indices());
+        marks.clear();
         if (index != selectedTile()) chooseTile(index);
         return tileActions(index);
     }
@@ -651,6 +755,7 @@ public abstract class StudioScreen extends GlassScreen {
         pressY = y;
         if (!node.key().equals(selectedNode())) {
             flushCommits();
+            marks.clear();
             selectNode(node);
             layout();
         }
@@ -660,15 +765,80 @@ public abstract class StudioScreen extends GlassScreen {
     // WHY: щелчок по пустому месту сетки снимает выбор: так справа открываются настройки раздела
     private boolean pressGrid(double x, double y) {
         int index = grid.pick(x, y, tiles().size());
-        if (index < 0) {
-            if (selectedTile() >= 0) chooseTile(-1);
-            return true;
-        }
+        boolean multi = multiSelect();
+        if (index < 0) return multi ? beginBand(x, y) : chooseNothing();
+        if (multi && hasControlDown()) return toggleMark(index);
+        if (multi && hasShiftDown() && selectedTile() >= 0) return markRange(selectedTile(), index);
         pressTile = index;
         pressX = x;
         pressY = y;
+        pressedMarked = bulk() && marks.has(index);
+        if (pressedMarked) return true;
+        if (marks.size() > 0) clearMarks();
         if (index != selectedTile()) chooseTile(index);
         return true;
+    }
+
+    private boolean chooseNothing() {
+        if (selectedTile() >= 0) chooseTile(-1);
+        return true;
+    }
+
+    // WHY: первая отметка с Ctrl забирает в выделение и ту плитку, что уже была выбрана: иначе
+    // WHY: выбранное одиночным щелчком выпадало из группы, хотя подсвечено как выбранное
+    private boolean toggleMark(int index) {
+        if (marks.size() == 0 && selectedTile() >= 0 && selectedTile() != index) marks.add(tileKey(selectedTile()));
+        marks.toggle(tileKey(index));
+        refreshMarks();
+        if (marks.has(index)) selectTile(index);
+        layout();
+        return true;
+    }
+
+    private boolean markRange(int from, int to) {
+        for (int index = Math.min(from, to); index <= Math.max(from, to); index++) {
+            marks.add(tileKey(index));
+        }
+        refreshMarks();
+        layout();
+        return true;
+    }
+
+    private boolean beginBand(double x, double y) {
+        banding = true;
+        bandMoved = false;
+        pressX = x;
+        pressY = y;
+        marks.beginBand(hasControlDown());
+        return true;
+    }
+
+    private boolean dragBand(double x, double y) {
+        bandMoved = bandMoved || moved(x, y);
+        if (!bandMoved) return true;
+        grid.band(pressX, pressY, x, y);
+        grid.collect(tiles().size(), marks.collected());
+        marks.applyBand(this::tileKey);
+        refreshMarks();
+        return true;
+    }
+
+    private void releaseBand() {
+        banding = false;
+        grid.endBand();
+        if (!bandMoved) {
+            marks.clear();
+            chooseNothing();
+            layout();
+            return;
+        }
+        if (marks.size() == 1) {
+            int only = marks.first();
+            marks.clear();
+            chooseTile(only);
+            return;
+        }
+        layout();
     }
 
     protected void chooseTile(int index) {
@@ -697,6 +867,7 @@ public abstract class StudioScreen extends GlassScreen {
         double x = localX(mouseX);
         double y = localY(mouseY);
         if (dragArt(dragX, dragY)) return true;
+        if (banding) return dragBand(x, y);
         if (pressNode != null) return dragNode(x, y);
         if (pressTile >= 0) return dragTile(x, y);
         if (pressPick != null) return dragPick(x, y);
@@ -715,11 +886,12 @@ public abstract class StudioScreen extends GlassScreen {
     private boolean dragTile(double x, double y) {
         if (!carryingTile && moved(x, y)) {
             carryingTile = true;
+            grid.group(pressedMarked ? marks.size() : 0);
             grid.carry(pressTile, x, y);
         }
         if (!carryingTile) return true;
 
-        grid.carryTo(x, y, tiles().size(), tilesMovable());
+        grid.carryTo(x, y, tiles().size(), tilesMovable() && !pressedMarked);
         int carried = pressTile;
         nav.hoverDrop(x, y, node -> acceptsTile(node, carried));
         return true;
@@ -742,7 +914,11 @@ public abstract class StudioScreen extends GlassScreen {
         double y = localY(mouseY);
         if (carryingNode) releaseNode();
         if (carryingTile) releaseTile();
+        if (banding) releaseBand();
+        if (pressedMarked && !carryingTile && pressTile >= 0) singleOut(pressTile);
         if (pressPick != null) releasePick(x, y);
+        pressedMarked = false;
+        grid.group(0);
         pressNode = null;
         pressTile = -1;
         pressPick = null;
@@ -762,14 +938,34 @@ public abstract class StudioScreen extends GlassScreen {
         navMoved(carried, target, drop);
     }
 
+    // WHY: щелчок без переноса по плитке из группы оставляет выбранной только её: так из выделения
+    // WHY: выходят тем же жестом, каким выбирают одну вещь
+    private void singleOut(int index) {
+        marks.clear();
+        chooseTile(index);
+    }
+
     private void releaseTile() {
         String dropKey = nav.dropKey();
         nav.clearDrop();
         int[] move = grid.drop();
+        if (dropKey != null && pressedMarked) {
+            grid.settle();
+            flushCommits();
+            List<Integer> group = marks.indices();
+            marks.clear();
+            dropTiles(nodeByKey(dropKey), group);
+            layout();
+            return;
+        }
         if (dropKey != null) {
             grid.settle();
             flushCommits();
             dropTile(nodeByKey(dropKey), move[0]);
+            return;
+        }
+        if (pressedMarked) {
+            grid.settle();
             return;
         }
         if (!tilesMovable() || move[0] < 0 || move[0] == move[1]) {
@@ -812,10 +1008,31 @@ public abstract class StudioScreen extends GlassScreen {
             if (canvas.scrollBy(amount)) layout();
         } else if (shelfOpen() && shelf.over(x, y)) {
             shelf.scrollBy(step);
-        } else if (!scrollArt(x, y, amount) && inspector.covers(x, y, inspectorLeft(), INSPECTOR_WIDTH)) {
+        } else if ((bulk() || !scrollArt(x, y, amount)) && inspector.covers(x, y, inspectorLeft(), INSPECTOR_WIDTH)) {
             if (inspector.scrollBy(amount)) layout();
         }
         return true;
+    }
+
+    private boolean markAll() {
+        for (int index = 0; index < tiles().size(); index++) {
+            marks.add(tileKey(index));
+        }
+        refreshMarks();
+        layout();
+        return true;
+    }
+
+    private void deleteChosen() {
+        if (!bulk()) {
+            deleteSelected();
+            return;
+        }
+        flushCommits();
+        List<Integer> group = marks.indices();
+        marks.clear();
+        deleteMarked(group);
+        layout();
     }
 
     @Override
@@ -829,8 +1046,13 @@ public abstract class StudioScreen extends GlassScreen {
             return true;
         }
         boolean typing = typingRow() || shelf.typing() || getFocused() instanceof EditBox;
+        if (key == GLFW.GLFW_KEY_ESCAPE && marks.size() > 0) {
+            clearMarks();
+            return true;
+        }
+        if (!typing && isSelectAll(key) && multiSelect()) return markAll();
         if (key == GLFW.GLFW_KEY_DELETE && !typing) {
-            deleteSelected();
+            deleteChosen();
             return true;
         }
         if ((key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) && typing && submit()) return true;
