@@ -24,8 +24,10 @@ public final class StudioShelf {
     private ItemShelf.Pick lastPick;
     private long lastPickAt;
     private int searchTop;
+    private final Runnable relayout;
 
-    public StudioShelf() {
+    public StudioShelf(Runnable relayout) {
+        this.relayout = relayout;
         search = new SearchField(Component.translatable("studio.shelf.search"), items::search);
         inventory = new UiButton(0, 0, 10, CONTROL, Component.translatable("studio.shelf.inventory"),
                 pressed -> show(true)).lit();
@@ -33,9 +35,12 @@ public final class StudioShelf {
                 pressed -> show(false)).lit().hint("studio.shelf.all.hint");
     }
 
+    // WHY: доступность кнопок источника и поле поиска ставятся раскладкой экрана: без неё обе
+    // WHY: кнопки застывали в прежнем виде, и вернуться к инвентарю было нечем
     private void show(boolean inventoryWanted) {
         items.showInventory(inventoryWanted);
         if (!inventoryWanted) items.search(search.query());
+        relayout.run();
     }
 
     public List<AbstractWidget> place(int x, int y, int width) {

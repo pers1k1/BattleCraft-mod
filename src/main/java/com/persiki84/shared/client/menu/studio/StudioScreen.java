@@ -64,7 +64,7 @@ public abstract class StudioScreen extends GlassScreen {
     protected final StudioGrid grid = new StudioGrid();
     protected final StudioStack inspector = new StudioStack();
     protected final StudioStack canvas = new StudioStack();
-    protected final StudioShelf shelf = new StudioShelf();
+    protected final StudioShelf shelf = new StudioShelf(this::layout);
     private final Map<String, String> due = new LinkedHashMap<>();
     private final Smooth artShown = new Smooth(0.0f, ART_SPEED);
     private Screen parent;

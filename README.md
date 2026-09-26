@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.26` in files, `26.09.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.26hotfix` in files, `26.09.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -827,6 +827,10 @@ The shop, the airdrop and the buyback each open as one editor instead of a panel
 - A broken `shop.json`, `zones.json`, `marks.json`, `points.dat`, `loot_caches.json`, loot table, quarry file, `sellmod.json` or `battlecraft.json` is set aside as `.broken-<time>` instead of being overwritten with an empty file on the next save. `battlecraft.json` and `sellmod.json` are written atomically in UTF-8, and a `battlecraft.json` saved by an older build in the system encoding is still read correctly.
 
 Version 2026.09.26 - built and started on a dedicated server, the new commands checked over RCON; not played through, so report anything that looks wrong.
+
+## Shelf source switch, 26 September 2026 (hotfix)
+
+- On the add shelf of the shop, airdrop and buyback editors, All items no longer leaves both source buttons frozen: the editor rebuilds on the switch, so Inventory can be chosen again and the search field appears at once.
 
 ## Releases
 
