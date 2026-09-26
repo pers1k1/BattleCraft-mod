@@ -11,13 +11,17 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public final class ItemShelf {
     public static final int CELL = 20;
@@ -80,15 +84,41 @@ public final class ItemShelf {
 
     // WHY: реестр предметов перебирается один раз на запрос, а не в кадре: в сборке их тысячи
     private void refilter() {
-        if (catalog.isEmpty()) {
-            for (Item item : BuiltInRegistries.ITEM) {
-                if (item != Items.AIR) catalog.add(new ItemStack(item));
-            }
-        }
+        if (catalog.isEmpty()) fillCatalog();
         found.clear();
         for (ItemStack stack : catalog) {
             if (query.isEmpty() || matches(stack)) found.add(stack);
         }
+    }
+
+    // WHY: один предмет реестра бывает десятком разных вещей по тегу: у TACZ каждый ствол это
+    // WHY: tacz:modern_kinetic_gun с GunId. Список творческого режима несёт эти варианты с тегами,
+    // WHY: а реестр добирает предметы, которых нет ни в одной вкладке
+    private void fillCatalog() {
+        Set<Item> covered = new HashSet<>();
+        for (ItemStack stack : creativeStacks()) {
+            if (stack.isEmpty()) continue;
+            catalog.add(stack.copyWithCount(1));
+            covered.add(stack.getItem());
+        }
+        for (Item item : BuiltInRegistries.ITEM) {
+            if (item != Items.AIR && !covered.contains(item)) catalog.add(new ItemStack(item));
+        }
+    }
+
+    private static Collection<ItemStack> creativeStacks() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player == null || minecraft.level == null) return List.of();
+        CreativeModeTabs.tryRebuildTabContents(minecraft.player.connection.enabledFeatures(),
+                minecraft.player.canUseGameMasterBlocks(), minecraft.level.registryAccess());
+        return CreativeModeTabs.searchTab().getDisplayItems();
+    }
+
+    // WHY: предмет уходит командой вместе с тегом в синтаксисе аргумента предмета, иначе вариант
+    // WHY: превращается в голый предмет реестра, а ствол TACZ без GunId - в пустую заглушку
+    public static String spec(ItemStack stack) {
+        String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        return stack.hasTag() ? id + stack.getTag() : id;
     }
 
     private boolean matches(ItemStack stack) {

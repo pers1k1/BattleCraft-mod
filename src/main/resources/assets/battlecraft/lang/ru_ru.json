@@ -83,7 +83,7 @@
   "battlecraft.visuals.plain.note": "Без размытия, самый быстрый режим",
   "battlecraft.menu.title": "BATTLECRAFT",
   "battlecraft.menu.subtitle": "СЕРВЕРНАЯ СБОРКА",
-  "battlecraft.menu.version": "BattleCraft 26.09.26hotfix PRE-ALPHA",
+  "battlecraft.menu.version": "BattleCraft 26.09.26v3 PRE-ALPHA",
   "battlecraft.menu.command_too_long": "Команда длиннее %s символов, сервер её не примет",
   "battlecraft.lobby.waiting_for": "Ждём игрока %s",
   "battlecraft.lobby.auto_assigned": "Вас определили в команду %s",

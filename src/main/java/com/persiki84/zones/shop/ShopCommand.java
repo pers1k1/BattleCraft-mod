@@ -2,6 +2,7 @@ package com.persiki84.zones.shop;
 
 import com.persiki84.battlecraft.BattleCraftCommands;
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
+import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
@@ -18,10 +19,11 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.item.ItemParser;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.registries.ForgeRegistries;
 
@@ -710,12 +712,24 @@ public final class ShopCommand {
         ShopSection target = targetSection(context, childId);
         if (target == null) return 0;
 
-        ResourceLocation itemId = ResourceLocation.tryParse(StringArgumentType.getString(context, "item"));
-        Item item = itemId == null ? null : ForgeRegistries.ITEMS.getValue(itemId);
-        if (item == null) return fail(context, "zones.shop.error.no_item");
+        ItemStack stack = parseItem(StringArgumentType.getString(context, "item"));
+        if (stack.isEmpty()) return fail(context, "zones.shop.error.no_item");
 
-        ItemStack stack = new ItemStack(item, IntegerArgumentType.getInteger(context, "count"));
+        stack.setCount(IntegerArgumentType.getInteger(context, "count"));
         return storeEntry(context, target, stack, IntegerArgumentType.getInteger(context, "price"));
+    }
+
+    // WHY: редактор шлёт предмет вместе с тегом (ствол TACZ это один предмет с GunId), поэтому
+    // WHY: строка разбирается синтаксисом аргумента предмета, а не голым идентификатором
+    private static ItemStack parseItem(String text) {
+        try {
+            ItemParser.ItemResult parsed = ItemParser.parseForItem(BuiltInRegistries.ITEM.asLookup(), new StringReader(text));
+            ItemStack stack = new ItemStack(parsed.item());
+            if (parsed.nbt() != null) stack.setTag(parsed.nbt().copy());
+            return stack;
+        } catch (CommandSyntaxException invalid) {
+            return ItemStack.EMPTY;
+        }
     }
 
     private static int storeEntry(CommandContext<CommandSourceStack> context, ShopSection target, ItemStack stack, int price) {

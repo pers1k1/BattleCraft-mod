@@ -83,7 +83,7 @@
   "battlecraft.visuals.plain.note": "No blur at all, the fastest mode",
   "battlecraft.menu.title": "BATTLECRAFT",
   "battlecraft.menu.subtitle": "SERVER PACK",
-  "battlecraft.menu.version": "BattleCraft 26.09.26hotfix PRE-ALPHA",
+  "battlecraft.menu.version": "BattleCraft 26.09.26v3 PRE-ALPHA",
   "battlecraft.menu.command_too_long": "The command is longer than %s characters, the server will not take it",
   "battlecraft.lobby.waiting_for": "Waiting for %s",
   "battlecraft.lobby.auto_assigned": "You were placed into team %s",

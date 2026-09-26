@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.26hotfix` in files, `26.09.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.26v3` in files, `26.09.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -831,6 +831,10 @@ Version 2026.09.26 - built and started on a dedicated server, the new commands c
 ## Shelf source switch, 26 September 2026 (hotfix)
 
 - On the add shelf of the shop, airdrop and buyback editors, All items no longer leaves both source buttons frozen: the editor rebuilds on the switch, so Inventory can be chosen again and the search field appears at once.
+
+## Items with tags on the shelf, 26 September 2026 (v3)
+
+- All items on the editor shelf lists what the creative inventory lists, with every variant and its tags, plus registry items that sit in no creative tab. A TACZ gun used to be a single untagged `modern_kinetic_gun`; now every gun, potion and enchanted book is its own tile, and it goes into the shop or a loot table with its tag. `shop item id` reads the item in the item argument syntax, so an id with a tag is accepted.
 
 ## Releases
 

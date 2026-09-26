@@ -17,7 +17,6 @@ import com.persiki84.zones.shop.ShopEntry;
 import com.persiki84.zones.shop.ShopSection;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -390,8 +389,8 @@ public final class ShopStudioScreen extends StudioScreen {
         if (pick.fromInventory()) {
             return COMMAND + "item slot " + node.section() + " " + pick.slot() + " " + inspectorRows.newPrice() + tail;
         }
-        String itemId = BuiltInRegistries.ITEM.getKey(pick.stack().getItem()).toString();
-        return COMMAND + "item id " + node.section() + " \"" + itemId + "\" " + inspectorRows.newCount() + " "
+        String spec = ItemShelf.spec(pick.stack()).replace("\\", "\\\\").replace("\"", "\\\"");
+        return COMMAND + "item id " + node.section() + " \"" + spec + "\" " + inspectorRows.newCount() + " "
                 + inspectorRows.newPrice() + tail;
     }
 

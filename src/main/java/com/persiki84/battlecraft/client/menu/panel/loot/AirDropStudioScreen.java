@@ -16,7 +16,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -439,7 +438,7 @@ public final class AirDropStudioScreen extends StudioScreen {
             int count = Math.max(1, Math.min(LootEntry.MAX_COUNT, pick.stack().getCount()));
             return base() + "slot " + pick.slot() + " " + count + " " + count + " " + chance;
         }
-        return base() + "add " + BuiltInRegistries.ITEM.getKey(pick.stack().getItem()) + " 1 1 " + chance;
+        return base() + "add " + ItemShelf.spec(pick.stack()) + " 1 1 " + chance;
     }
 
     @Override
