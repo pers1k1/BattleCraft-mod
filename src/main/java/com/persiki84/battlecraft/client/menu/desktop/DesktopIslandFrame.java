@@ -17,7 +17,6 @@ final class DesktopIslandFrame {
     private static final float ART = 30.0f;
     private static final float PILL_GAP = 5.0f;
     private static final float CARD_GAP = 7.0f;
-    private static final float EMPTY_WIDTH = 30.0f;
     private static final float MAX_RADIUS = 19.0f;
     private static final float TITLE_TOP = 4.0f;
     private static final float ARTIST_TOP = 16.0f;
@@ -80,12 +79,9 @@ final class DesktopIslandFrame {
         return Math.min(body, screenWidth - SCREEN_EDGE * 2.0f);
     }
 
-    // WHY: на закрытии карточка сперва сжимается в маленькую пустую таблетку и лишь потом
-    // WHY: раздвигается под содержимое: это доля squeeze, она живёт только на обратном ходе
-    void lay(float middle, float top, float shape, float squeeze, float pill, float card, boolean bars) {
-        float collapsed = lerp(pill, Math.min(EMPTY_WIDTH, pill), squeeze);
+    void lay(float middle, float top, float shape, float pill, float card, boolean bars) {
         centerX = middle;
-        width = lerp(collapsed, card, shape);
+        width = lerp(pill, card, shape);
         height = lerp(PILL_HEIGHT, CARD_HEIGHT, shape);
         x = middle - width / 2.0f;
         y = top;

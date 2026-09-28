@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.28` in files, `28.09.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.28hotfix` in files, `28.09.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -877,19 +877,19 @@ Built from screen recordings of macOS 27 and iOS 26, measured frame by frame rat
 - **World loading screens** use the desktop wallpaper when the desktop menu is on, with the same player head animation. The settings screen no longer flickers over the desktop: the background was drawn twice per frame, and the second copy went through the settings reveal effect.
 - **Smoother edges.** The minimap no longer clips its rounded corners with the depth buffer: it is drawn off screen and laid in through an exact shape mask with a one-pixel soft edge. Progress rings are drawn by exact distance too.
 
-- **Blur in motion.** The player pill and card morph through a real blur (one shared morph for the HUD island and the desktop): the pill empties into blur, the shape grows, the card arrives out of blur, and closing shrinks the card into an empty pill before it widens again for the cover, title and visualizer. The desktop pill sits in the menu bar row and uses the same visualizer as the HUD. Leaving menus is now as smooth as entering them, including vanilla screens.
+- **Blur in motion.** The player pill and card cross-fade into each other through a light blur (one shared morph for the HUD island and the desktop). The desktop pill sits in the menu bar row and uses the same visualizer as the HUD. Leaving menus is now as smooth as entering them, including vanilla screens.
 - **Clock styles.** Right-click the desktop clock to switch liquid glass on or off, change the weight and the blur; every change animates. The digit field is more precise, so the grain is gone.
 - **Menu corner shape.** Menus get their own corner shape (1-5, default 2, Apple-like continuous curvature), separate from the HUD; changes animate.
 - **Marker hiding.** The points key and the player list now also fade out base, shop and map markers and quarry ore markers.
 - **Wallpaper window** scrolls instead of growing past the screen; imports are capped at 2 GiB per file and 8 GiB in total; the wallpaper player frees its video memory while you are in a world.
 
 - **Glass over glass.** Pop-ups that open over other glass (control centre, calendar, Spotlight, context menus, stacked toasts) refract and blur the glass beneath them; mod screens opened in the world refract the HUD. The backdrop is re-captured only when glass is actually under the pop-up.
-- **Island.** The HUD island no longer squeezes and no longer twitches with the FPS, ping and timer digits; closing mid-open picks up from the current shape and blur without a jump.
+- **Island.** The island never empties out: on a track change the cover, title and visualizer stay in place, and the pill and the card cross-fade into each other with a light blur only mid-way. It no longer squeezes, no longer twitches with the FPS, ping and timer digits, and closing mid-open picks up from the current shape without a jump.
 - **Desktop.** The build version sits in the bottom-right corner as a quiet watermark, and the brand menu has an About BattleCraft panel. Sleep mode blurs the wallpaper more strongly, and the Dock, menu bar and unlock hint blur in and out.
 - **First launch.** Greeting lines and page turns come in from a soft blur and leave into it, and letters no longer snap into place one by one.
 - **Customization preview.** HUD samples follow the HUD corner shape, menu parts follow the interface corner shape.
 
-Version 2026.09.28 - built but not played through, so report anything that looks wrong.
+Version 2026.09.28hotfix - built but not played through, so report anything that looks wrong.
 
 ## Releases
 

@@ -51,7 +51,7 @@ public final class DesktopIsland {
     private static final int DIM_INK = 0xFF8E8E93;
     private static final int PLACEHOLDER = 0xFF2C2C2E;
 
-    private final IslandMorph morph = IslandMorph.squeezing();
+    private final IslandMorph morph = new IslandMorph();
     private final Spring shown = new Spring(SHOW_RESPONSE, SHOW_DAMPING, 0.0f);
     private final Spring pillWidth = new Spring(WIDTH_RESPONSE, WIDTH_DAMPING);
     private final Spring cardWidth = new Spring(WIDTH_RESPONSE, WIDTH_DAMPING);
@@ -95,7 +95,7 @@ public final class DesktopIsland {
         float delta = UiFrame.delta();
         bars = HudConfig.islandVisualizer();
         MediaTrack live = follow();
-        if (text.describe(held, delta, shown.get() > VISIBLE_SHARE)) morph.swap();
+        if (text.describe(held, delta, shown.get() > VISIBLE_SHARE)) morph.pulse();
         text.measure(graphics, font);
         progress.advance(held, delta);
         text.time(shownElapsed(), held.durationMs());
@@ -115,7 +115,7 @@ public final class DesktopIsland {
 
     private void lay(float screenWidth) {
         float top = (DesktopMenuBar.HEIGHT - DesktopIslandFrame.PILL_HEIGHT) / 2.0f;
-        frame.lay(screenWidth / 2.0f, top, morph.shape(), morph.squeeze(), pillWidth.get(), cardWidth.get(), bars);
+        frame.lay(screenWidth / 2.0f, top, morph.shape(), pillWidth.get(), cardWidth.get(), bars);
         frame.layBar(text.timeSlot());
         frame.reveal = morph.card();
         settle();

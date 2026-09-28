@@ -39,7 +39,6 @@ public final class IslandHud {
     private static final float CAPSULE_GAP = 4.0f;
     private static final float CAPSULE_PAD = 6.0f;
     private static final float MAX_RADIUS = 13.0f;
-    private static final float EMPTY_WIDTH = 40.0f;
     private static final float PILL_DRIFT = 1.5f;
     private static final float CARD_DRIFT = -3.0f;
 
@@ -88,7 +87,7 @@ public final class IslandHud {
     private static final IslandText timing = new IslandText();
     private static final IslandText pillRow = new IslandText();
     private static final Frame frame = new Frame();
-    private static final IslandMorph morph = IslandMorph.flat();
+    private static final IslandMorph morph = new IslandMorph();
 
     private static MediaTrack shownTrack = MediaTrack.NONE;
     private static long shownPlayed = -1L;
@@ -181,9 +180,7 @@ public final class IslandHud {
                 UiRender.measure(graphics, font, artist.value(), ARTIST_SCALE)),
                 CARD_TEXT_MIN, CARD_TEXT_MAX) + frame.cardWaveSlot + PAD;
         frame.pillWidth = lerp(idle, pill, frame.media);
-        float collapsed = lerp(frame.pillWidth, Math.min(EMPTY_WIDTH, frame.pillWidth),
-                morph.squeeze() * frame.media);
-        frame.width = lerp(collapsed, frame.cardWidth, frame.shape);
+        frame.width = lerp(frame.pillWidth, frame.cardWidth, frame.shape);
     }
 
     private static float held(float peak, float measured) {
@@ -539,15 +536,10 @@ public final class IslandHud {
                 Math.max(0L, track.durationMs() / 1000L));
     }
 
-    // WHY: новое название встаёт, только когда старое уже ушло в размытие: на раскрытии это середина
-    // WHY: морфа, а если форма не меняется (карточка уже открыта или трек без управления), остров
-    // WHY: сам проходит смену через размытие. У слепого трека название есть, только если плеер
-    // WHY: пишет его в заголовок окна, иначе в строке стоит площадка или плеер, с которого шёл звук
+    // WHY: у слепого трека название есть, только если плеер пишет его в заголовок окна, иначе в
+    // WHY: строке стоит площадка или плеер, с которого шёл звук
     private static void retitle(MediaTrack track) {
-        if (IslandModel.media() > 0.02f && !morph.hollow()) {
-            if (morph.resting() && IslandModel.carded() == morph.opened()) morph.swap();
-            return;
-        }
+        if (IslandModel.media() > 0.02f && shownTrack.present()) morph.pulse();
         shownTrack = track;
         shownPlayed = -1L;
         title.set(track.blind() && track.title().isEmpty() ? track.origin() : track.title());
