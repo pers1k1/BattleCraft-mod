@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.28hotfix` in files, `28.09.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.28v3` in files, `28.09.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -890,6 +890,13 @@ Built from screen recordings of macOS 27 and iOS 26, measured frame by frame rat
 - **Customization preview.** HUD samples follow the HUD corner shape, menu parts follow the interface corner shape.
 
 Version 2026.09.28hotfix - built but not played through, so report anything that looks wrong.
+
+## The island flies instead of fading, 28 September 2026 (v3)
+
+- **Shared parts travel.** When the pill opens into the card and back, whatever both of them show is one moving piece instead of two layers fading into each other: the cover or avatar grows from the small square into the artwork, the title slides and scales from the pill line into the card heading, the elapsed time and the progress hairline move and thicken into the card bar, and the visualizer bars travel and grow into the card set. Only what exists on one side - the artist line, the card controls, the player name - fades in or out on its own. The blur still runs through the whole move and clears at the end. The HUD island and the desktop island share this.
+- **Track change.** On a new track the old title and artist slide up and fade while the new ones rise into place, in the HUD as well as on the desktop, instead of swapping under the blur.
+
+Version 2026.09.28v3 - built but not played through, so report anything that looks wrong.
 
 ## Releases
 

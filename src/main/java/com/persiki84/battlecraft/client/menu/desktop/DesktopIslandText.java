@@ -21,6 +21,7 @@ final class DesktopIslandText {
     private static final float SWAP_SECONDS = 0.36f;
     private static final float LEAVE_UNTIL = 0.6f;
     private static final float ENTER_FROM = 0.3f;
+    private static final float SWAP_LIFT = 4.0f;
     private static final Component NO_CONTROL = Component.translatable("battlecraft.desktop.island.no_control");
     private static final Component TIME_SAMPLE = Component.literal("-00:00");
 
@@ -98,6 +99,14 @@ final class DesktopIslandText {
 
     float fading() {
         return 1.0f - UiAnim.smoothstep(0.0f, LEAVE_UNTIL, swap);
+    }
+
+    float leaveShift() {
+        return -SWAP_LIFT * UiAnim.smoothstep(0.0f, LEAVE_UNTIL, swap);
+    }
+
+    float enterShift() {
+        return SWAP_LIFT * (1.0f - entering());
     }
 
     Component elapsed() {

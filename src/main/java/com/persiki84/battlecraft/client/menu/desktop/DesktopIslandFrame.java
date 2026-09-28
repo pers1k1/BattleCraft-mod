@@ -3,9 +3,6 @@ package com.persiki84.battlecraft.client.menu.desktop;
 import com.persiki84.battlecraft.client.island.IslandGlyph;
 import com.persiki84.shared.client.ui.UiRender;
 
-// WHY: таблетка и карточка раскладываются каждая в своём покое, а форма между ними меняется
-// WHY: пустой: содержимое не перетекает, а уходит в размытие и приходит из него. Поэтому у
-// WHY: каждой из раскладок свои места, и ни одна строка не ведётся лерпом координат и кегля
 final class DesktopIslandFrame {
     static final float PILL_HEIGHT = 12.0f;
     static final float CARD_HEIGHT = 82.0f;

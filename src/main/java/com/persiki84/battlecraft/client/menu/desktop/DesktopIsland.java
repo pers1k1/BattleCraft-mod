@@ -46,6 +46,7 @@ public final class DesktopIsland {
     private static final float PILL_DRIFT = 1.5f;
     private static final float CARD_DRIFT = -3.0f;
     private static final float STILL = 0.001f;
+    private static final float FLIGHT_EDGE = 0.002f;
     private static final int BODY = 0xFF000000;
     private static final int TITLE_INK = 0xFFFFFFFF;
     private static final int DIM_INK = 0xFF8E8E93;
@@ -154,6 +155,7 @@ public final class DesktopIsland {
         try {
             paintPill(graphics, font, alpha * morph.pill());
             paintCard(graphics, font, alpha * morph.card());
+            if (flying()) paintFlight(graphics, font, alpha);
         } finally {
             if (veiled) {
                 UiVeil.end(graphics, frame.x, frame.y, frame.width, frame.height, frame.radius,
@@ -189,10 +191,12 @@ public final class DesktopIsland {
 
         IslandMorph.pose(graphics, frame.centerX, frame.pillCoverY, morph.pill(), PILL_DRIFT);
         try {
-            paintCover(graphics, frame.pillCoverX, frame.pillCoverY, frame.faceSize(), alpha);
-            pillTitle(graphics, font, text.leaving(), alpha * text.fading());
-            pillTitle(graphics, font, text.shown(), alpha * text.entering());
-            if (bars) IslandGlyph.pillBars(graphics, frame.pillWaveX, frame.pillCoverY, alpha);
+            if (!flying()) {
+                paintCover(graphics, frame.pillCoverX, frame.pillCoverY, frame.faceSize(), alpha);
+                pillTitle(graphics, font, text.leaving(), alpha * text.fading(), text.leaveShift());
+                pillTitle(graphics, font, text.shown(), alpha * text.entering(), text.enterShift());
+                if (bars) IslandGlyph.pillBars(graphics, frame.pillWaveX, frame.pillCoverY, alpha);
+            }
         } finally {
             UiRestFrame.pop(graphics);
         }
@@ -204,10 +208,10 @@ public final class DesktopIsland {
         IslandMorph.pose(graphics, frame.centerX, frame.y + DesktopIslandFrame.CARD_HEIGHT / 2.0f, morph.card(),
                 CARD_DRIFT);
         try {
-            paintCover(graphics, frame.coverX, frame.coverY, frame.coverSize(), alpha);
-            cardFace(graphics, font, text.leaving(), alpha * text.fading());
-            cardFace(graphics, font, text.shown(), alpha * text.entering());
-            if (bars) IslandGlyph.cardBars(graphics, frame.waveX, frame.coverY, alpha);
+            if (!flying()) paintCover(graphics, frame.coverX, frame.coverY, frame.coverSize(), alpha);
+            cardFace(graphics, font, text.leaving(), alpha * text.fading(), text.leaveShift());
+            cardFace(graphics, font, text.shown(), alpha * text.entering(), text.enterShift());
+            if (bars && !flying()) IslandGlyph.cardBars(graphics, frame.waveX, frame.coverY, alpha);
             paintControls(graphics, font, alpha);
         } finally {
             UiRestFrame.pop(graphics);
@@ -229,21 +233,72 @@ public final class DesktopIsland {
         }
     }
 
-    private void pillTitle(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float alpha) {
+    private void pillTitle(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float alpha, float lift) {
         if (alpha <= 0.01f) return;
 
-        line(graphics, font, face.title(), face.titleRaw(), face.pillTitleWidth(), frame.pillTextX,
-                frame.pillTitleY, frame.pillTitleSlot, DesktopIslandText.PILL_TITLE_SCALE,
-                UiTheme.alpha(TITLE_INK, alpha));
+        UiRestFrame.shift(graphics, 0.0f, lift);
+        try {
+            line(graphics, font, face.title(), face.titleRaw(), face.pillTitleWidth(), frame.pillTextX,
+                    frame.pillTitleY, frame.pillTitleSlot, DesktopIslandText.PILL_TITLE_SCALE,
+                    UiTheme.alpha(TITLE_INK, alpha));
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
     }
 
-    private void cardFace(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float alpha) {
+    private void cardFace(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float alpha, float lift) {
         if (alpha <= 0.01f) return;
 
-        line(graphics, font, face.title(), face.titleRaw(), face.cardTitleWidth(), frame.textX, frame.titleY,
-                frame.titleSlot, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha));
-        line(graphics, font, face.artist(), face.artistRaw(), face.artistWidth(), frame.textX, frame.artistY,
-                frame.titleSlot, DesktopIslandText.ARTIST_SCALE, UiTheme.alpha(DIM_INK, alpha));
+        UiRestFrame.shift(graphics, 0.0f, lift);
+        try {
+            if (!flying()) {
+                line(graphics, font, face.title(), face.titleRaw(), face.cardTitleWidth(), frame.textX, frame.titleY,
+                        frame.titleSlot, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha));
+            }
+            line(graphics, font, face.artist(), face.artistRaw(), face.artistWidth(), frame.textX, frame.artistY,
+                    frame.titleSlot, DesktopIslandText.ARTIST_SCALE, UiTheme.alpha(DIM_INK, alpha));
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
+    }
+
+    private boolean flying() {
+        float shape = morph.shape();
+        return shape > FLIGHT_EDGE && shape < 1.0f - FLIGHT_EDGE;
+    }
+
+    private void paintFlight(GuiGraphics graphics, Font font, float alpha) {
+        float k = morph.shape();
+        paintCover(graphics, lerp(frame.pillCoverX, frame.coverX, k), lerp(frame.pillCoverY, frame.coverY, k),
+                lerp(frame.faceSize(), frame.coverSize(), k), alpha);
+        flyTitle(graphics, font, text.leaving(), k, alpha * text.fading(), text.leaveShift());
+        flyTitle(graphics, font, text.shown(), k, alpha * text.entering(), text.enterShift());
+        if (!bars) return;
+
+        IslandGlyph.visualizer(graphics, lerp(frame.pillWaveX, frame.waveX, k),
+                lerp(frame.pillCoverY, frame.coverY, k), lerp(IslandGlyph.PILL_WIDTH, IslandGlyph.CARD_WIDTH, k),
+                lerp(IslandGlyph.PILL_HEIGHT, IslandGlyph.CARD_HEIGHT, k), alpha);
+    }
+
+    private void flyTitle(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float k, float alpha,
+                          float lift) {
+        if (alpha <= 0.01f) return;
+
+        float scale = lerp(DesktopIslandText.PILL_TITLE_SCALE / DesktopIslandText.CARD_TITLE_SCALE, 1.0f, k);
+        float left = lerp(frame.pillTextX, frame.textX, k);
+        float slot = lerp(frame.pillTitleSlot, frame.titleSlot, k);
+        UiRestFrame.push(graphics, frame.textX, frame.titleY, scale, scale, left - frame.textX,
+                (frame.pillTitleY - frame.titleY) * (1.0f - k) + lift);
+        try {
+            line(graphics, font, face.title(), face.titleRaw(), face.cardTitleWidth(), frame.textX, frame.titleY,
+                    slot / scale, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha));
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
+    }
+
+    private static float lerp(float from, float to, float weight) {
+        return from + (to - from) * weight;
     }
 
     private void paintControls(GuiGraphics graphics, Font font, float alpha) {
