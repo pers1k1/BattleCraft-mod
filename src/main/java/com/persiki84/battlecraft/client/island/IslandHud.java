@@ -39,7 +39,7 @@ public final class IslandHud {
     private static final float PILL_DRIFT = 1.5f;
     private static final float CARD_DRIFT = -3.0f;
     private static final float FLIGHT_EDGE = 0.002f;
-    private static final float SWAP_SECONDS = 0.36f;
+    private static final float SWAP_SECONDS = 0.3f;
     private static final float SWAP_LIFT = 4.0f;
     private static final float LEAVE_UNTIL = 0.6f;
     private static final float ENTER_FROM = 0.3f;

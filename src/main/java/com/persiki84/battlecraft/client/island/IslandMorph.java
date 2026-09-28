@@ -13,12 +13,12 @@ import net.minecraft.client.gui.GuiGraphics;
 public final class IslandMorph {
     public static final float BLUR = 4.0f;
     private static final float SHRINK = 0.04f;
-    private static final float OPEN_SECONDS = 0.42f;
-    private static final float CLOSE_SECONDS = 0.42f;
+    private static final float OPEN_SECONDS = 0.34f;
+    private static final float CLOSE_SECONDS = 0.34f;
     private static final float BLEND_FROM = 0.12f;
     private static final float BLEND_TO = 0.78f;
     private static final float SHAPE_TO = 0.8f;
-    private static final float PULSE_SECONDS = 0.38f;
+    private static final float PULSE_SECONDS = 0.3f;
     private static final float FOG_RISE = 0.25f;
     private static final float FOG_CLEAR = 0.55f;
 

@@ -18,7 +18,7 @@ final class DesktopIslandText {
     static final float ARTIST_SCALE = 0.72f;
     static final float TIME_SCALE = 0.56f;
 
-    private static final float SWAP_SECONDS = 0.36f;
+    private static final float SWAP_SECONDS = 0.3f;
     private static final float LEAVE_UNTIL = 0.6f;
     private static final float ENTER_FROM = 0.3f;
     private static final float SWAP_LIFT = 4.0f;

@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.28v3` in files, `28.09.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.09.28v4` in files, `28.09.26v4 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -897,6 +897,12 @@ Version 2026.09.28hotfix - built but not played through, so report anything that
 - **Track change.** On a new track the old title and artist slide up and fade while the new ones rise into place, in the HUD as well as on the desktop, instead of swapping under the blur.
 
 Version 2026.09.28v3 - built but not played through, so report anything that looks wrong.
+
+## A quicker island, 28 September 2026 (v4)
+
+- **Faster, same curves.** Opening and closing the island now takes 0.34 s instead of 0.42 s, the blur pulse on a track change 0.3 s instead of 0.38 s, and the title and artist swap 0.3 s instead of 0.36 s. The easing, the blur over the move and the flight of the shared parts are unchanged, so the motion stays smooth, only shorter. The HUD island and the desktop island share this.
+
+Version 2026.09.28v4 - built but not played through, so report anything that looks wrong.
 
 ## Releases
 
