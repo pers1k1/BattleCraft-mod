@@ -1,0 +1,106 @@
+{
+    "blend": {
+        "func": "add",
+        "srcrgb": "one",
+        "dstrgb": "1-srcalpha",
+        "srcalpha": "one",
+        "dstalpha": "1-srcalpha"
+    },
+    "vertex": "battlecraft:ui_aurora",
+    "fragment": "battlecraft:ui_veil",
+    "attributes": [
+        "Position",
+        "UV0"
+    ],
+    "samplers": [
+        {
+            "name": "Sampler0"
+        }
+    ],
+    "uniforms": [
+        {
+            "name": "ModelViewMat",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "ProjMat",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "ScreenSize",
+            "type": "float",
+            "count": 2,
+            "values": [
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "name": "VeilShape",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.0,
+                0.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "name": "VeilCorner",
+            "type": "float",
+            "count": 2,
+            "values": [
+                0.0,
+                2.0
+            ]
+        },
+        {
+            "name": "VeilBlur",
+            "type": "float",
+            "count": 2,
+            "values": [
+                0.0,
+                1.0
+            ]
+        }
+    ]
+}

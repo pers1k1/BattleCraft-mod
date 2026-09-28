@@ -23,6 +23,7 @@ public final class UiAssemble {
     private static final ResourceLocation SHADER = new ResourceLocation("battlecraft", "ui_assemble");
 
     private static final float CENTRE = 0.5f;
+    private static final float ARRIVED = 1.0f;
 
     private static ShaderInstance assembleShader;
 
@@ -53,13 +54,22 @@ public final class UiAssemble {
                             float phase, float seconds, float mode, float sweepTop, float sweepSpan,
                             float originX, float originY, float charge) {
         paint(graphics, texture, 0.0f, 0.0f, width, height, width, height,
-                phase, seconds, mode, sweepTop, sweepSpan, originX, originY, charge);
+                phase, seconds, mode, sweepTop, sweepSpan, originX, originY, charge, ARRIVED);
+    }
+
+    // WHY: уход, начатый посреди входа, продолжает его с той доли, на которой вход застали: иней иначе
+    // WHY: на первом кадре ухода прыгал к полной непрозрачности и к масштабу покоя
+    public static void leave(GuiGraphics graphics, float width, float height, int texture,
+                             float phase, float seconds, float mode, float sweepTop, float sweepSpan,
+                             float originX, float originY, float charge, float arrived) {
+        paint(graphics, texture, 0.0f, 0.0f, width, height, width, height,
+                phase, seconds, mode, sweepTop, sweepSpan, originX, originY, charge, arrived);
     }
 
     // WHY: шейдер сэмплит по gl_FragCoord, поэтому квад можно ужать до окна и не платить за полноэкранный проход
     public static void window(GuiGraphics graphics, float screenWidth, float screenHeight, int texture,
                               float left, float top, float width, float height, float margin,
-                              float phase, float seconds, float mode, float charge) {
+                              float phase, float seconds, float mode, float charge, float arrived) {
         float quadLeft = Math.max(0.0f, left - margin);
         float quadTop = Math.max(0.0f, top - margin);
         float quadRight = Math.min(screenWidth, left + width + margin);
@@ -67,17 +77,18 @@ public final class UiAssemble {
 
         paint(graphics, texture, quadLeft, quadTop, quadRight - quadLeft, quadBottom - quadTop,
                 screenWidth, screenHeight, phase, seconds, mode, top, height,
-                (left + width / 2.0f) / screenWidth, 1.0f - (top + height / 2.0f) / screenHeight, charge);
+                (left + width / 2.0f) / screenWidth, 1.0f - (top + height / 2.0f) / screenHeight, charge, arrived);
     }
 
     private static void paint(GuiGraphics graphics, int texture, float left, float top, float width, float height,
                               float screenWidth, float screenHeight, float phase, float seconds, float mode,
-                              float sweepTop, float sweepSpan, float originX, float originY, float charge) {
+                              float sweepTop, float sweepSpan, float originX, float originY, float charge,
+                              float arrived) {
         if (assembleShader == null || texture == 0 || width <= 0.0f || height <= 0.0f) return;
 
         graphics.flush();
         arm(phase, seconds, mode, sweepTop / screenHeight, Math.max(0.02f, sweepSpan / screenHeight),
-                originX, originY, charge);
+                originX, originY, charge, arrived);
 
         Matrix4f matrix = graphics.pose().last().pose();
         BufferBuilder builder = Tesselator.getInstance().getBuilder();
@@ -110,12 +121,13 @@ public final class UiAssemble {
     }
 
     private static void arm(float phase, float seconds, float mode, float sweepTop, float sweepSpan,
-                            float originX, float originY, float charge) {
+                            float originX, float originY, float charge, float arrived) {
         assembleShader.safeGetUniform("Phase").set(phase);
         assembleShader.safeGetUniform("Time").set(seconds);
         assembleShader.safeGetUniform("Mode").set(mode);
         assembleShader.safeGetUniform("Sweep").set(sweepTop, sweepSpan);
         assembleShader.safeGetUniform("Origin").set(originX, originY);
+        assembleShader.safeGetUniform("Arrival").set(arrived);
 
         int accent = UiAccent.color();
         assembleShader.safeGetUniform("Spark").set(

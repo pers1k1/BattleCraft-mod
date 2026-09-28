@@ -23,6 +23,8 @@ public final class MediaWatch {
         track = fresh;
     }
 
+    // WHY: перемотка назад тоже движение: по одному росту позиции трек после неё числился
+    // WHY: застывшим, пока не доигрывал до точки, с которой его отмотали
     private static boolean frozen(MediaTrack fresh) {
         if (!fresh.playing() || fresh.blind() || !fresh.sameTrack(track)) {
             anchorPosition = fresh.positionMs();
@@ -32,7 +34,7 @@ public final class MediaWatch {
 
         long moved = fresh.positionMs() - anchorPosition;
         long waited = fresh.sampledAt() - anchorAt;
-        if (moved > STALL_SLACK_MS || waited <= 0L) {
+        if (Math.abs(moved) > STALL_SLACK_MS || waited <= 0L) {
             anchorPosition = fresh.positionMs();
             anchorAt = fresh.sampledAt();
             return false;

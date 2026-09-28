@@ -33,6 +33,7 @@ public final class UiShatter {
     private static final float RIM_KEEP = 0.16f;
     private static final float RIM_ACCENT = 0.12f;
     private static final float GONE = 0.02f;
+    private static final float FOCUS_BLUR = 14.0f;
 
     private static ShaderInstance shatterShader;
 
@@ -54,25 +55,19 @@ public final class UiShatter {
     }
 
     public static void draw(GuiGraphics graphics, float screenWidth, float screenHeight, int texture,
-                            UiShards shards, float phase) {
+                            UiShards shards, float phase, float arrived) {
         if (shatterShader == null || shards == null || texture == 0) return;
         if (screenWidth <= 0.0f || screenHeight <= 0.0f) return;
 
-        float alive = fade(phase, 1.0f);
-        float rim = rim(phase);
+        float focused = focused(arrived);
+        float alive = fade(phase, 1.0f) * focused;
+        float rim = rim(phase) * focused;
         if (alive <= GONE && rim <= 0.0f) return;
 
         graphics.flush();
         Matrix4f matrix = graphics.pose().last().pose();
         BufferBuilder builder = Tesselator.getInstance().getBuilder();
-        if (alive > GONE) {
-            arm(texture, 0.0f, blur(phase));
-            builder.begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
-            for (int index = 0; index < shards.count(); index++) {
-                shard(builder, matrix, screenWidth, screenHeight, shards, index, phase);
-            }
-            Tesselator.getInstance().end();
-        }
+        if (alive > GONE) paintShards(builder, matrix, texture, screenWidth, screenHeight, shards, phase, focused);
         if (rim > 0.0f) {
             arm(texture, 1.0f, 0.0f);
             builder.begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
@@ -80,6 +75,24 @@ public final class UiShatter {
             Tesselator.getInstance().end();
         }
         release();
+    }
+
+    private static void paintShards(BufferBuilder builder, Matrix4f matrix, int texture, float screenWidth,
+                                    float screenHeight, UiShards shards, float phase, float focused) {
+        arm(texture, 0.0f, Math.max(blur(phase), FOCUS_BLUR * (1.0f - focused)));
+        builder.begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
+        for (int index = 0; index < shards.count(); index++) {
+            shard(builder, matrix, screenWidth, screenHeight, shards, index, phase, focused);
+        }
+        Tesselator.getInstance().end();
+    }
+
+    // WHY: раскол входит наводкой резкости, и уход, начатый посреди входа, стартует с её доли: та же
+    // WHY: кривая 1 - (1 - t)^5 и тот же радиус 14 пикселей, что FOCUS_EASE и FOCUS_BLUR в ui_assemble.fsh
+    private static float focused(float arrived) {
+        float left = 1.0f - UiAnim.clamp01(arrived);
+        float squared = left * left;
+        return 1.0f - squared * squared * left;
     }
 
     // WHY: отсечение граней снимается на время прохода: контур ячейки Вороного идёт по часовой,
@@ -103,9 +116,9 @@ public final class UiShatter {
     }
 
     private static void shard(BufferBuilder builder, Matrix4f matrix, float screenWidth, float screenHeight,
-                              UiShards shards, int index, float phase) {
+                              UiShards shards, int index, float phase, float focused) {
         int corners = shards.corners(index);
-        float alpha = fade(phase, shards.lag(index));
+        float alpha = fade(phase, shards.lag(index)) * focused;
         if (corners < 3 || alpha <= GONE) return;
 
         UiShards.Flight place = shards.flight(index, phase);

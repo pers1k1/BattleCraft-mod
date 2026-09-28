@@ -170,7 +170,7 @@ public final class ItemPickerScreen extends GlassScreen {
         }
         if (!shelf.showsInventory()) {
             search.place(left, top + CONTROL + 6, SHELF_WIDTH - (int) UiMetrics.PAD * 2);
-            addRenderableWidget(search.box());
+            addWidget(search.box());
         }
         placeSide();
         if (typing && !shelf.showsInventory()) setFocused(search.box());
@@ -210,7 +210,7 @@ public final class ItemPickerScreen extends GlassScreen {
         UiGlass.window(graphics, left(), top, SHELF_WIDTH, height, RADIUS, 1.0f);
         UiGlass.window(graphics, sideLeft(), top, SIDE_WIDTH, height, RADIUS, 1.0f);
         UiGlass.layer(graphics);
-        if (!shelf.showsInventory()) search.render(graphics);
+        if (!shelf.showsInventory()) search.render(graphics, mouseX, mouseY, partialTick);
         shelf.place(left() + UiMetrics.PAD, shelfTop(), SHELF_WIDTH - UiMetrics.PAD * 2.0f,
                 top + height - shelfTop() - UiMetrics.PAD);
         shelf.render(graphics, mouseX, mouseY);

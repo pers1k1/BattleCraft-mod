@@ -96,8 +96,27 @@ public final class UiGlassStyle {
     private static float glowAlpha = GLOW_ALPHA;
     private static float glowLift = GLOW_LIFT;
     private static float textWeight = TEXT_WEIGHT;
+    private static float presence = 1.0f;
 
     private UiGlassStyle() {}
+
+    // WHY: линза, дисперсия и френель набирают силу вместе с анимацией входа и теряют её на уходе:
+    // WHY: в полную силу с первого кадра приближение в центре панели прыгало рывком. Множитель
+    // WHY: читают геттеры, поэтому он одинаков для шейдерного и кольцевого пути стекла. Вложенные
+    // WHY: анимации перемножаются, а вызывающий обязан вернуть прежнее значение в finally
+    public static float scalePresence(float share) {
+        float previous = presence;
+        presence = previous * UiAnim.clamp01(share);
+        return previous;
+    }
+
+    public static void restorePresence(float previous) {
+        presence = previous;
+    }
+
+    public static float presence() {
+        return presence;
+    }
 
     public static void liquid(boolean value) {
         liquid = value;
@@ -112,6 +131,8 @@ public final class UiGlassStyle {
         resetLens();
         resetBlur();
         resetAccents();
+        UiDepth.reset();
+        UiCorner.level(UiCorner.LEVEL);
     }
 
     private static void resetMaterial() {
@@ -381,7 +402,7 @@ public final class UiGlassStyle {
     }
 
     public static float fresnelGlow() {
-        return fresnelGlow;
+        return fresnelGlow * presence;
     }
 
     public static float saturation() {
@@ -424,7 +445,13 @@ public final class UiGlassStyle {
 
     public static float shapePower(float width, float height, float radius) {
         if (switching) return switchSquircle;
+        if (!UiCorner.hud()) return UiCorner.power(width, height, radius);
         return circular(width, height, radius) ? CIRCLE_POWER : squircle;
+    }
+
+    public static float shapeReach(float width, float height, float radius) {
+        if (switching || UiCorner.hud()) return radius;
+        return UiCorner.reach(width, height, radius);
     }
 
     public static float radiusPanel() {
@@ -442,7 +469,7 @@ public final class UiGlassStyle {
     // WHY: у переключателя не своё число, а доля общей силы: единица это ровно то же искажение,
     // WHY: что у панелей, поэтому заводской вид совпадает с остальным стеклом при любом пресете
     public static float pull() {
-        return switching ? pull * switchLens : pull;
+        return (switching ? pull * switchLens : pull) * presence;
     }
 
     public static float falloff() {
@@ -468,7 +495,7 @@ public final class UiGlassStyle {
     }
 
     public static float zoom() {
-        return zoom;
+        return zoom * presence;
     }
 
     public static int rings() {
@@ -480,7 +507,7 @@ public final class UiGlassStyle {
     }
 
     public static float dispersion() {
-        return dispersion;
+        return dispersion * presence;
     }
 
     public static int blurLevels() {

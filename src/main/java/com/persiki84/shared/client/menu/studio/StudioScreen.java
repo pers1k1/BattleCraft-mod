@@ -13,6 +13,7 @@ import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiTheme;
 import com.persiki84.shared.client.ui.UiTitle;
 import net.minecraft.client.Minecraft;
@@ -491,6 +492,7 @@ public abstract class StudioScreen extends GlassScreen {
         for (AbstractWidget widget : shelf.place(inspectorRowsLeft(), inspector.cursor(), inspectorRowsWidth())) {
             addRenderableWidget(widget);
         }
+        if (shelf.searching()) addWidget(shelf.searchBox());
     }
 
     private void placeCanvas() {
@@ -601,8 +603,7 @@ public abstract class StudioScreen extends GlassScreen {
             artShown.snap(0.0f);
         }
         float appear = UiAnim.easeOut(artShown.to(1.0f, UiFrame.delta()));
-        graphics.pose().pushPose();
-        graphics.pose().translate((1.0f - appear) * ART_SLIDE, 0.0f, 0.0f);
+        UiRestFrame.shift(graphics, (1.0f - appear) * ART_SLIDE, 0.0f);
         try {
             if (bulk()) {
                 renderBulkArt(graphics, left, contentTop() + UiMetrics.PAD_WIDE, width, appear);
@@ -610,7 +611,7 @@ public abstract class StudioScreen extends GlassScreen {
                 renderArt(graphics, left, contentTop() + UiMetrics.PAD_WIDE, width, appear, mouseX, mouseY);
             }
         } finally {
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
         }
     }
 

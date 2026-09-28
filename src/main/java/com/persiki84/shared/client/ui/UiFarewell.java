@@ -6,8 +6,11 @@ import net.minecraft.client.gui.GuiGraphics;
 
 public final class UiFarewell {
     private static final float MAX_STEP = 1.0f / 15.0f;
+    // WHY: короткий уход (иней, 0.14 с) иначе проскакивал за кадр: не меньше шести кадров на уход
+    private static final float MIN_FRAMES = 6.0f;
     private static final float BURN_CHARGE = 0.55f;
     private static final int TRAILS = 3;
+    private static final float CENTRE = 0.5f;
 
     private static final Departure[] trail = fill();
     private static final int[] queue = new int[TRAILS];
@@ -26,13 +29,26 @@ public final class UiFarewell {
     }
 
     public static void begin(UiEmber source, UiPlane anchor, float sweepTop, float sweepSpan,
-                             float centreX, float centreY, UiMotionSet motion) {
+                             float centreX, float centreY, UiMotionSet motion, float arrived, float enteredSeconds) {
         opened = null;
         if (!UiReveal.enabled() || UiStage.texture() == 0) return;
 
         Departure departure = claim();
         departure.arm(source, anchor, sweepTop, sweepSpan, centreX, centreY, motion);
+        departure.carry(arrived, enteredSeconds);
         opened = departure;
+    }
+
+    // WHY: ванильный экран закрывается между кадрами, и снятого первого кадра ухода у него нет:
+    // WHY: уход ждёт ближайшей отрисовки, рисует её с нулевой фазой, и только потом идёт время
+    public static boolean depart(UiEmber source, UiMotionSet motion, float arrived) {
+        if (!UiReveal.enabled()) return false;
+
+        Departure departure = claim();
+        departure.arm(source, null, 0.0f, 1.0f, CENTRE, CENTRE, motion);
+        departure.carry(arrived, 0.0f);
+        departure.await();
+        return true;
     }
 
     // WHY: мировая панель висит там, где её оставили, и таких может догорать несколько сразу;
@@ -77,8 +93,13 @@ public final class UiFarewell {
 
         age();
         order();
-        for (int i = 0; i < living; i++) {
-            trail[queue[i]].paint(graphics, width, height, partialTick);
+        boolean hud = UiCorner.hud(false);
+        try {
+            for (int i = 0; i < living; i++) {
+                trail[queue[i]].paint(graphics, width, height, partialTick);
+            }
+        } finally {
+            UiCorner.hud(hud);
         }
         sweep();
     }
@@ -145,10 +166,14 @@ public final class UiFarewell {
         private UiShards shards;
         private long grain;
         private Runnable pending;
+        private float arrival = 1.0f;
+        private float presence = 1.0f;
+        private float since;
+        private boolean waiting;
 
         private void arm(UiEmber source, UiPlane anchor, float sweepTop, float sweepSpan,
                          float centreX, float centreY, UiMotionSet motion) {
-            set = motion == UiMotionSet.GLASS && UiShatter.ready() ? UiMotionSet.GLASS : UiMotionSet.IGNITE;
+            set = settled(motion);
             grain = System.nanoTime();
             elapsed = 0.0f;
             burn = set.leaveSeconds(Minecraft.getInstance().level != null);
@@ -160,6 +185,26 @@ public final class UiFarewell {
             shards = null;
             plane = anchor;
             ember = source;
+            waiting = false;
+        }
+
+        // WHY: уход, начатый посреди входа, наследует долю, которую вход успел набрать: силу стекла,
+        // WHY: у инея непрозрачность с увеличением, у света открытую маску, у раскола прозрачность и
+        // WHY: расфокус, иначе первый кадр ухода прыгал бы к покою. Время горения продолжает время входа:
+        // WHY: шум фронта входа, восстановленный в шейдере, иначе стоял бы на другом рисунке
+        private void carry(float arrived, float enteredSeconds) {
+            arrival = UiAnim.clamp01(arrived);
+            presence = UiReveal.glassPresence(arrival);
+            since = Math.max(0.0f, enteredSeconds);
+        }
+
+        private void await() {
+            waiting = true;
+        }
+
+        private static UiMotionSet settled(UiMotionSet motion) {
+            if (motion == UiMotionSet.GLASS) return UiShatter.ready() ? UiMotionSet.GLASS : UiMotionSet.IGNITE;
+            return motion == UiMotionSet.FROST ? UiMotionSet.FROST : UiMotionSet.IGNITE;
         }
 
         private boolean alive() {
@@ -182,9 +227,11 @@ public final class UiFarewell {
             pending = disposal;
         }
 
+        // WHY: кадр, где уход снят целым экраном с нулевой фазой, уже показан, и шаг в нём же
+        // WHY: пропускал бы первую долю ухода: у инея на 60 к/с это скачок непрозрачности с 1.0 к 0.34
         private void age(float step) {
-            if (elapsed < 0.0f) return;
-            elapsed += step;
+            if (elapsed < 0.0f || waiting || painted == UiFrame.frame()) return;
+            elapsed += Math.min(step, burn / MIN_FRAMES);
         }
 
         private void mark() {
@@ -195,6 +242,7 @@ public final class UiFarewell {
             long frame = UiFrame.frame();
             if (!alive() || frame == painted) return;
             painted = frame;
+            waiting = false;
 
             float phase = UiAnim.clamp01(elapsed / burn);
             field(width, height);
@@ -224,10 +272,7 @@ public final class UiFarewell {
 
             UiBackdrop.hold();
             try {
-                ember.paintEmber(graphics, partialTick);
-            } catch (Throwable error) {
-                ember = null;
-                report(error);
+                repaint(graphics, partialTick, phase);
             } finally {
                 UiBackdrop.resume();
                 UiPlane.sampling(null);
@@ -236,6 +281,18 @@ public final class UiFarewell {
                 UiStage.end();
             }
             return true;
+        }
+
+        private void repaint(GuiGraphics graphics, float partialTick, float phase) {
+            float outerPresence = UiGlassStyle.scalePresence(presence * UiReveal.glassPresence(1.0f - phase));
+            try {
+                ember.paintEmber(graphics, partialTick);
+            } catch (Throwable error) {
+                ember = null;
+                report(error);
+            } finally {
+                UiGlassStyle.restorePresence(outerPresence);
+            }
         }
 
         // WHY: без своей перерисовки уход рисовал бы чужое содержимое стадии: у соседнего ухода или
@@ -270,11 +327,16 @@ public final class UiFarewell {
         private void compose(GuiGraphics graphics, float width, float height, float phase) {
             if (set == UiMotionSet.GLASS) {
                 field(width, height);
-                UiShatter.draw(graphics, width, height, UiStage.texture(), shards, phase);
+                UiShatter.draw(graphics, width, height, UiStage.texture(), shards, phase, arrival);
                 return;
             }
-            UiAssemble.draw(graphics, width, height, UiStage.texture(), phase, elapsed, UiReveal.BURN,
-                    top * height, span * height, originX, originY, BURN_CHARGE);
+            if (set == UiMotionSet.FROST) {
+                UiAssemble.leave(graphics, width, height, UiStage.texture(), phase, elapsed, UiReveal.FROST_LEAVE,
+                        top * height, span * height, originX, originY, 0.0f, arrival);
+                return;
+            }
+            UiAssemble.leave(graphics, width, height, UiStage.texture(), phase, since + elapsed, UiReveal.BURN,
+                    top * height, span * height, originX, originY, BURN_CHARGE, arrival);
         }
 
         private void quit() {

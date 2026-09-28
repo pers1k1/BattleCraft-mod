@@ -11,6 +11,7 @@ import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiInput;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.Util;
@@ -177,12 +178,11 @@ public abstract class BrowseCard extends AbstractWidget implements GlidingRow {
 
         float appear = UiAnim.easeOut((System.currentTimeMillis() - shownAt - staggerMs) / APPEAR_MS);
         slide = (1.0f - appear) * APPEAR_SLIDE;
-        graphics.pose().pushPose();
-        graphics.pose().translate(0.0f, slide, 0.0f);
+        UiRestFrame.shift(graphics, 0.0f, slide);
         try {
             paintBody(graphics, focus, pick);
         } finally {
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
         }
     }
 

@@ -1,5 +1,7 @@
 package com.persiki84.battlecraft.client.custom;
 
+import com.persiki84.shared.client.ui.UiCorner;
+import com.persiki84.shared.client.ui.UiDepth;
 import com.persiki84.shared.client.ui.UiGlassStyle;
 import com.persiki84.shared.client.ui.UiScale;
 
@@ -32,6 +34,8 @@ public enum GlassKey {
             UiGlassStyle::dissolveChaos),
     DISSOLVE_DRIFT(Group.MATERIAL, "dissolveDrift", 0.0f, 3.0f, UiGlassStyle.DISSOLVE_DRIFT, 0.05f,
             UiGlassStyle::dissolveDrift),
+    MENU_CORNER(Group.MATERIAL, "menuCorner", UiCorner.LEVEL_MIN, UiCorner.LEVEL_MAX, UiCorner.LEVEL, 1.0f,
+            UiCorner::level),
     SQUIRCLE(Group.MATERIAL, "squircle", 2.0f, 8.0f, UiGlassStyle.SQUIRCLE, 0.1f,
             UiGlassStyle::squircle),
     SWITCH_SQUIRCLE(Group.MATERIAL, "switchSquircle", 2.0f, 8.0f, UiGlassStyle.SWITCH_SQUIRCLE, 0.1f,
@@ -92,14 +96,18 @@ public enum GlassKey {
     GLOW_SPREAD(Group.TEXT, "glowSpread", 0.0f, 1.0f, UiGlassStyle.GLOW_SPREAD, 0.01f,
             UiGlassStyle::glowSpread),
     GLOW_LIFT(Group.TEXT, "glowLift", 0.0f, 1.0f, UiGlassStyle.GLOW_LIFT, 0.01f,
-            UiGlassStyle::glowLift);
+            UiGlassStyle::glowLift),
+
+    HUSH(Group.DEPTH, "hush", 0.0f, 0.5f, UiDepth.HUSH, 0.01f,
+            UiDepth::hush);
 
     public enum Group {
         MATERIAL,
         LENS,
         BLUR,
         SHINE,
-        TEXT;
+        TEXT,
+        DEPTH;
 
         public String id() {
             return name().toLowerCase(Locale.ROOT);

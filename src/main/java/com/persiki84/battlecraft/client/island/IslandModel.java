@@ -1,5 +1,6 @@
 package com.persiki84.battlecraft.client.island;
 
+import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.battlecraft.client.media.MediaBridge;
 import com.persiki84.battlecraft.client.media.MediaTrack;
 import com.persiki84.battlecraft.client.media.MediaWatch;
@@ -15,23 +16,22 @@ public final class IslandModel {
     private static final long STALL_HOLD_MS = 10000L;
     private static final float SHOW_RESPONSE = 0.42f;
     private static final float SHOW_DAMPING = 0.86f;
-    private static final float EXPAND_RESPONSE = 0.36f;
-    private static final float EXPAND_DAMPING = 0.78f;
     private static final float BLIND_RESPONSE = 0.34f;
     private static final float BLIND_DAMPING = 0.9f;
     private static final float ENERGY_SPEED = 4.5f;
     private static final int PING_CEILING = 300;
 
     private static final Spring shown = new Spring(SHOW_RESPONSE, SHOW_DAMPING, 0.0f);
-    private static final Spring opened = new Spring(EXPAND_RESPONSE, EXPAND_DAMPING, 0.0f);
     private static final Spring blinded = new Spring(BLIND_RESPONSE, BLIND_DAMPING, 0.0f);
     private static final Smooth energy = new Smooth(0.0f, ENERGY_SPEED);
 
 
+    private static long advancedFrame = -1L;
     private static MediaTrack track = MediaTrack.NONE;
     private static long playingAt;
     private static long cardUntil;
     private static boolean dormant = true;
+    private static boolean carded;
     private static int frames = -1;
     private static int latency = -1;
     private static Component framesLabel = Component.empty();
@@ -72,7 +72,16 @@ public final class IslandModel {
         return info == null ? 0 : Math.max(0, info.getLatency());
     }
 
-    public static void advance(float delta) {
+    // WHY: модель ведёт HUD острова, а в главном меню HUD не рисуется: плитка музыки центра
+    // WHY: управления зовёт её сама, и защёлка по кадру не даёт продвинуть модель дважды
+    public static void advanceFrame() {
+        long frame = UiFrame.frame();
+        if (frame == advancedFrame) return;
+        advancedFrame = frame;
+        advance(UiFrame.delta());
+    }
+
+    private static void advance(float delta) {
         MediaTrack fresh = MediaWatch.current();
         long now = System.currentTimeMillis();
         if (fresh.present() && fresh.playing()) playingAt = now;
@@ -85,7 +94,7 @@ public final class IslandModel {
         IslandFlip.advance(delta);
         IslandTone.advance(delta);
         shown.to(live ? 1.0f : 0.0f, delta);
-        opened.to(live && !fresh.blind() && now < cardUntil ? 1.0f : 0.0f, delta);
+        carded = live && !fresh.blind() && now < cardUntil;
         blinded.to(live && fresh.blind() ? 1.0f : 0.0f, delta);
         energy.to(fresh.playing() ? 1.0f : 0.0f, delta);
     }
@@ -117,8 +126,8 @@ public final class IslandModel {
         return clamp(shown.get());
     }
 
-    public static float expand() {
-        return clamp(opened.get());
+    public static boolean carded() {
+        return carded;
     }
 
     public static float blind() {
@@ -145,6 +154,10 @@ public final class IslandModel {
         return nick;
     }
 
+    public static String nickRaw() {
+        return nickRaw;
+    }
+
     public static float quality() {
         if (latency <= 0) return 1.0f;
         return Math.max(0.0f, 1.0f - latency / (float) PING_CEILING);
@@ -156,7 +169,7 @@ public final class IslandModel {
         cardUntil = 0L;
         playingAt = 0L;
         shown.snap(0.0f);
-        opened.snap(0.0f);
+        carded = false;
         blinded.snap(0.0f);
         IslandProgress.forget();
         IslandFlip.forget();

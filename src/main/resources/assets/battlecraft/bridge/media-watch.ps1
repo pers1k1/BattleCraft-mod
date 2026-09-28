@@ -37,6 +37,7 @@ if (-not (Test-Path $library) -or (Get-Item $source).LastWriteTimeUtc -gt (Get-I
 
 Add-Type -Path $library
 [BattleCraftMedia]::Init()
+[BattleCraftRemote]::Listen()
 
 $failures = 0
 $tick = 0
@@ -46,6 +47,7 @@ while ($true) {
     if ($ParentPid -ne 0 -and -not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { break }
 
     try {
+        if ([BattleCraftRemote]::Obey()) { $tick = [Math]::Min($tick, 6) }
         if ($tick -le 0) {
             $tick = 32
             $state = [BattleCraftMedia]::Poll($artPath)

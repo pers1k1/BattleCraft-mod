@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases — `2026.09.26v5` in files, `26.09.26v5 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases — `2026.09.28` in files, `28.09.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -849,6 +849,41 @@ Version 2026.09.26 - built and started on a dedicated server, the new commands c
 ## A softer visualiser, 26 September 2026 (v5)
 
 - The island bars ease a little more: a rise now takes 48 ms instead of 40 and a fall 75 ms instead of 60, so a fade no longer drops the bars in a jerk while a hit still lands faster than the tail of a sound.
+
+## The desktop, wallpapers and the frost motion set, 26-28 September 2026 (2026.09.28)
+
+Built from screen recordings of macOS 27 and iOS 26, measured frame by frame rather than by eye.
+
+- **The glass stays as it was.** A "macOS 27" glass preset with a grey film, a sharp edge and dark input fields was tried and removed together with all its knobs; saved configs that picked it fall back to the default preset. What stayed is a halo: pop-ups (hints, menus, the palette, toasts, desktop panels) barely darken the world around them on every preset. Neighbouring halos never stack and never shade another pop-up's body; the strength lives in the "Depth" group of the glass settings.
+- **Frost motion set**, re-measured against a macOS 27 App Center recording at 52 fps. Enter (0.17 s) fades in linearly and settles from 1.135x zoom, with no blur. Leave (0.14 s) fades out with (1-t)^4 while a Gaussian blur grows to 2.4 % of screen width and the panel zooms to 1.056x.
+- **Liquid glass eases in.** Lens effects (centre zoom, edge bend, dispersion, fresnel) ramp in over the whole enter animation of every motion set and ramp out over every leave. Before, they snapped to full strength on the first frame. First-frame skips in leave animations, the palette window and the title intro are fixed too.
+- **Text moves with its glass.** During scrolling, press squash, screen entrances, value swaps with arrows and marquees, text is now placed on the pixel grid of its resting position and moves continuously instead of stepping pixel by pixel. Glyph advances and centering are measured at the resting scale, so digits no longer jump at the start and end of a press, and small dim lines no longer flicker in density.
+- **Desktop main menu** (on by default; "Classic menu" in the View menu switches back, and the classic menu has a "Desktop" button to return):
+  - a transparent menu bar with a sliding hover pill, and a dock that is one glass pill where only the hovered icon grows slightly;
+  - a lock-screen clock: the date as plain text above digits drawn from a signed distance field (built once in the background from the bundled Inter SemiBold), so edges stay pixel-sharp at any size. The digits and the thin round colon are frosted glass modelled on the iOS 26 "Glass" lock screen: the wallpaper behind the glyph is blurred and brightened, pixels outside the glyph are left untouched. A changed digit rolls up and out while the new one rises from below;
+  - a control centre laid out like macOS: Fullscreen, Dots and Discord status toggles, an Animations tile that cycles the motion set, round buttons for wallpapers, theme colour and search, and a mini player with cover art, a draggable progress bar and previous / play-pause / next. Brightness and volume stay in the game settings;
+  - clicking the clock opens a calendar with month navigation and localized month and weekday names; the first day of the week follows the game language. Both popovers grow out of their menu bar item;
+  - a black now-playing pill under the menu bar with cover art, a scrolling title and the visualizer. Click it to expand into a player card over the clock with the artist, a seek bar with elapsed and remaining time, and previous / play-pause / next; click outside or press Esc to collapse. It hides when nothing is playing;
+  - after 2 minutes without input the desktop goes to sleep: the wallpaper blurs and dims, the dock and menu bar slide away, the clock moves to the centre and a large "Click or move the mouse to unlock" line appears. Any mouse movement, click or key brings everything back, and the waking event does not trigger anything else;
+  - Spotlight search opens from any letter typed on the desktop and lights a Siri glow around the screen. It finds worlds, servers, actions, every customization tab and row, every vanilla settings page and option, and every key binding, in the current language or in English. Picking a result opens the right screen, scrolls the row into view and briefly lights it. Resource packs are left out on purpose, since the options button for them is disabled.
+- **Media controls.** Play/pause, next, previous and seeking go only to the media session the island is showing, through the same Windows bridge, at most five commands a second. They are unavailable in sound-only (blind) mode.
+- **Icons** are drawn in the spirit of SF Symbols by exact shapes in a shader: new play, pause, forward, backward, chevrons, calendar, chat and motion. The globe no longer has stubs above and below the circle.
+- **Dotted wallpaper.** The built-in wallpaper is a lit planet, a light beam and a faint nebula, drawn as a dot matrix in black and white or in the theme colour. It assembles dot by dot once per launch; changing wallpaper shrinks the old dots while the new ones pop in, and without dots it cross-fades like macOS. When a menu opens over the desktop the wallpaper zooms, blurs and vignettes the same way the aurora background does.
+- **Wallpaper window.** Wallpapers open in their own window like every other menu of the mod, with the same open and close animation, text that wraps inside the panel, and Dots and Theme colour toggles. Right-click a tile to delete it.
+- **Own wallpapers.** Drop a picture, GIF or video onto the game window, or put it into `<game>/battlecraft/wallpapers/` and open the wallpaper window. Any resolution and aspect is accepted: nothing is cropped on import, the cache keeps the source aspect and is fitted to the screen when drawn, and only sources above 3840x2160 are scaled down. Animation is capped at 30 fps and 20 seconds (a longer clip is cut, not rejected). A 4K clip of 20 seconds takes about 500 MB of cache.
+- PNG, JPEG and BMP are read by Java. A GIF is composited by its own disposal rules, offsets and transparency, laid over black and resampled onto a 30 fps grid; a 0 or 1 hundredth delay plays as 10, as browsers do.
+- Video (mp4, mov, m4v, wmv, avi, mkv, webm) goes through Media Foundation `IMFSourceReader`, using the same bridge approach as the island: `wallpaper-import.ps1` compiles `wallpaper-native.cs` with the `csc.exe` that ships with Windows, runs PowerShell with `-MTA` and quits together with the game. A codec that Windows lacks (HEVC without HEVC Video Extensions, AV1) fails with a readable message instead of hanging.
+- Playback decodes JPEG with stb_image in a small thread pool into a three-frame ring of mapped pixel buffers. The render thread only issues an asynchronous upload, so a 4K clip holds 30 fps at about 0.25 ms of render-thread time per frame. Decoding pauses when the texture has not been asked for in 2 seconds.
+- **World loading screens** use the desktop wallpaper when the desktop menu is on, with the same player head animation. The settings screen no longer flickers over the desktop: the background was drawn twice per frame, and the second copy went through the settings reveal effect.
+- **Smoother edges.** The minimap no longer clips its rounded corners with the depth buffer: it is drawn off screen and laid in through an exact shape mask with a one-pixel soft edge. Progress rings are drawn by exact distance too.
+
+- **Blur in motion.** The player pill and card morph through a real blur (one shared morph for the HUD island and the desktop): the pill empties into blur, the shape grows, the card arrives out of blur, and closing shrinks the card into an empty pill before it widens again for the cover, title and visualizer. The desktop pill sits in the menu bar row and uses the same visualizer as the HUD. Leaving menus is now as smooth as entering them, including vanilla screens.
+- **Clock styles.** Right-click the desktop clock to switch liquid glass on or off, change the weight and the blur; every change animates. The digit field is more precise, so the grain is gone.
+- **Menu corner shape.** Menus get their own corner shape (1-5, default 2, Apple-like continuous curvature), separate from the HUD; changes animate.
+- **Marker hiding.** The points key and the player list now also fade out base, shop and map markers and quarry ore markers.
+- **Wallpaper window** scrolls instead of growing past the screen; imports are capped at 2 GiB per file and 8 GiB in total; the wallpaper player frees its video memory while you are in a world.
+
+Version 2026.09.28 - built but not played through, so report anything that looks wrong.
 
 ## Releases
 

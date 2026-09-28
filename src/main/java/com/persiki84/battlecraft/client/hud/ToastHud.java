@@ -9,9 +9,11 @@ import com.persiki84.shared.client.ui.Toggle;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
+import com.persiki84.shared.client.ui.UiGlassStyle;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiReveal;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiTheme;
@@ -220,6 +222,18 @@ public final class ToastHud {
         float eased = UiAnim.easeOut(note.alphaValue);
         float x = note.targetX + HudLayout.slideX(HudSlot.TOASTS, (1.0f - eased) * SLIDE_TRAVEL);
         float noteY = note.y.to(note.targetY, delta);
+        UiGlass.hush(graphics, x, noteY, note.width, note.height, UiMetrics.radius(note.height), note.alphaValue);
+
+        float outerPresence = UiGlassStyle.scalePresence(UiReveal.glassPresence(note.alphaValue));
+        try {
+            paintNote(graphics, mc, note, now, delta, x, noteY);
+        } finally {
+            UiGlassStyle.restorePresence(outerPresence);
+        }
+    }
+
+    private static void paintNote(GuiGraphics graphics, Minecraft mc, Note note, long now, float delta,
+                                  float x, float noteY) {
         float alpha = note.alphaValue;
         float urgency = note.alert ? UiAnim.pulse(1150.0f, 0.55f, 1.0f) : 0.0f;
         int accent = note.alert ? UiTheme.mix(UiPalette.alertDim(), UiPalette.alert(), urgency)

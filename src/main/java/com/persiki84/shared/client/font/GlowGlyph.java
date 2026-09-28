@@ -2,14 +2,16 @@ package com.persiki84.shared.client.font;
 
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.persiki84.shared.client.ui.UiGlassStyle;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import net.minecraft.client.gui.font.GlyphRenderTypes;
 import net.minecraft.client.gui.font.glyphs.BakedGlyph;
 import org.joml.Matrix4f;
 
 public final class GlowGlyph extends BakedGlyph {
     private static final float DIAGONAL_SHARE = 0.7071f;
-    private static final float MIN_ALPHA = 0.02f;
-    private static final float DENSE_SPAN = 9.0f;
+    private static final float MIN_ALPHA = 0.002f;
+    private static final float DENSE_FROM = 8.0f;
+    private static final float DENSE_FULL = 10.0f;
     private static final int CARDINAL_OFFSETS = 8;
     private static final float[] OFFSETS = new float[16];
 
@@ -30,19 +32,24 @@ public final class GlowGlyph extends BakedGlyph {
             float haloRed = lift(red);
             float haloGreen = lift(green);
             float haloBlue = lift(blue);
-            int limit = spreadWorthDiagonals(matrix) ? OFFSETS.length : CARDINAL_OFFSETS;
-            for (int step = 0; step < limit; step += 2) {
+            float diagonal = halo * density(matrix);
+            for (int step = 0; step < OFFSETS.length; step += 2) {
+                float copy = step < CARDINAL_OFFSETS ? halo : diagonal;
+                if (copy <= MIN_ALPHA) continue;
                 super.render(italic, x + OFFSETS[step], y + OFFSETS[step + 1], matrix, buffer,
-                        haloRed, haloGreen, haloBlue, halo, packedLight);
+                        haloRed, haloGreen, haloBlue, copy, packedLight);
             }
         }
 
         super.render(italic, x, y, matrix, buffer, red, green, blue, alpha, packedLight);
     }
 
-    private boolean spreadWorthDiagonals(Matrix4f matrix) {
-        float scale = Math.max(Math.abs(matrix.m00()), Math.abs(matrix.m11()));
-        return span * scale >= DENSE_SPAN;
+    // WHY: диагонали ореола включаются долей, а не порогом, и по размеру покоя: порог по живому
+    // WHY: масштабу щёлкал на широких буквах посреди нажатия, и ореол у них вспыхивал вдвое
+    private float density(Matrix4f matrix) {
+        float scale = Math.max(Math.abs(matrix.m00()), Math.abs(matrix.m11())) / UiRestFrame.stretchX();
+        float share = (span * scale - DENSE_FROM) / (DENSE_FULL - DENSE_FROM);
+        return Math.max(0.0f, Math.min(1.0f, share));
     }
 
     private static float lift(float channel) {

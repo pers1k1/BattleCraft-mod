@@ -3,6 +3,7 @@ package com.persiki84.shared.client.menu;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiSwap;
 import com.persiki84.shared.client.ui.UiAccent;
@@ -46,8 +47,13 @@ public class ActionRow extends MenuRow {
     private void paintValue(GuiGraphics graphics, Component text, float shift, int color) {
         if (text.getString().isEmpty() || (color >>> 24) < MIN_ALPHA) return;
 
-        UiRender.textTrackedBox(graphics, font(), text, getX() + width - PAD - VALUE_WIDTH, getY() + shift, height,
-                VALUE_WIDTH, LABEL_SCALE, 0.0f, color, false, 1.0f);
+        UiRestFrame.shift(graphics, 0.0f, shift);
+        try {
+            UiRender.textTrackedBox(graphics, font(), text, getX() + width - PAD - VALUE_WIDTH, getY(), height,
+                    VALUE_WIDTH, LABEL_SCALE, 0.0f, color, false, 1.0f);
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
     }
 
     @Override

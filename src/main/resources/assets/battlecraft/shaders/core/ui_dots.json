@@ -1,0 +1,179 @@
+{
+    "blend": {
+        "func": "add",
+        "srcrgb": "srcalpha",
+        "dstrgb": "1-srcalpha",
+        "srcalpha": "one",
+        "dstalpha": "1-srcalpha"
+    },
+    "vertex": "battlecraft:ui_aurora",
+    "fragment": "battlecraft:ui_dots",
+    "attributes": [
+        "Position",
+        "UV0"
+    ],
+    "samplers": [
+        {
+            "name": "Sampler0"
+        },
+        {
+            "name": "Sampler1"
+        }
+    ],
+    "uniforms": [
+        {
+            "name": "ModelViewMat",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "ProjMat",
+            "type": "matrix4x4",
+            "count": 16,
+            "values": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "ScreenSize",
+            "type": "float",
+            "count": 2,
+            "values": [
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "name": "Time",
+            "type": "float",
+            "count": 1,
+            "values": [
+                0.0
+            ]
+        },
+        {
+            "name": "Pointer",
+            "type": "float",
+            "count": 2,
+            "values": [
+                0.5,
+                0.5
+            ]
+        },
+        {
+            "name": "Ink",
+            "type": "float",
+            "count": 4,
+            "values": [
+                1.0,
+                1.0,
+                1.0,
+                0.0
+            ]
+        },
+        {
+            "name": "Backdrop",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "name": "Pitch",
+            "type": "float",
+            "count": 1,
+            "values": [
+                6.0
+            ]
+        },
+        {
+            "name": "Source",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.0,
+                0.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "name": "CoverA",
+            "type": "float",
+            "count": 4,
+            "values": [
+                1.0,
+                1.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "CoverB",
+            "type": "float",
+            "count": 4,
+            "values": [
+                1.0,
+                1.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "Dotted",
+            "type": "float",
+            "count": 1,
+            "values": [
+                1.0
+            ]
+        },
+        {
+            "name": "Mood",
+            "type": "float",
+            "count": 4,
+            "values": [
+                1.0,
+                0.0,
+                0.0,
+                0.0
+            ]
+        }
+    ]
+}

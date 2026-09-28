@@ -5,7 +5,6 @@ import com.persiki84.battlecraft.client.hud.HudConfig;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiFrame;
-import com.persiki84.shared.client.ui.UiHud;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiTheme;
@@ -28,7 +27,7 @@ public final class QuarryHud {
     public static final IGuiOverlay OVERLAY = (gui, graphics, partialTick, screenWidth, screenHeight) -> {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.options.hideGui || minecraft.player == null || minecraft.player.isSpectator()) return;
-        if (!ClientModules.allows(ModuleId.QUARRY) || UiHud.rosterOpen()) return;
+        if (!ClientModules.allows(ModuleId.QUARRY)) return;
 
         float scale = UiScale.push(graphics);
         try {

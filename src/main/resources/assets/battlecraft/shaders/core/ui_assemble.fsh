@@ -8,6 +8,7 @@ uniform vec4 Spark;
 uniform float Mode;
 uniform vec2 Sweep;
 uniform vec2 Origin;
+uniform float Arrival;
 
 in vec2 stagePoint;
 
@@ -54,6 +55,23 @@ const int FOCUS_RINGS = 2;
 const vec2 FOCUS_TAPS[8] = vec2[8](
     vec2(1.0, 0.0), vec2(-1.0, 0.0), vec2(0.0, 1.0), vec2(0.0, -1.0),
     vec2(0.7071, 0.7071), vec2(-0.7071, 0.7071), vec2(0.7071, -0.7071), vec2(-0.7071, -0.7071));
+
+// WHY: иней снят покадрово с центра приложений macOS 27 (ref11, подгонка масштаба, размытия и
+// WHY: непрозрачности к каждому кадру). Вход без размытия: панель садится из увеличения 1.135 к 1.0
+// WHY: вокруг своего центра, (1-t)^2 за весь вход, а непрозрачность растёт линейно и полная уже на
+// WHY: 0.61 входа. Уход с образца, (1-t)^4, терял 40 % непрозрачности на первом кадре и читался
+// WHY: рывком, поэтому он зеркален входу: непрозрачность (1-t^2)^2 и увеличение до 1.056 как t^2 стоят
+// WHY: на месте в первом кадре и гаснут без излома в последнем, а размытие растёт как t^1.4 до сигмы
+// WHY: 2.37 % ширины экрана, так что панель уходит расфокусом, а не просто прозрачностью
+const float FROST_OPEN_FADE = 0.61;
+const float FROST_OPEN_ZOOM = 0.135;
+const float FROST_OPEN_EASE = 2.0;
+const float FROST_CLOSE_DRIFT = 1.4;
+const float FROST_CLOSE_ZOOM = 0.056;
+const float FROST_CLOSE_SIGMA = 0.0237;
+const float FROST_SHARP = 0.35;
+const int FROST_TAPS = 40;
+const float GOLDEN_TURN = 2.3999632;
 
 const float LAND_START = 0.94;
 const float LAND_END = 1.00;
@@ -157,11 +175,99 @@ vec4 focusAt(vec2 centre, vec2 step) {
     return vec4(cover > 0.0 ? tint / cover : vec3(0.0), share);
 }
 
+float frostOpenOpacity(float t) {
+    return min(1.0, t / FROST_OPEN_FADE);
+}
+
+float frostOpenZoom(float t) {
+    return 1.0 + FROST_OPEN_ZOOM * pow(1.0 - t, FROST_OPEN_EASE);
+}
+
+// WHY: уход, начатый посреди входа, стартует с той непрозрачности и того увеличения, на которых вход
+// WHY: застали (Arrival - доля входа). У доигранного входа Arrival равен единице, и кривые ухода ровно
+// WHY: те, что сняты с образца
+float frostCloseOpacity(float t) {
+    float kept = 1.0 - t * t;
+    return kept * kept;
+}
+
+float frostOpacity(float t, bool leaving) {
+    if (leaving) return frostOpenOpacity(clamp(Arrival, 0.0, 1.0)) * frostCloseOpacity(t);
+    return frostOpenOpacity(t);
+}
+
+float frostZoom(float t, bool leaving) {
+    if (leaving) return frostOpenZoom(clamp(Arrival, 0.0, 1.0)) + FROST_CLOSE_ZOOM * t * t;
+    return frostOpenZoom(t);
+}
+
+float frostSigma(float t, bool leaving) {
+    if (!leaving) return 0.0;
+    return FROST_CLOSE_SIGMA * ScreenSize.x * pow(t, FROST_CLOSE_DRIFT);
+}
+
+float coverOf(float alpha) {
+    return min(1.0, sqrt(alpha) * COVER_STEPS);
+}
+
+vec4 stageAt(vec2 uv) {
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0);
+    return texture(Sampler0, uv);
+}
+
+// WHY: отсчёты лежат спиралью по золотому углу, а их удаление от центра взято из обратной функции
+// WHY: распределения Рэлея: равные веса тогда складываются в гаусс с той же сигмой, что снята с кадров.
+// WHY: Цвет усредняется с весом покрытия, иначе пустые отсчёты за кромкой тянут панель в чёрное
+vec4 frostSoft(vec2 centre, float sigma) {
+    vec4 middle = stageAt(centre);
+    float cover = coverOf(middle.a);
+    vec3 tint = middle.rgb * cover;
+    float turn = hash(gl_FragCoord.xy) * 6.2831853;
+    for (int tap = 0; tap < FROST_TAPS; tap++) {
+        float share = (float(tap) + 0.5) / float(FROST_TAPS);
+        float reach = sigma * sqrt(-2.0 * log(1.0 - share));
+        float angle = turn + float(tap) * GOLDEN_TURN;
+        vec4 found = stageAt(centre + vec2(cos(angle), sin(angle)) * reach / ScreenSize);
+        float covered = coverOf(found.a);
+        tint += found.rgb * covered;
+        cover += covered;
+    }
+    return vec4(cover > 0.0 ? tint / cover : vec3(0.0), cover / float(FROST_TAPS + 1));
+}
+
+// WHY: масштаб считается сэмплингом стадии вокруг центра панели, а не позой отрисовки: так он один
+// WHY: на все пути (экран, окно палитры, титульный экран, ванильные настройки, уход в мировой позе)
+vec4 frost(vec2 uv, bool leaving) {
+    float t = clamp(Phase, 0.0, 1.0);
+    vec2 seen = Origin + (uv - Origin) / frostZoom(t, leaving);
+    float sigma = frostSigma(t, leaving);
+    float exact = coverOf(coverageAt(seen * ScreenSize, COVER_REACH, leaving ? 1.0 : 0.0));
+    vec4 soft = sigma < FROST_SHARP ? vec4(stageAt(seen).rgb, exact) : frostSoft(seen, sigma);
+    float land = leaving ? 0.0 : smoothstep(LAND_START, LAND_END, Phase);
+    float alpha = mix(soft.a * frostOpacity(t, leaving), 1.0, land);
+    vec3 tone = soft.a > 0.0 ? soft.rgb : texture(Sampler0, uv).rgb;
+    return vec4(tone * alpha, alpha);
+}
+
+// WHY: горение, начатое посреди входа из света, обязано стартовать с той маски, которую вход успел
+// WHY: открыть, а не с целой панели: фронт входа восстанавливается той же формулой, что у Mode 0, на доле
+// WHY: Arrival. У доигранного входа край 1.46 выше поля (не больше 1.18), и доля ровно единица
+float arrivedReach(vec2 uv, float shaped, float seeded) {
+    float depth = clamp(((1.0 - uv.y) - Sweep.x) / max(0.02, Sweep.y), 0.0, 1.0);
+    float field = mix(depth, uv.x, RAMP_TILT) + (shaped - 0.5) * CLOUD_SHARE + (0.5 - seeded) * BLOOM_SHARE;
+    float edge = mix(EDGE_FROM, EDGE_TO, clamp(Arrival, 0.0, 1.0));
+    return smoother(clamp((edge - field) / FRONT_WIDTH, 0.0, 1.0));
+}
+
 void main() {
     // WHY: снимок сэмплится по координате снятия, а не по экранной: на горении квад лежит в мире,
     // WHY: и по gl_FragCoord он читал бы сцену с чужого места
     vec2 uv = stagePoint;
     vec2 pixel = uv * ScreenSize;
+    if (Mode > 2.75) {
+        fragColor = frost(uv, Mode > 3.25);
+        return;
+    }
     if (Mode > 1.5) {
         float settled = 1.0 - pow(1.0 - clamp(Phase, 0.0, 1.0), FOCUS_EASE);
         vec4 soft = focusAt(uv, FOCUS_BLUR * (1.0 - settled) / ScreenSize);
@@ -200,6 +306,8 @@ void main() {
     float edge = mix(mix(EDGE_FROM, EDGE_TO, Mode), mix(EDGE_TO, EDGE_FROM, Mode), Phase);
     float ramped = clamp((edge - field) / FRONT_WIDTH, 0.0, 1.0);
     float reached = smoother(ramped);
+    float entered = Mode > 0.5 ? arrivedReach(uv, shaped, seeded) : 1.0;
+    float arrivedBody = smoothstep(0.0, BODY_IN, entered);
 
     vec4 ink = inkAt(pixel);
     // WHY: содержимое доводится до резкости вслед за фронтом: куда свет ещё не дошёл, там оно
@@ -207,7 +315,7 @@ void main() {
     // WHY: горение берёт ту же наводку зеркально - резкость уходит перед фронтом, - и это безопасно:
     // WHY: содержимое лежит в стадии плоско, в мировую позу его выносит уже композитный квад,
     // WHY: а вес тапа это его покрытие, поэтому перенесённая сцена из-за кромки в цвет не попадает
-    vec4 soft = focusAt(uv, ENTER_BLUR * (1.0 - reached) / ScreenSize);
+    vec4 soft = focusAt(uv, ENTER_BLUR * (1.0 - min(reached, entered)) / ScreenSize);
     vec3 tone = soft.a > 0.0 ? soft.rgb : ink.rgb;
     float body = smoothstep(0.0, BODY_IN, reached);
     float offset = (ramped - EDGE_AT) / EDGE_SPAN;
@@ -225,11 +333,11 @@ void main() {
     // WHY: сцена совпадала с кадром вне интерфейса, а на мировом кваде это неверно по построению
     float seam = (1.0 - smoothstep(0.0, BURN_SEAM, Phase)) * Mode;
     float settled = max(land, seam);
-    float mask = mix(mix(body * cover, cover, seam), 1.0, land);
+    float mask = mix(mix(body * cover, cover, seam) * arrivedBody, 1.0, land);
 
     vec3 ember = mix(Spark.rgb, mix(Spark.rgb, vec3(1.0), EMBER_WHITE), Mode);
     float glint = charge > 0.0 ? pow(sparkle(plane * SPARK_SCALE + Time * SPARK_DRIFT), SPARK_POWER) : 0.0;
-    float lift = cover * body * line * charge * (FRONT_GLOW + glint * SPARK_GLOW) * (1.0 - settled);
+    float lift = cover * body * arrivedBody * line * charge * (FRONT_GLOW + glint * SPARK_GLOW) * (1.0 - settled);
     float dither = (hash(pixel + fract(Time) * 61.7) - 0.5) / DITHER_DEPTH * line * mask;
 
     fragColor = vec4((tinted + ember * lift + dither) * mask, mask);

@@ -1,5 +1,6 @@
 package com.persiki84.quarrymod.client;
 
+import com.persiki84.battlecraft.client.hud.PointsView;
 import com.persiki84.shared.Names;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
@@ -51,14 +52,15 @@ public final class QuarryMarkers {
         float screenWidth = minecraft.getWindow().getGuiScaledWidth();
         float screenHeight = minecraft.getWindow().getGuiScaledHeight();
 
+        boolean shown = PointsView.markersShown();
         for (ClientQuarryField.Cell cell : ClientQuarryField.cells()) {
-            place(minecraft.level, cell, camera, view, projection, screenWidth, screenHeight);
+            place(minecraft.level, cell, shown, camera, view, projection, screenWidth, screenHeight);
         }
         prune();
     }
 
-    private static void place(BlockGetter level, ClientQuarryField.Cell cell, Vec3 camera, Matrix4f view,
-                              Matrix4f projection, float screenWidth, float screenHeight) {
+    private static void place(BlockGetter level, ClientQuarryField.Cell cell, boolean shown, Vec3 camera,
+                              Matrix4f view, Matrix4f projection, float screenWidth, float screenHeight) {
         Marker marker = claim(cell);
         marker.pass = pass;
         double x = cell.pos().getX() + 0.5 - camera.x;
@@ -82,7 +84,8 @@ public final class QuarryMarkers {
         }
 
         marker.relabel(cell);
-        live.add(marker.place(screenX, screenY, (int) distance, cell.color(), wanted(level, cell, camera, distance)));
+        live.add(marker.place(screenX, screenY, (int) distance, cell.color(),
+                shown && wanted(level, cell, camera, distance)));
     }
 
     // WHY: метка висит только над клеткой вплотную и в прямой видимости: карьер это сотня блоков

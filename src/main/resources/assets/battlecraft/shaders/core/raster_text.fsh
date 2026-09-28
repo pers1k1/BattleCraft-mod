@@ -3,6 +3,7 @@
 uniform sampler2D Sampler0;
 uniform vec4 ColorModulator;
 uniform float TextWeight;
+uniform vec4 RestMove;
 
 uniform vec4 RevealBand;
 uniform vec4 RevealShade;
@@ -10,6 +11,8 @@ uniform vec4 RevealShade;
 in float bandX;
 in vec4 vertexColor;
 in vec2 texCoord0;
+in vec2 livePixel;
+in vec2 restPixel;
 
 out vec4 fragColor;
 
@@ -25,9 +28,7 @@ const float SMALL_LIFT = 0.055;
 const float FLOOR = 0.025;
 const float WEIGHT_GAIN = 0.20;
 
-float sampledCoverage(vec2 uv) {
-    vec2 stepX = dFdx(uv);
-    vec2 stepY = dFdy(uv);
+float sampledCoverage(vec2 uv, vec2 stepX, vec2 stepY) {
     vec2 atlasSize = vec2(textureSize(Sampler0, 0));
     float footprint = max(length(stepX * atlasSize), length(stepY * atlasSize));
 
@@ -51,6 +52,29 @@ float sampledCoverage(vec2 uv) {
     return pow(clamp(coverage, 0.0, 1.0), mix(0.95, 0.78, smallText));
 }
 
+const vec4 AT_REST = vec4(1.0, 1.0, 0.0, 0.0);
+
+// WHY: порог прилипает к пиксельной сетке, и строка в ходу шла бы ступенями. В ходу покрытие
+// WHY: считается на пикселях сетки покоя с футпринтом пикселя покоя и переносится на живые пиксели
+// WHY: билинейно: чернила не меняются, строка едет ровно, а к концу хода веса сходятся к покою
+float restCoverage(vec2 uv) {
+    vec2 stepX = dFdx(uv);
+    vec2 stepY = dFdy(uv);
+    if (RestMove == AT_REST) return sampledCoverage(uv, stepX, stepY);
+
+    mat2 toTexture = mat2(stepX, stepY) * inverse(mat2(dFdx(livePixel), dFdy(livePixel)));
+    vec2 restStepX = toTexture * vec2(RestMove.x, 0.0);
+    vec2 restStepY = toTexture * vec2(0.0, RestMove.y);
+    vec2 base = floor(restPixel - 0.5) + 0.5;
+    vec2 blend = restPixel - base;
+    vec2 anchor = uv + toTexture * ((base - restPixel) * RestMove.xy);
+    float nearTop = sampledCoverage(anchor, restStepX, restStepY);
+    float farTop = sampledCoverage(anchor + restStepX, restStepX, restStepY);
+    float nearBottom = sampledCoverage(anchor + restStepY, restStepX, restStepY);
+    float farBottom = sampledCoverage(anchor + restStepX + restStepY, restStepX, restStepY);
+    return mix(mix(nearTop, farTop, blend.x), mix(nearBottom, farBottom, blend.x), blend.y);
+}
+
 const float REVEAL_OPAQUE_AT = 0.7;
 
 // WHY: бегущая строка гаснет у края коробки по пикселю, а не буквой целиком: край проявляется
@@ -66,7 +90,7 @@ vec4 revealed(vec4 color) {
 
 void main() {
     vec4 color = vertexColor * ColorModulator;
-    float coverage = sampledCoverage(texCoord0);
+    float coverage = restCoverage(texCoord0);
     fragColor = revealed(vec4(color.rgb, color.a * coverage));
 
     if (fragColor.a < 0.008) {

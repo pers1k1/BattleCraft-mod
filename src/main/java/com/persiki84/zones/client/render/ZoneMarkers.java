@@ -1,10 +1,10 @@
 package com.persiki84.zones.client.render;
 
 import com.persiki84.battlecraft.client.ClientMarkerRanges;
+import com.persiki84.battlecraft.client.hud.PointsView;
 import com.persiki84.battlecraft.rules.MarkerRange;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
-import com.persiki84.shared.client.ui.UiHud;
 import com.persiki84.shared.client.ui.UiTagStack;
 import com.persiki84.shared.client.ui.UiWorldPalette;
 import com.persiki84.shared.zone.ZoneArea;
@@ -75,7 +75,7 @@ public final class ZoneMarkers {
         float screenHeight = minecraft.getWindow().getGuiScaledHeight();
 
         boolean running = VisibleZones.matchRunning();
-        boolean shown = !UiHud.rosterOpen();
+        boolean shown = PointsView.markersShown();
         ResourceLocation here = minecraft.level == null ? null : minecraft.level.dimension().location();
         for (Zone zone : ClientZoneData.all()) {
             if (!listed(zone) || !zone.inDimension(here)) continue;

@@ -79,10 +79,11 @@ public final class UiPane {
 
     private static void bind(float pixels, float width, float height, float radius, int top, int bottom) {
         float corner = Math.min(radius, Math.min(width, height) * 0.5f);
+        float reach = Math.min(UiGlassStyle.shapeReach(width, height, corner), Math.min(width, height) * 0.5f);
         paneShader.safeGetUniform("PaneTop").set(red(top), green(top), blue(top), opacity(top));
         paneShader.safeGetUniform("PaneBottom").set(red(bottom), green(bottom), blue(bottom), opacity(bottom));
         paneShader.safeGetUniform("PaneShape").set(width * pixels * 0.5f, height * pixels * 0.5f,
-                corner * pixels, density());
+                reach * pixels, density());
         float smallest = Math.min(width, height) * pixels;
         float thickness = Math.min(UiGlassStyle.band() * pixels, smallest * BAND_SHARE);
         paneShader.safeGetUniform("PaneLens").set(thickness, refraction(),

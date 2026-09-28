@@ -1,5 +1,7 @@
 package com.persiki84.battlecraft.client.menu;
 
+import com.persiki84.battlecraft.client.hud.HudConfig;
+import com.persiki84.battlecraft.client.menu.desktop.DesktopWallpaper;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAmbience;
 import com.persiki84.shared.client.ui.UiAurora;
@@ -18,23 +20,39 @@ public final class MenuBackground {
 
     private final Smooth pointerX = new Smooth(SCREEN_CENTER, POINTER_SPEED);
     private final Smooth pointerY = new Smooth(SCREEN_CENTER, POINTER_SPEED);
+    private long aimedFrame = -1L;
 
     public static MenuBackground shared() {
         return SHARED;
     }
 
+    // WHY: один выбор фона на всё меню: при рабочем столе его обои стоят и под экранами загрузки
+    // WHY: мира, и под настройками, иначе при входе в мир мелькало бы прежнее главное меню
     public void render(GuiGraphics graphics, int screenWidth, int screenHeight) {
         if (screenWidth <= 0 || screenHeight <= 0) return;
 
         UiAmbience.advance();
-        float delta = UiFrame.delta();
-        float aimX = pointerX.to(pointerFraction(true), delta);
-        float aimY = pointerY.to(pointerFraction(false), delta);
-
+        aim();
+        if (HudConfig.menuDesktop()
+                && DesktopWallpaper.shared().render(graphics, screenWidth, screenHeight, pointerX.get(), pointerY.get())) {
+            return;
+        }
         int backdrop = UiPalette.backdrop();
-        if (UiAurora.field(graphics, screenWidth, screenHeight, backdrop, aimX, aimY)) return;
+        if (UiAurora.field(graphics, screenWidth, screenHeight, backdrop, pointerX.get(), pointerY.get())) return;
 
         UiRender.rect(graphics, 0.0f, 0.0f, screenWidth, screenHeight, backdrop);
+    }
+
+    // WHY: фон за кадр рисуется не один раз (подложка под окном и сам экран), а сглаживание
+    // WHY: курсора обязано шагать раз в кадр, иначе линза бегала бы вдвое быстрее
+    private void aim() {
+        long frame = UiFrame.frame();
+        if (frame == aimedFrame) return;
+
+        aimedFrame = frame;
+        float delta = UiFrame.delta();
+        pointerX.to(pointerFraction(true), delta);
+        pointerY.to(pointerFraction(false), delta);
     }
 
     private static float pointerFraction(boolean horizontal) {

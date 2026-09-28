@@ -16,7 +16,6 @@ public final class UiSkin {
     private static final String WORD_BREAK = "[^\\p{L}\\p{N}]+";
     private static final float PRESS_SQUASH = 0.055f;
     private static final float REBOUND_LIMIT = 0.35f;
-    private static final float SMOOTH_THRESHOLD = 0.0004f;
     private static final float HOVER_LIFT = 1.2f;
     private static final float TRACK_HEIGHT = 3.0f;
     private static final float TRACK_INSET = 9.0f;
@@ -76,21 +75,43 @@ public final class UiSkin {
         float squash = Math.max(-REBOUND_LIMIT, Math.min(1.0f, pressed)) * PRESS_SQUASH;
         float w = width * (1.0f - squash);
         float h = height * (1.0f - squash);
+        float rise = focus * wholeLift(graphics);
         float bx = x + (width - w) / 2.0f;
-        float by = y + (height - h) / 2.0f - focus * HOVER_LIFT;
+        float by = y + (height - h) / 2.0f - rise;
 
-        boolean quantized = UiRender.rawScale(UiRender.rawScale(false) || Math.abs(squash) > SMOOTH_THRESHOLD);
+        surface(graphics, bx, by, w, h, live, focus, pressed);
+        UiRestFrame.push(graphics, x + width / 2.0f, y + height / 2.0f, 1.0f - squash, 1.0f - squash, 0.0f, -rise);
         try {
-            surface(graphics, bx, by, w, h, live, focus, pressed);
             float textLive = lit ? 1.0f : live;
-            float scale = labelScale * (1.0f - squash);
             if (outgoing != null && swap < 0.999f) {
-                label(graphics, outgoing, bx, by - swap * LABEL_SWAP_LIFT, w, h, textLive, focus, scale, 1.0f - swap);
+                sliding(graphics, outgoing, x, y, width, height, -swap * LABEL_SWAP_LIFT, textLive, focus,
+                        labelScale, 1.0f - swap);
             }
-            label(graphics, label, bx, by + (1.0f - swap) * LABEL_SWAP_LIFT, w, h, textLive, focus, scale, swap);
-            swatch(graphics, bx, by, w, h, 1.0f - squash, swatch);
+            sliding(graphics, label, x, y, width, height, (1.0f - swap) * LABEL_SWAP_LIFT, textLive, focus,
+                    labelScale, swap);
         } finally {
-            UiRender.rawScale(quantized);
+            UiRestFrame.pop(graphics);
+        }
+        swatch(graphics, bx, by, w, h, 1.0f - squash, swatch);
+    }
+
+    // WHY: подъём под курсором кончается на целом пикселе: подпись едет за стеклом ходом и
+    // WHY: в наведённой кнопке обязана встать на сетку, иначе она стояла бы мягче соседних.
+    // WHY: Пиксели берутся по сетке покоя: по живым округление щёлкало посреди въезда экрана и кнопка прыгала
+    private static float wholeLift(GuiGraphics graphics) {
+        float pixels = UiRender.pixels(graphics) / UiRestFrame.stretchX();
+        return pixels <= 0.01f ? HOVER_LIFT : Math.round(HOVER_LIFT * pixels) / pixels;
+    }
+
+    // WHY: сжатие, подъём и смена подписи заявлены ходом от места покоя: иначе буквы и цифры
+    // WHY: перестраивали перо под каждый кадр нажатия и прыгали в его начале и конце
+    private static void sliding(GuiGraphics graphics, Component label, float x, float y, float width, float height,
+                                float lift, float live, float focus, float scale, float alpha) {
+        UiRestFrame.shift(graphics, 0.0f, lift);
+        try {
+            label(graphics, label, x, y, width, height, live, focus, scale, alpha);
+        } finally {
+            UiRestFrame.pop(graphics);
         }
     }
 

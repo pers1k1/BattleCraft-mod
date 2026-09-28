@@ -28,7 +28,10 @@ public enum InterfaceFlag {
     RADIO_STATIC("radioStatic", true, HudConfig::radioStatic, HudConfig::radioStatic),
     RADIO_CHIRP("radioChirp", true, HudConfig::radioChirp, HudConfig::radioChirp),
     DAMAGE_NUMBERS("damageNumbers", true, HudConfig::damageNumbers, HudConfig::damageNumbers),
-    DAMAGE_STACK("damageStack", true, HudConfig::damageStack, HudConfig::damageStack);
+    DAMAGE_STACK("damageStack", true, HudConfig::damageStack, HudConfig::damageStack),
+    MENU_DESKTOP("menuDesktop", true, HudConfig::menuDesktop, HudConfig::menuDesktop),
+    WALLPAPER_DOTS("wallpaperDots", true, HudConfig::wallpaperDots, HudConfig::wallpaperDots),
+    WALLPAPER_THEMED("wallpaperThemed", false, HudConfig::wallpaperThemed, HudConfig::wallpaperThemed);
 
     public interface Switch {
         void set(boolean value);

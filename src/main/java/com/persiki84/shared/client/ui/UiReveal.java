@@ -7,9 +7,15 @@ public final class UiReveal {
     public static final float ENTER = 0.0f;
     public static final float BURN = 1.0f;
     public static final float FOCUS = 2.0f;
+    public static final float FROST = 3.0f;
+    public static final float FROST_LEAVE = 3.5f;
 
     private static final float ENTER_SECONDS = 0.85f;
     private static final float MAX_STEP = 1.0f / 15.0f;
+    // WHY: короткий вход (иней, 0.17 с) проскакивал за кадр-два: первый кадр после открытия экрана
+    // WHY: приходит с задержкой инициализации. Шаг зажат долей длины, и любой вход длится хотя бы
+    // WHY: шесть кадров, а первый кадр начинается с нуля
+    private static final float MIN_FRAMES = 6.0f;
     private static final float DRAG_LIMIT = 2.5f;
 
     private static boolean allowed = true;
@@ -36,6 +42,21 @@ public final class UiReveal {
         return allowed && UiAssemble.ready();
     }
 
+    // WHY: сила линзы идёт гладкой ступенькой по фазе всей анимации: на обоих концах без излома,
+    // WHY: поэтому в покое ровно единица, а на уходе та же кривая берётся от обратной фазы
+    public static float glassPresence(float phase) {
+        float t = UiAnim.clamp01(phase);
+        return t * t * (3.0f - 2.0f * t);
+    }
+
+    // WHY: та же кривая, что frostCloseOpacity в ui_assemble.fsh: всё, что гаснет вместе с телом
+    // WHY: уходящей панели (ореол окна палитры), обязано гаснуть с ним в такт
+    public static float frostLeaveOpacity(float phase) {
+        float t = UiAnim.clamp01(phase);
+        float kept = 1.0f - t * t;
+        return kept * kept;
+    }
+
     public void pace(float enterSeconds) {
         span = Math.max(MAX_STEP, enterSeconds);
     }
@@ -56,7 +77,7 @@ public final class UiReveal {
         if (frame == stamp) return;
         stamp = frame;
 
-        entered += Math.min(MAX_STEP, UiFrame.delta());
+        entered += frames == 0 ? 0.0f : Math.min(Math.min(MAX_STEP, span / MIN_FRAMES), UiFrame.delta());
         frames++;
         if (dragging()) entered = span;
     }

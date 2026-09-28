@@ -47,7 +47,7 @@ public final class UiLens {
     }
 
     private static ShaderInstance current() {
-        lensShader.safeGetUniform("Dispersion").set(dispersion);
+        lensShader.safeGetUniform("Dispersion").set(dispersion * UiGlassStyle.presence());
         lensShader.safeGetUniform("Brightness").set(brightness);
         UiPlane plane = UiBackdrop.carrier();
         lensShader.safeGetUniform("LensWarp").set(plane == null ? FLAT : plane.warp());

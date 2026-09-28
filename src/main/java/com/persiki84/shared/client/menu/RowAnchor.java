@@ -1,6 +1,7 @@
 package com.persiki84.shared.client.menu;
 
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import net.minecraft.client.gui.GuiGraphics;
 
 public final class RowAnchor {
@@ -63,14 +64,18 @@ public final class RowAnchor {
         return covers(mouseY) ? mouseY : POINTER_AWAY;
     }
 
+    // WHY: ходом заявлена вся прокрутка, а не только дробь: место покоя строки - её якорь. Если
+    // WHY: покоем считать целый Y, то при масштабе посадки меньше 1 единица не равна целому числу
+    // WHY: пикселей, и на каждом переходе целого Y текст дёргался на полпикселя против стекла
     public void draw(GuiGraphics graphics, int x, int width, int y, int height, Runnable body) {
         boolean clipped = clip(graphics, x, width, y + residue, height);
-        graphics.pose().pushPose();
-        graphics.pose().translate(0.0f, residue, 0.0f);
+        UiRestFrame.shift(graphics, 0.0f, residue);
+        UiRestFrame.declare(graphics, 0.0f, shiftedY - anchorY);
         try {
             body.run();
         } finally {
-            graphics.pose().popPose();
+            UiRestFrame.retract();
+            UiRestFrame.pop(graphics);
             if (clipped) graphics.disableScissor();
         }
     }

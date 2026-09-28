@@ -54,10 +54,18 @@ public final class UiStage {
         return WINDOW.texture();
     }
 
+    // WHY: стадия экрана, снятая простой копией кадра, лежит в тех же пикселях, что и главный кадр,
+    // WHY: поэтому ореол, положенный в неё, можно повторить на главном кадре без переноса
+    static int mirroredFrame(int drawing) {
+        if (!SCREEN.mirrors(drawing)) return UiHushLedger.NONE;
+        return Minecraft.getInstance().getMainRenderTarget().frameBufferId;
+    }
+
     private static final class Surface {
         private TextureTarget target;
         private boolean failed;
         private boolean held;
+        private boolean plain;
 
         private boolean begin(UiPlane carrier, UiShards shards, float phase,
                               float width, float height) {
@@ -69,8 +77,9 @@ public final class UiStage {
             try {
                 build(main.width, main.height);
                 target.bindWrite(true);
-                fill(main, carrier, shards, phase, width, height);
+                boolean copied = fill(main, carrier, shards, phase, width, height);
                 clearCoverage();
+                UiHushLedger.refilled(target.frameBufferId, copied ? main.frameBufferId : UiHushLedger.NONE);
             } catch (Throwable error) {
                 failed = true;
                 release();
@@ -78,6 +87,7 @@ public final class UiStage {
                 return false;
             }
             held = true;
+            plain = carrier == null && shards == null;
             return true;
         }
 
@@ -89,6 +99,10 @@ public final class UiStage {
 
         private int texture() {
             return target == null ? 0 : target.getColorTextureId();
+        }
+
+        private boolean mirrors(int drawing) {
+            return held && plain && target != null && target.frameBufferId == drawing;
         }
 
         private void release() {
@@ -127,10 +141,11 @@ public final class UiStage {
             LogUtils.getLogger().warn("[battlecraft] menu stage kept 8 bit: 16 bit target incomplete");
         }
 
-        private void fill(RenderTarget main, UiPlane carrier, UiShards shards, float phase,
-                          float width, float height) {
-            if (UiCarry.paint(main.getColorTextureId(), carrier, shards, phase, width, height)) return;
+        private boolean fill(RenderTarget main, UiPlane carrier, UiShards shards, float phase,
+                             float width, float height) {
+            if (UiCarry.paint(main.getColorTextureId(), carrier, shards, phase, width, height)) return false;
             copy(main);
+            return true;
         }
 
         private void copy(RenderTarget main) {

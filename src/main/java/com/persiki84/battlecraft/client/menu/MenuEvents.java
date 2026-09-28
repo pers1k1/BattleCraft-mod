@@ -13,6 +13,7 @@ import com.persiki84.shared.client.ui.UiSound;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
+import com.persiki84.battlecraft.client.menu.desktop.DesktopTitleScreen;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
@@ -42,14 +43,14 @@ public final class MenuEvents {
         Minecraft client = Minecraft.getInstance();
         client.options.onboardAccessibility = false;
         client.options.save();
-        event.setNewScreen(SetupState.needed() ? new SetupScreen() : new MinimalTitleScreen());
+        event.setNewScreen(SetupState.needed() ? new SetupScreen() : DesktopTitleScreen.fresh());
     }
 
     private static void replaceTitle(ScreenEvent.Opening event) {
         if (!(event.getNewScreen() instanceof TitleScreen) || event.getNewScreen() instanceof MinimalTitleScreen) {
             return;
         }
-        event.setNewScreen(SetupState.needed() ? new SetupScreen() : new MinimalTitleScreen());
+        event.setNewScreen(SetupState.needed() ? new SetupScreen() : DesktopTitleScreen.fresh());
     }
 
     // WHY: подмена не только в титульном экране: в ванильный выбор мира и сервера возвращают

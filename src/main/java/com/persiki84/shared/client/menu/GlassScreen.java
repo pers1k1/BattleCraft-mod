@@ -9,8 +9,9 @@ import com.persiki84.shared.client.ui.UiDress;
 import com.persiki84.shared.client.ui.UiEmber;
 import com.persiki84.shared.client.ui.UiFarewell;
 import com.persiki84.shared.client.ui.UiBackdrop;
+import com.persiki84.shared.client.ui.UiGlassStyle;
 import com.persiki84.shared.client.ui.UiPlane;
-import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiReveal;
 import com.persiki84.shared.client.ui.UiStage;
 import com.persiki84.shared.client.ui.UiFrame;
@@ -37,7 +38,6 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
     private static final float DIM_LIGHT = 0.0f;
     private static final float GONE = 0.012f;
     private static final float ENTER_CHARGE = 0.55f;
-    private static final float SETTLED = 0.999f;
     private static final int OFF_SCREEN = -1;
     private static final float CENTRE = 0.5f;
     protected static final int OVERSCAN = 3;
@@ -216,7 +216,7 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        reveal.pace(motion() == UiMotionSet.GLASS ? UiMotionSet.GLASS.enterSeconds() : enterSeconds());
+        reveal.pace(motion().enterSeconds(enterSeconds()));
         reveal.advance();
         float shown = advance();
         if (leaving && !UiReveal.enabled() && shown <= GONE) {
@@ -228,22 +228,39 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
         veil(graphics);
         renderBackdrop(graphics);
         graphics.flush();
-        boolean staged = (reveal.active() || leaving) && UiStage.begin();
+        // WHY: без проявления уход идёт альфой до GONE: возьми он стадию, последний кадр экрана ушёл бы
+        // WHY: в офскрин без композита, и вместо затухания мигал бы пустой фон
+        boolean farewell = leaving && UiReveal.enabled();
+        boolean staged = (reveal.active() || farewell) && UiStage.begin();
         reveal.report(getClass().getSimpleName(), staged);
-
-        // WHY: содержимое экрана рисуют чужие виджеты и мосты: исключение между begin и end
-        // WHY: оставляло кадр писать в офскрин, и дальше игрок видел чёрный экран до перезахода
-        try {
-            paintContent(graphics, mouseX, mouseY, partialTick, shown, staged);
-        } finally {
-            if (staged) UiStage.end();
-        }
+        paintStaged(graphics, mouseX, mouseY, partialTick, shown, staged, glassPresence(staged, shown));
 
         if (!staged) {
-            if (leaving) closing();
+            if (farewell) closing();
             return;
         }
         resolveStage(graphics);
+    }
+
+    // WHY: содержимое экрана рисуют чужие виджеты и мосты: исключение между begin и end
+    // WHY: оставляло кадр писать в офскрин, и дальше игрок видел чёрный экран до перезахода
+    private void paintStaged(GuiGraphics graphics, int mouseX, int mouseY, float partialTick,
+                             float shown, boolean staged, float presence) {
+        float outerPresence = UiGlassStyle.scalePresence(presence);
+        try {
+            paintContent(graphics, mouseX, mouseY, partialTick, shown, staged);
+        } finally {
+            UiGlassStyle.restorePresence(outerPresence);
+            if (staged) UiStage.end();
+        }
+    }
+
+    // WHY: сила стекла идёт за фазой входа и на первом кадре ухода остаётся той же, что кадром
+    // WHY: раньше: закрытие посреди входа передаёт уходу фазу входа, и тот гасит силу дальше без скачка.
+    // WHY: Без проявления вход и уход идут альфой, и сила стекла идёт за ней
+    private float glassPresence(boolean staged, float shown) {
+        if (staged) return UiReveal.glassPresence(reveal.phase());
+        return UiReveal.enabled() ? 1.0f : UiReveal.glassPresence(shown);
     }
 
     // WHY: мир не на паузе, пока экран открыт: игрока несёт инерция, качание головы и camera-overhaul
@@ -270,14 +287,12 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
     private void paintContent(GuiGraphics graphics, int mouseX, int mouseY, float partialTick,
                               float shown, boolean staged) {
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, staged ? 1.0f : shown);
-        boolean quantized = UiRender.rawScale(settling(seated(shown)));
         aim(mouseX, mouseY);
         try {
             paintScaled(graphics, partialTick, shown);
             renderOverlay(graphics, cursorX, cursorY, partialTick);
             graphics.flush();
         } finally {
-            UiRender.rawScale(quantized);
             RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
         }
     }
@@ -294,7 +309,6 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
     // WHY: подсказка рисуется здесь, а не поверх экрана: в этой позе она живёт в тех же координатах,
     // WHY: что и строки, и попадает в офскрин-стадию, то есть в проявление, горение и разворот в мир
     private void paintScaled(GuiGraphics graphics, float partialTick, float shown) {
-        graphics.pose().pushPose();
         applyEntrance(graphics, shown);
         try {
             renderContent(graphics, inputCaptured() ? OFF_SCREEN : pointerX,
@@ -302,7 +316,7 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
             MenuHint.render(graphics);
             graphics.flush();
         } finally {
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
         }
     }
 
@@ -310,7 +324,7 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
         UiMotionSet set = motion();
         if (leaving) {
             UiFarewell.begin(this, plane, revealTop() / this.height, revealSpan() / this.height,
-                    burnOriginX(), burnOriginY(), set);
+                    burnOriginX(), burnOriginY(), set, reveal.phase(), reveal.seconds());
             UiFarewell.first(graphics, this.width, this.height);
             closing();
             return;
@@ -318,7 +332,8 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
         // WHY: заряд у входа из света даёт фронту цвет акцента, как на титульном экране: без него
         // WHY: свет шёл белой полосой, а свечения кромки не было вовсе
         UiAssemble.draw(graphics, this.width, this.height, UiStage.texture(),
-                reveal.phase(), reveal.seconds(), set.enterMode(), revealTop(), revealSpan(), ENTER_CHARGE);
+                reveal.phase(), reveal.seconds(), set.enterMode(), revealTop(), revealSpan(),
+                burnOriginX(), burnOriginY(), ENTER_CHARGE);
     }
 
     protected UiMotionSet motion() {
@@ -351,10 +366,6 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
     public void renderBackground(GuiGraphics graphics) {
     }
 
-    private static boolean settling(float shown) {
-        return shown < SETTLED;
-    }
-
     protected float shown() {
         return UiAnim.easeOut(entrance.get());
     }
@@ -365,11 +376,17 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
         return UiAnim.easeOut(entrance.to(target, fading ? LEAVE_SPEED : ENTER_SPEED, UiFrame.delta()));
     }
 
+    // WHY: въезд заявлен ходом, а посадка контента по ширине окна нет: текст стоит на сетке покоя
+    // WHY: и растёт вместе со стеклом непрерывно, без ступеней по пикселю и без скачка в конце въезда
     private void applyEntrance(GuiGraphics graphics, float shown) {
-        float scale = entranceScale(shown);
-        graphics.pose().translate(this.width / 2.0f, this.height / 2.0f + entranceLift(shown), 0.0f);
-        graphics.pose().scale(scale, scale, 1.0f);
-        graphics.pose().translate(-this.width / 2.0f, -this.height / 2.0f, 0.0f);
+        float centerX = this.width / 2.0f;
+        float centerY = this.height / 2.0f;
+        float entering = ENTER_SCALE + (1.0f - ENTER_SCALE) * seated(shown);
+        UiRestFrame.push(graphics, centerX, centerY, entering, entering, 0.0f, entranceLift(shown));
+        float fit = contentScale();
+        graphics.pose().translate(centerX, centerY, 0.0f);
+        graphics.pose().scale(fit, fit, 1.0f);
+        graphics.pose().translate(-centerX, -centerY, 0.0f);
     }
 
     // WHY: масштаб въезда сдвигает кромки на доли пикселя, и между элементами проступает кадр под интерфейсом

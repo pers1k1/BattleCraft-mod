@@ -6,8 +6,22 @@ public final class UiGlass {
     private static final float SHEEN_LIFT = 0.42f;
     private static final float BORDER_SHARE = 0.2f;
     private static final float THIN_BAR = 3.6f;
+    private static final float HUSH_SHARE = 0.5f;
+    private static final float HUSH_NEAREST = 8.0f;
+    private static final float HUSH_FARTHEST = 48.0f;
 
     private UiGlass() {}
+
+    // WHY: мир вокруг всплывающего темнеет мягким пятном, которое сходит на нет примерно за половину
+    // WHY: короткой стороны: так оно отделяется от фона без тени и без обводки. Зовётся до самой
+    // WHY: панели и в её позе, её стекло читает снимок без ореола
+    public static void hush(GuiGraphics graphics, float x, float y, float width, float height,
+                            float radius, float alpha) {
+        if (width <= 0.0f || height <= 0.0f) return;
+
+        float reach = Math.max(HUSH_NEAREST, Math.min(HUSH_FARTHEST, Math.min(width, height) * HUSH_SHARE));
+        UiHush.draw(graphics, x, y, width, height, radius, reach, UiDepth.hush(), alpha);
+    }
 
     public static void panel(GuiGraphics graphics, float x, float y, float width, float height, float radius, float alpha) {
         surface(graphics, x, y, width, height, radius, alpha, 0.0f, 0);

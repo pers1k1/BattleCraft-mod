@@ -31,6 +31,11 @@ public final class MsdfShaders {
     private static float shadeGreen;
     private static float shadeBlue;
     private static float shadeStrength;
+    private static float moveStretchX = 1.0f;
+    private static float moveStretchY = 1.0f;
+    private static float moveShiftX;
+    private static float moveShiftY;
+    private static float movePixels = 1.0f;
 
     private MsdfShaders() {}
 
@@ -62,8 +67,24 @@ public final class MsdfShaders {
             shader.safeGetUniform("TextWeight").set(weight());
             shader.safeGetUniform("RevealBand").set(bandLeft, bandRight, bandLeftWidth, bandRightWidth);
             shader.safeGetUniform("RevealShade").set(shadeRed, shadeGreen, shadeBlue, shadeStrength);
+            shader.safeGetUniform("RestMove").set(moveStretchX, moveStretchY, moveShiftX, moveShiftY);
+            shader.safeGetUniform("RestPixels").set(movePixels);
         }
         return shader;
+    }
+
+    // WHY: ход живёт в координатах вершин после позы, как и полоса бегущей строки: юниформ
+    // WHY: читается на сбросе батча, поэтому строка обязана выдавить свои буквы до settle
+    public static void move(float stretchX, float stretchY, float shiftX, float shiftY, float pixels) {
+        moveStretchX = stretchX;
+        moveStretchY = stretchY;
+        moveShiftX = shiftX;
+        moveShiftY = shiftY;
+        movePixels = pixels;
+    }
+
+    public static void settle() {
+        move(1.0f, 1.0f, 0.0f, 0.0f, 1.0f);
     }
 
     // WHY: полоса живёт в координатах вершин после позы, то есть там же, где лежит Position:

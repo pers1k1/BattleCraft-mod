@@ -6,6 +6,7 @@ import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiGlassStyle;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiSwap;
 import com.persiki84.shared.client.ui.UiTheme;
@@ -88,14 +89,20 @@ public class ToggleRow extends MenuRow {
         Component leaving = swap.outgoing();
         float y = UiRender.centerY(getY(), height, LABEL_SCALE);
         if (leaving != null) {
-            paintState(graphics, leaving, rightX, y - phase * UiSwap.LIFT, stateColor(!on, focus), 1.0f - phase);
+            paintState(graphics, leaving, rightX, y, -phase * UiSwap.LIFT, stateColor(!on, focus), 1.0f - phase);
         }
-        paintState(graphics, label, rightX, y + (1.0f - phase) * UiSwap.LIFT, stateColor(on, focus), phase);
+        paintState(graphics, label, rightX, y, (1.0f - phase) * UiSwap.LIFT, stateColor(on, focus), phase);
     }
 
-    private void paintState(GuiGraphics graphics, Component text, float rightX, float y, int color, float alpha) {
+    private void paintState(GuiGraphics graphics, Component text, float rightX, float y, float lift, int color,
+                            float alpha) {
         if (alpha <= MIN_ALPHA) return;
-        UiRender.textRight(graphics, font(), text, rightX, y, LABEL_SCALE, UiTheme.alpha(color, alpha), false);
+        UiRestFrame.shift(graphics, 0.0f, lift);
+        try {
+            UiRender.textRight(graphics, font(), text, rightX, y, LABEL_SCALE, UiTheme.alpha(color, alpha), false);
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
     }
 
     private int stateColor(boolean on, float focus) {

@@ -3,8 +3,10 @@ package com.persiki84.shared.client.menu.studio;
 import com.persiki84.shared.client.menu.SearchField;
 import com.persiki84.shared.client.menu.pick.ItemShelf;
 import com.persiki84.shared.client.ui.UiButton;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
@@ -57,9 +59,16 @@ public final class StudioShelf {
         searchTop = y + CONTROL + SPACING;
         if (!items.showsInventory()) {
             search.place(x, searchTop, width);
-            widgets.add(search.box());
         }
         return widgets;
+    }
+
+    public boolean searching() {
+        return !items.showsInventory();
+    }
+
+    public EditBox searchBox() {
+        return search.box();
     }
 
     public int itemsTop() {
@@ -71,7 +80,7 @@ public final class StudioShelf {
     }
 
     public void render(GuiGraphics graphics, float left, float width, float bottom, int mouseX, int mouseY) {
-        if (!items.showsInventory()) search.render(graphics);
+        if (!items.showsInventory()) search.render(graphics, mouseX, mouseY, Minecraft.getInstance().getFrameTime());
         float top = itemsTop();
         items.place(left, top, width, bottom - top);
         items.render(graphics, mouseX, mouseY);

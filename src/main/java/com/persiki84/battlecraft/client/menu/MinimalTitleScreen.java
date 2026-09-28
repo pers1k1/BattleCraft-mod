@@ -11,6 +11,7 @@ import com.persiki84.shared.client.ui.UiBackdrop;
 import com.persiki84.shared.client.ui.UiBoot;
 import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.client.ui.UiFrame;
+import com.persiki84.shared.client.ui.UiGlassStyle;
 import com.persiki84.shared.client.ui.UiGlow;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiStage;
@@ -26,10 +27,13 @@ import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
 import com.persiki84.battlecraft.client.hud.HudConfig;
 import com.persiki84.battlecraft.client.menu.browse.ServerBrowseScreen;
 import com.persiki84.battlecraft.client.menu.browse.WorldBrowseScreen;
+import com.persiki84.battlecraft.client.menu.desktop.DesktopTitleScreen;
 import net.minecraft.network.chat.Component;
 
 public class MinimalTitleScreen extends TitleScreen implements Ambient {
     private static final int CORNER_MARGIN = 12;
+    private static final int DESKTOP_GAP = 6;
+    private static final int DESKTOP_WIDTH = 86;
     private static final int BUTTON_WIDTH = 200;
     private static final int BUTTON_HEIGHT = 22;
     private static final int BUTTON_GAP = 7;
@@ -127,6 +131,16 @@ public class MinimalTitleScreen extends TitleScreen implements Ambient {
 
         this.addRenderableWidget(new PaletteButton(CORNER_MARGIN,
                 this.height - CORNER_MARGIN - PaletteButton.SIZE, button -> CustomizeScreen.open()));
+        this.addRenderableWidget(new UiButton(CORNER_MARGIN + PaletteButton.SIZE + DESKTOP_GAP,
+                this.height - CORNER_MARGIN - PaletteButton.SIZE, DESKTOP_WIDTH, PaletteButton.SIZE,
+                Component.translatable("battlecraft.desktop.return"), button -> returnToDesktop()));
+    }
+
+    // WHY: классическое меню включают из рабочего стола одним щелчком, и вернуться обязано быть
+    // WHY: так же просто, а не через вкладку кастомизации
+    private void returnToDesktop() {
+        HudConfig.menuDesktop(true);
+        this.minecraft.setScreen(new DesktopTitleScreen());
     }
 
     private net.minecraft.client.gui.screens.Screen worlds() {
@@ -151,9 +165,11 @@ public class MinimalTitleScreen extends TitleScreen implements Ambient {
 
         graphics.flush();
         boolean staged = MenuIntro.running() && UiStage.begin();
+        float outerPresence = UiGlassStyle.scalePresence(MenuIntro.presence(staged));
         try {
             content(graphics, mouseX, mouseY, partialTick);
         } finally {
+            UiGlassStyle.restorePresence(outerPresence);
             if (staged) {
                 graphics.flush();
                 UiStage.end();

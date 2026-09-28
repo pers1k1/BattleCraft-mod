@@ -6,6 +6,7 @@ import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiField;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTheme;
@@ -70,7 +71,7 @@ public final class SearchField {
         box.setWidth(Math.max(1, width - (int) (ICON_BOX + UiMetrics.PAD * 2.0f)));
     }
 
-    public void render(GuiGraphics graphics) {
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         float grown = UiAnim.easeOut(appear.to(1.0f, UiFrame.delta()));
         if (grown <= 0.004f) return;
 
@@ -79,14 +80,13 @@ public final class SearchField {
         float centerX = x + width / 2.0f;
         float bottom = box.getY() + HEIGHT;
 
-        graphics.pose().pushPose();
-        graphics.pose().translate(centerX, bottom + (1.0f - grown) * RISE, 0.0f);
-        graphics.pose().scale(scale(grown), scale(grown), 1.0f);
-        graphics.pose().translate(-centerX, -bottom, 0.0f);
+        UiRestFrame.push(graphics, centerX, bottom, scale(grown), scale(grown), 0.0f, (1.0f - grown) * RISE);
         try {
             paint(graphics, x, box.getY(), width, grown);
+            UiField.fade(box, grown);
+            box.render(graphics, mouseX, mouseY, partialTick);
         } finally {
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
         }
     }
 

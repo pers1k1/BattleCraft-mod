@@ -18,6 +18,7 @@ import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiAccent;
+import com.persiki84.shared.client.ui.UiClip;
 import com.persiki84.shared.client.ui.UiTheme;
 import com.persiki84.battlecraft.client.ClientModules;
 import com.persiki84.battlecraft.modules.ModuleId;
@@ -84,19 +85,49 @@ public class MinimapOverlay {
     private static void render(GuiGraphics guiGraphics, Minecraft mc, float partialTick,
                                float logicalWidth, float logicalHeight, float scale) {
         float size = renderSize();
-        float zoom = ClientMapData.minimapZoom;
         HudBox box = HudLayout.place(HudSlot.MINIMAP, size, size, logicalWidth, logicalHeight);
         float x = box.x();
         float y = box.y();
         float radius = Math.min(14.0f, size * 0.16f);
-        float cx = x + size / 2.0f;
-        float cy = y + size / 2.0f;
 
         double mapX = Mth.lerp(partialTick, mc.player.xo, mc.player.getX());
         double mapZ = Mth.lerp(partialTick, mc.player.zo, mc.player.getZ());
 
         UiRender.panel(guiGraphics, x, y, size, size, radius, FIELD_COLOR);
 
+        if (UiClip.begin(guiGraphics)) {
+            try {
+                renderInside(guiGraphics, mc, partialTick, x, y, size, mapX, mapZ);
+            } finally {
+                UiClip.end(guiGraphics, x, y, size, size, radius);
+            }
+        } else {
+            renderDepthClipped(guiGraphics, mc, partialTick, x, y, size, radius, scale, mapX, mapZ);
+        }
+
+        label(guiGraphics, mc, Mth.floor(mapX) + " " + Mth.floor(mapZ), x + size / 2.0f, y + size - 9.0f, PLATE_TEXT);
+    }
+
+    private static void renderInside(GuiGraphics guiGraphics, Minecraft mc, float partialTick, float x, float y,
+                                     float size, double mapX, double mapZ) {
+        float zoom = ClientMapData.minimapZoom;
+        float cx = x + size / 2.0f;
+        float cy = y + size / 2.0f;
+        MapTextureManager.renderMap(guiGraphics, mapX, mapZ, zoom, cx, cy, x, y, x + size, y + size);
+        renderGrid(guiGraphics, x, y, size, zoom, cx, cy, mapX, mapZ);
+        renderObjectives(guiGraphics, mapX, mapZ, zoom, cx, cy);
+        renderMarkers(guiGraphics, mc, mapX, mapZ, zoom, cx, cy);
+        float yaw = Mth.lerp(partialTick, mc.player.yRotO, mc.player.getYRot());
+        UiRender.arrow(guiGraphics, cx, cy, yaw, 3.2f, UiAccent.color(), UiTheme.alpha(UiPalette.panelDeep(), 0.75f));
+    }
+
+    // WHY: запасной путь, когда офскрин окна занят или шейдер не поднялся: обрезка глубиной
+    // WHY: работает везде, но режет угол целыми пикселями
+    private static void renderDepthClipped(GuiGraphics guiGraphics, Minecraft mc, float partialTick, float x, float y,
+                                           float size, float radius, float scale, double mapX, double mapZ) {
+        float zoom = ClientMapData.minimapZoom;
+        float cx = x + size / 2.0f;
+        float cy = y + size / 2.0f;
         clipToShape(guiGraphics, x, y, size, radius);
         MapTextureManager.renderMap(guiGraphics, mapX, mapZ, zoom, cx, cy, x, y, x + size, y + size);
         renderGrid(guiGraphics, x, y, size, zoom, cx, cy, mapX, mapZ);
@@ -105,12 +136,9 @@ public class MinimapOverlay {
         guiGraphics.enableScissor((int) (x * scale), (int) (y * scale), (int) ((x + size) * scale), (int) ((y + size) * scale));
         renderObjectives(guiGraphics, mapX, mapZ, zoom, cx, cy);
         renderMarkers(guiGraphics, mc, mapX, mapZ, zoom, cx, cy);
-
         float yaw = Mth.lerp(partialTick, mc.player.yRotO, mc.player.getYRot());
         UiRender.arrow(guiGraphics, cx, cy, yaw, 3.2f, UiAccent.color(), UiTheme.alpha(UiPalette.panelDeep(), 0.75f));
         guiGraphics.disableScissor();
-
-        label(guiGraphics, mc, Mth.floor(mapX) + " " + Mth.floor(mapZ), cx, y + size - 9.0f, PLATE_TEXT);
     }
 
     private static void clipToShape(GuiGraphics guiGraphics, float x, float y, float size, float radius) {

@@ -68,6 +68,13 @@ public final class HudConfig {
     private static ForgeConfigSpec.BooleanValue DISCORD_RPC;
     private static ForgeConfigSpec.BooleanValue ACCENT_FROM_LAUNCHER;
     private static ForgeConfigSpec.ConfigValue<String> ACCENT_COLOR;
+    private static ForgeConfigSpec.BooleanValue MENU_DESKTOP;
+    private static ForgeConfigSpec.BooleanValue WALLPAPER_DOTS;
+    private static ForgeConfigSpec.BooleanValue WALLPAPER_THEMED;
+    private static ForgeConfigSpec.ConfigValue<String> WALLPAPER;
+    private static ForgeConfigSpec.BooleanValue CLOCK_GLASS;
+    private static ForgeConfigSpec.IntValue CLOCK_WEIGHT;
+    private static ForgeConfigSpec.IntValue CLOCK_FROST;
 
     static {
         BUILDER.push("Интерфейс BattleCraft");
@@ -76,6 +83,7 @@ public final class HudConfig {
         defineFeel();
         defineVanillaReplacements();
         defineScreens();
+        defineDesktop();
         defineIslandGroup();
         defineProfile();
 
@@ -155,6 +163,23 @@ public final class HudConfig {
         WORLD_PANEL = defineWorldPanel();
         REVEAL_PROBE = defineRevealProbe();
         SCREEN_PROBE = defineScreenProbe();
+    }
+
+    private static void defineDesktop() {
+        MENU_DESKTOP = BUILDER.comment("Главное меню рабочим столом: строка меню, часы, док и обои")
+                .define("menuDesktop", true);
+        WALLPAPER_DOTS = BUILDER.comment("Свои обои рисуются точечной матрицей, как встроенные")
+                .define("wallpaperDots", true);
+        WALLPAPER_THEMED = BUILDER.comment("Точки обоев цветом темы, иначе чёрно-белые")
+                .define("wallpaperThemed", false);
+        WALLPAPER = BUILDER.comment("Какие обои на рабочем столе: пусто это встроенная планета, иначе id своих обоев")
+                .define("wallpaper", "");
+        CLOCK_GLASS = BUILDER.comment("Цифры часов рабочего стола из жидкого стекла, иначе сплошные цвета текста")
+                .define("clockGlass", true);
+        CLOCK_WEIGHT = BUILDER.comment("Жирность цифр часов: 0 тонкие, 1 обычные, 2 жирные, 3 очень жирные")
+                .defineInRange("clockWeight", 1, 0, 3);
+        CLOCK_FROST = BUILDER.comment("Размытость стекла часов: 0 почти прозрачное, 1 слабая, 2 обычная, 3 сильная")
+                .defineInRange("clockFrost", 2, 0, 3);
     }
 
     private static void defineIslandGroup() {
@@ -671,6 +696,62 @@ public final class HudConfig {
 
     public static boolean accentFromLauncher() {
         return read(ACCENT_FROM_LAUNCHER, true);
+    }
+
+    public static boolean menuDesktop() {
+        return read(MENU_DESKTOP, true);
+    }
+
+    public static void menuDesktop(boolean value) {
+        if (SPEC.isLoaded()) MENU_DESKTOP.set(value);
+    }
+
+    public static boolean wallpaperDots() {
+        return read(WALLPAPER_DOTS, true);
+    }
+
+    public static void wallpaperDots(boolean value) {
+        if (SPEC.isLoaded()) WALLPAPER_DOTS.set(value);
+    }
+
+    public static boolean wallpaperThemed() {
+        return read(WALLPAPER_THEMED, false);
+    }
+
+    public static void wallpaperThemed(boolean value) {
+        if (SPEC.isLoaded()) WALLPAPER_THEMED.set(value);
+    }
+
+    public static String wallpaper() {
+        return SPEC.isLoaded() ? WALLPAPER.get() : "";
+    }
+
+    public static void wallpaper(String id) {
+        if (SPEC.isLoaded()) WALLPAPER.set(id == null ? "" : id);
+    }
+
+    public static boolean clockGlass() {
+        return read(CLOCK_GLASS, true);
+    }
+
+    public static void clockGlass(boolean value) {
+        if (SPEC.isLoaded()) CLOCK_GLASS.set(value);
+    }
+
+    public static int clockWeight() {
+        return SPEC.isLoaded() ? CLOCK_WEIGHT.get() : 1;
+    }
+
+    public static void clockWeight(int value) {
+        if (SPEC.isLoaded()) CLOCK_WEIGHT.set(value);
+    }
+
+    public static int clockFrost() {
+        return SPEC.isLoaded() ? CLOCK_FROST.get() : 2;
+    }
+
+    public static void clockFrost(int value) {
+        if (SPEC.isLoaded()) CLOCK_FROST.set(value);
     }
 
     public static String accentColor() {

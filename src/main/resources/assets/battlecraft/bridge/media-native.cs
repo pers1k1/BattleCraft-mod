@@ -20,6 +20,7 @@ public static class BattleCraftMedia {
     const int BlindArm = 3;
     const int HeardHold = 6;
     const int ArtTries = 6;
+    const int FieldLimit = 512;
 
     static readonly string[] Sites = {
         "soundcloud", "youtube music", "youtube", "spotify", "music.yandex",
@@ -110,6 +111,7 @@ public static class BattleCraftMedia {
     }
 
     public static string Poll(string artPath) {
+        BattleCraftRemote.Aim(null, "", "");
         var picked = Pick();
         if (picked == null) return Blind();
 
@@ -125,7 +127,9 @@ public static class BattleCraftMedia {
         lastSite = SiteOf(app);
         armed = BlindArm;
         Restamp(app, picked.Properties, artPath);
-        return Serialize(picked.Session, picked.Properties, app, lastSite);
+        string state = Serialize(picked.Session, picked.Properties, app, lastSite);
+        BattleCraftRemote.Aim(picked.Session, app, picked.Properties.Title ?? "");
+        return state;
     }
 
     // WHY: сессия на паузе (Spotify, забытая вкладка) висит в списке и перебивала локальный плеер
@@ -238,7 +242,8 @@ public static class BattleCraftMedia {
                             GlobalSystemMediaTransportControlsSessionMediaProperties properties,
                             string app, string site) {
         var timeline = session.GetTimelineProperties();
-        var status = session.GetPlaybackInfo().PlaybackStatus;
+        var playback = session.GetPlaybackInfo();
+        var status = playback.PlaybackStatus;
         bool playing = status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
         long age = (long)Math.Max(0.0, (DateTimeOffset.Now - timeline.LastUpdatedTime).TotalMilliseconds);
 
@@ -254,6 +259,7 @@ public static class BattleCraftMedia {
         json.Append(",\"dur\":").Append((long)timeline.EndTime.TotalMilliseconds);
         json.Append(",\"age\":").Append(age);
         json.Append(",\"art\":").Append(artStamp);
+        json.Append(",\"ctl\":").Append(BattleCraftRemote.Allowed(playback.Controls));
         json.Append('}');
         return json.ToString();
     }
@@ -311,11 +317,31 @@ public static class BattleCraftMedia {
     }
 
     static string Escape(string value) {
-        var text = new StringBuilder(value.Length + 8);
-        foreach (char symbol in value) {
+        string shown = Shown(value);
+        StringBuilder text = new StringBuilder(shown.Length + 8);
+        foreach (char symbol in shown) {
             if (symbol == '"' || symbol == '\\') text.Append('\\').Append(symbol);
-            else if (symbol < ' ') text.Append(' ');
             else text.Append(symbol);
+        }
+        return text.ToString();
+    }
+
+    // WHY: название публикует любая страница или программа, и мегабайтная строка шла бы в каждый опрос,
+    // WHY: в заголовок острова и обратно в каждую команду. Одиночную половину суррогатной пары вывод UTF-8
+    // WHY: всё равно заменил бы на U+FFFD: замена здесь даёт команде то же поле, что прочла игра
+    public static string Shown(string value) {
+        string raw = value ?? "";
+        StringBuilder text = new StringBuilder(Math.Min(raw.Length, FieldLimit));
+        for (int index = 0; index < raw.Length && text.Length < FieldLimit; index++) {
+            char symbol = raw[index];
+            if (char.IsHighSurrogate(symbol) && index + 1 < raw.Length && char.IsLowSurrogate(raw[index + 1])) {
+                if (text.Length + 2 > FieldLimit) break;
+                text.Append(symbol).Append(raw[++index]);
+            } else if (char.IsSurrogate(symbol)) {
+                text.Append('\uFFFD');
+            } else {
+                text.Append(symbol < ' ' ? ' ' : symbol);
+            }
         }
         return text.ToString();
     }
@@ -424,6 +450,151 @@ public static class BattleCraftMedia {
             return true;
         }, IntPtr.Zero);
         return found;
+    }
+}
+
+// WHY: команды игры приходят строками в stdin моста: «глагол TAB позиция в мс TAB приложение TAB
+// WHY: название». Пайп читает отдельный поток, потому что чтение блокирует, а исполняет цикл скрипта
+// WHY: между опросами. Команда уходит только сессии, которую последний опрос опубликовал острову, и
+// WHY: только если приложение и название в команде совпадают с ней: чужая сессия (браузер владельца
+// WHY: или соседняя вкладка того же браузера, на которую опрос переключился за время полёта строки)
+// WHY: команду не получает. Глобальные медиаклавиши здесь не используются вовсе
+public static class BattleCraftRemote {
+    public const int Toggle = 1;
+    public const int Next = 2;
+    public const int Previous = 4;
+    public const int Seek = 8;
+
+    const int InboxLimit = 8;
+    const int AwaitSteps = 40;
+    const int AwaitSleepMs = 5;
+    const long TicksPerMs = 10000L;
+
+    static readonly object door = new object();
+    static readonly Queue<string> inbox = new Queue<string>();
+    static Thread reader;
+    static GlobalSystemMediaTransportControlsSession target;
+    static string targetApp = "";
+    static string targetTitle = "";
+
+    public static void Listen() {
+        if (reader != null) return;
+        reader = new Thread(Read);
+        reader.IsBackground = true;
+        reader.Start();
+    }
+
+    static void Read() {
+        try {
+            using (var input = new StreamReader(Console.OpenStandardInput(), new UTF8Encoding(false))) {
+                string line;
+                while ((line = input.ReadLine()) != null) Enqueue(line);
+            }
+        } catch (Exception error) {
+            Console.Error.WriteLine("remote input closed: " + error.Message);
+        }
+    }
+
+    static void Enqueue(string line) {
+        lock (door) {
+            if (inbox.Count < InboxLimit) inbox.Enqueue(line);
+        }
+    }
+
+    static string Take() {
+        lock (door) {
+            return inbox.Count > 0 ? inbox.Dequeue() : null;
+        }
+    }
+
+    public static void Aim(GlobalSystemMediaTransportControlsSession session, string app, string title) {
+        target = session;
+        targetApp = session == null ? "" : AsSeen(app);
+        targetTitle = session == null ? "" : AsSeen(title);
+    }
+
+    // WHY: игра сверяет команду по тому, что прочла из JSON: Escape меняет управляющие символы на
+    // WHY: пробел и режет длину, а игра срезает пробелы по краям. Сырое поле не совпало бы никогда
+    static string AsSeen(string value) {
+        return BattleCraftMedia.Shown(value).Trim(' ');
+    }
+
+    public static int Allowed(GlobalSystemMediaTransportControlsSessionPlaybackControls controls) {
+        int bits = 0;
+        if (controls.IsPlayPauseToggleEnabled || controls.IsPlayEnabled || controls.IsPauseEnabled) bits |= Toggle;
+        if (controls.IsNextEnabled) bits |= Next;
+        if (controls.IsPreviousEnabled) bits |= Previous;
+        if (controls.IsPlaybackPositionEnabled) bits |= Seek;
+        return bits;
+    }
+
+    // WHY: ошибка команды не имеет права уронить цикл скрипта: его catch публикует «ok:false»,
+    // WHY: и остров мигнул бы пустотой. Отказ пишется в stderr, игра кладёт его в лог.
+    // WHY: После смены трека снимок прошлого опроса врёт: команды, нажатые над старым треком и
+    // WHY: ждавшие в очереди (перемотка на его позицию, ещё один «дальше»), ждут нового опроса
+    public static bool Obey() {
+        string line = Take();
+        if (line == null) return false;
+
+        string[] parts = line.Split('\t');
+        long position;
+        if (parts.Length != 4 || target == null || parts[2] != targetApp || parts[3] != targetTitle) return false;
+        if (!long.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out position)) return false;
+        try {
+            if (!Send(target, parts[0], position)) Console.Error.WriteLine("remote " + parts[0] + " refused by " + targetApp);
+        } catch (Exception error) {
+            Console.Error.WriteLine("remote " + parts[0] + " failed: " + error.Message);
+        }
+        if (parts[0] == "next" || parts[0] == "previous") Aim(null, "", "");
+        return true;
+    }
+
+    public static bool Send(GlobalSystemMediaTransportControlsSession session, string verb, long positionMs) {
+        if (Already(session, verb)) return true;
+        IAsyncOperation<bool> request = Request(session, verb, positionMs);
+        return request != null && Settle(request);
+    }
+
+    // WHY: игра шлёт «играть» и «пауза» по тому, что видела на прошлом опросе, а у плеера без
+    // WHY: отдельных Play и Pause остаётся только переключение: исполнить его над уже нужным
+    // WHY: состоянием значит сделать ровно обратное тому, что нажал игрок
+    static bool Already(GlobalSystemMediaTransportControlsSession session, string verb) {
+        var status = session.GetPlaybackInfo().PlaybackStatus;
+        if (verb == "play") return status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+        if (verb != "pause") return false;
+        return status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused
+            || status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Stopped;
+    }
+
+    static IAsyncOperation<bool> Request(GlobalSystemMediaTransportControlsSession session, string verb,
+                                         long positionMs) {
+        var controls = session.GetPlaybackInfo().Controls;
+        switch (verb) {
+            case "play": return controls.IsPlayEnabled ? session.TryPlayAsync() : session.TryTogglePlayPauseAsync();
+            case "pause": return controls.IsPauseEnabled ? session.TryPauseAsync() : session.TryTogglePlayPauseAsync();
+            case "toggle": return session.TryTogglePlayPauseAsync();
+            case "next": return session.TrySkipNextAsync();
+            case "previous": return session.TrySkipPreviousAsync();
+            case "seek": return session.TryChangePlaybackPositionAsync(Ticks(session, positionMs));
+            default: return null;
+        }
+    }
+
+    // WHY: позиция за концом шкалы переводит плеер на следующий трек, а миллисекунды сверх
+    // WHY: long.MaxValue / 10000 переполняли умножение в отрицательные тики
+    static long Ticks(GlobalSystemMediaTransportControlsSession session, long positionMs) {
+        long ticks = Math.Min(Math.Max(0L, positionMs), long.MaxValue / TicksPerMs) * TicksPerMs;
+        long end = session.GetTimelineProperties().EndTime.Ticks;
+        return end > 0L ? Math.Min(ticks, end) : ticks;
+    }
+
+    // WHY: ожидание опросом Status, а не AsTask: System.Runtime.WindowsRuntime.dll тянет сборку Windows
+    // WHY: из SDK, которой на машине игрока нет. Не дождались - команда всё равно дойдёт, опрос покажет
+    static bool Settle(IAsyncOperation<bool> request) {
+        int guard = 0;
+        while (request.Status == AsyncStatus.Started && guard++ < AwaitSteps) Thread.Sleep(AwaitSleepMs);
+        if (request.Status == AsyncStatus.Started) return true;
+        return request.Status == AsyncStatus.Completed && request.GetResults();
     }
 }
 

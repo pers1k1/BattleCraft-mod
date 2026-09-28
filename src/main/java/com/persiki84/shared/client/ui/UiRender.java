@@ -80,6 +80,14 @@ public final class UiRender {
     private static final float[] SQUIRCLE_Y = new float[ARC_TABLE + 1];
     private static final float[] SWITCH_X = new float[ARC_TABLE + 1];
     private static final float[] SWITCH_Y = new float[ARC_TABLE + 1];
+    private static final float[][] MENU_X = new float[UiCorner.BANDS + 1][ARC_TABLE + 1];
+    private static final float[][] MENU_Y = new float[UiCorner.BANDS + 1][ARC_TABLE + 1];
+    private static final double[] BAKE_X = new double[SQUIRCLE_SAMPLES + 1];
+    private static final double[] BAKE_Y = new double[SQUIRCLE_SAMPLES + 1];
+    private static final double[] BAKE_TRAVEL = new double[SQUIRCLE_SAMPLES + 1];
+    private static final int SHAPE_HUD = -1;
+    private static final int SHAPE_HUD_ROUND = -2;
+    private static final int SHAPE_SWITCH = -3;
 
     private static final float TEXT_CENTER = 3.2f;
     private static final float MSDF_TEXT_CENTER = 4.4f;
@@ -140,9 +148,7 @@ public final class UiRender {
     private static int points;
     private static int glyphs;
     private static boolean smoothing;
-    private static boolean rawScale;
     private static boolean floating;
-    private static boolean marqueeFloating;
     private static boolean dissolving;
     private static boolean fading;
     private static float fadeFrom;
@@ -163,6 +169,7 @@ public final class UiRender {
         }
         rebakeSquircle();
         rebakeSwitchShape();
+        rebakeMenuCorner();
     }
 
     static void rebakeSquircle() {
@@ -173,34 +180,38 @@ public final class UiRender {
         bakeCorner(UiGlassStyle.switchSquircle(), SWITCH_X, SWITCH_Y);
     }
 
-    private static void bakeCorner(float shape, float[] outX, float[] outY) {
-        double[] curveX = new double[SQUIRCLE_SAMPLES + 1];
-        double[] curveY = new double[SQUIRCLE_SAMPLES + 1];
-        double[] travelled = new double[SQUIRCLE_SAMPLES + 1];
-        double power = 2.0 / shape;
-
-        for (int i = 0; i <= SQUIRCLE_SAMPLES; i++) {
-            double theta = Math.PI / 2.0 * i / SQUIRCLE_SAMPLES;
-            curveX[i] = Math.pow(Math.cos(theta), power);
-            curveY[i] = Math.pow(Math.sin(theta), power);
-            travelled[i] = i == 0 ? 0.0
-                    : travelled[i - 1] + Math.hypot(curveX[i] - curveX[i - 1], curveY[i] - curveY[i - 1]);
+    static void rebakeMenuCorner() {
+        for (int band = 0; band <= UiCorner.BANDS; band++) {
+            bakeCorner(UiCorner.bandPower(band), MENU_X[band], MENU_Y[band]);
         }
+    }
 
-        double length = travelled[SQUIRCLE_SAMPLES];
+    private static void bakeCorner(float shape, float[] outX, float[] outY) {
+        traceCorner(2.0 / shape);
+        double length = BAKE_TRAVEL[SQUIRCLE_SAMPLES];
         int sample = 0;
         for (int i = 0; i <= ARC_TABLE; i++) {
             double target = length * i / ARC_TABLE;
-            while (sample < SQUIRCLE_SAMPLES - 1 && travelled[sample + 1] < target) sample++;
-            double span = travelled[sample + 1] - travelled[sample];
-            double t = span <= 0.0 ? 0.0 : (target - travelled[sample]) / span;
-            outX[i] = (float) (curveX[sample] + (curveX[sample + 1] - curveX[sample]) * t);
-            outY[i] = (float) (curveY[sample] + (curveY[sample + 1] - curveY[sample]) * t);
+            while (sample < SQUIRCLE_SAMPLES - 1 && BAKE_TRAVEL[sample + 1] < target) sample++;
+            double span = BAKE_TRAVEL[sample + 1] - BAKE_TRAVEL[sample];
+            double t = span <= 0.0 ? 0.0 : (target - BAKE_TRAVEL[sample]) / span;
+            outX[i] = (float) (BAKE_X[sample] + (BAKE_X[sample + 1] - BAKE_X[sample]) * t);
+            outY[i] = (float) (BAKE_Y[sample] + (BAKE_Y[sample + 1] - BAKE_Y[sample]) * t);
         }
         outX[0] = 1.0f;
         outY[0] = 0.0f;
         outX[ARC_TABLE] = 0.0f;
         outY[ARC_TABLE] = 1.0f;
+    }
+
+    private static void traceCorner(double power) {
+        for (int i = 0; i <= SQUIRCLE_SAMPLES; i++) {
+            double theta = Math.PI / 2.0 * i / SQUIRCLE_SAMPLES;
+            BAKE_X[i] = Math.pow(Math.cos(theta), power);
+            BAKE_Y[i] = Math.pow(Math.sin(theta), power);
+            BAKE_TRAVEL[i] = i == 0 ? 0.0
+                    : BAKE_TRAVEL[i - 1] + Math.hypot(BAKE_X[i] - BAKE_X[i - 1], BAKE_Y[i] - BAKE_Y[i - 1]);
+        }
     }
 
     private UiRender() {}
@@ -842,6 +853,7 @@ public final class UiRender {
                             float progress, int color) {
         float swept = UiAnim.clamp01(progress);
         if (swept <= 0.0f || radius <= 0.0f || thickness <= 0.0f || (color >>> 24) == 0) return;
+        if (UiArc.draw(graphics, centerX, centerY, radius, thickness, swept, color)) return;
 
         float pixels = pixelsPerUnit(graphics);
         float edge = feather(pixels);
@@ -1082,11 +1094,11 @@ public final class UiRender {
     }
 
     public static float crisp(GuiGraphics graphics, float scale) {
-        return crisp(REGULAR_BAKE, pixelsPerUnit(graphics), scale);
+        return crisp(REGULAR_BAKE, textPixels(graphics), scale);
     }
 
     public static float measure(GuiGraphics graphics, Font font, Component value, float scale) {
-        float pixels = pixelsPerUnit(graphics);
+        float pixels = textPixels(graphics);
         float snapped = crisp(REGULAR_BAKE, pixels, scale);
         layout(value, BOLD, BOLD, REGULAR_BAKE, pixels * snapped);
         return span(font, pixels, snapped, 0.0f);
@@ -1105,7 +1117,7 @@ public final class UiRender {
                                   float[] bakes, float scale, float tracking) {
         if (value.getString().isEmpty()) return 0.0f;
 
-        float pixels = pixelsPerUnit(graphics);
+        float pixels = textPixels(graphics);
         float snapped = crisp(bakes, pixels, scale);
         layout(value, faces, faces, bakes, pixels * snapped);
         return span(font, pixels, snapped, tracking);
@@ -1114,7 +1126,7 @@ public final class UiRender {
     // WHY: перо кладёт каждый глиф на целый пиксель, поэтому измеренная ширина куска строки не совпадает
     // WHY: с местом букв в ней: подчёркивание слова берёт границы тем же ходом пера, что и отрисовка
     public static float[] trackedStops(GuiGraphics graphics, Font font, Component value, float scale, float tracking) {
-        float pixels = pixelsPerUnit(graphics);
+        float pixels = textPixels(graphics);
         if (pixels <= 0.01f || value.getString().isEmpty()) return new float[]{0.0f};
 
         float snapped = crisp(REGULAR_BAKE, pixels, scale);
@@ -1125,7 +1137,7 @@ public final class UiRender {
     // WHY: перо ставит после каждой буквы округлённый межбуквенный зазор, и без его вычета
     // WHY: подчёркивание слова заезжает в пробел за ним, что особенно заметно на коротких словах
     public static float trackedGap(GuiGraphics graphics, float scale, float tracking) {
-        float pixels = pixelsPerUnit(graphics);
+        float pixels = textPixels(graphics);
         if (pixels <= 0.01f) return 0.0f;
 
         return Math.round(tracking * pixels * crisp(REGULAR_BAKE, pixels, scale)) / pixels;
@@ -1206,7 +1218,7 @@ public final class UiRender {
 
     private static void aligned(GuiGraphics graphics, Font font, Component value, ResourceLocation[] faces,
                                 float anchorX, float y, float scale, int color, boolean shadow, float align) {
-        float pixels = pixelsPerUnit(graphics);
+        float pixels = textPixels(graphics);
         float snapped = crisp(REGULAR_BAKE, pixels, scale);
         layout(value, faces, faces == REGULAR ? BOLD : faces, REGULAR_BAKE, pixels * snapped);
 
@@ -1254,7 +1266,7 @@ public final class UiRender {
                                       boolean bold, float align) {
         if (value.getString().isEmpty()) return;
 
-        float pixels = pixelsPerUnit(graphics);
+        float pixels = textPixels(graphics);
         scale = crisp(REGULAR_BAKE, pixels, scale);
         layout(value, BOLD, BOLD, REGULAR_BAKE, pixels * scale);
 
@@ -1265,7 +1277,7 @@ public final class UiRender {
             return;
         }
 
-        float start = boxX - UiMarquee.shift(value.getString(), span - boxWidth);
+        float start = boxX - marqueeShift(graphics, value.getString(), span - boxWidth);
         float margin = UiMarquee.margin(boxWidth, scale);
         scissor(graphics, boxX - margin, boxY, boxWidth + margin * 2.0f, boxHeight);
         marqueeFrom(graphics, boxX, boxWidth, start, span, scale);
@@ -1277,11 +1289,27 @@ public final class UiRender {
         }
     }
 
+    // WHY: порог хода берётся по настоящему вылету строки: округлённый вверх до пикселя, он при
+    // WHY: посадке меньше 1 запускал бегущую строку ради сотой доли единицы, и она ползала на пиксель
+    public static float marqueeShift(GuiGraphics graphics, String text, float travel) {
+        float shift = UiMarquee.shift(text, travel);
+        if (shift <= 0.0f) return 0.0f;
+
+        return shift * wholePixels(travel, textPixels(graphics)) / travel;
+    }
+
+    // WHY: дальний край хода встаёт на целый пиксель, иначе строка стояла бы там на полпикселя
+    // WHY: и всю паузу у конца читалась мягче, чем у начала
+    private static float wholePixels(float travel, float pixels) {
+        return pixels <= 0.01f ? travel : (float) Math.ceil(travel * pixels) / pixels;
+    }
+
     // WHY: ножницы режут глиф пополам, и строка выглядит вылезшей из стенки; край гасится маской
-    // WHY: в шейдере текста по пикселю, а ванильное перо её не знает и гасится целой буквой
+    // WHY: в шейдере текста по пикселю, а ванильное перо её не знает и гасится целой буквой.
+    // WHY: Ход строки заявлен от начала коробки: место покоя стоит на сетке, а сдвиг идёт без ступеней
     public static void marqueeFrom(GuiGraphics graphics, float boxX, float boxWidth, float start, float span,
                                    float scale) {
-        marqueeFloating = floating(true);
+        UiRestFrame.declare(graphics, start - boxX, 0.0f);
         if (MsdfFontSets.ready()) {
             graphics.bufferSource().endBatch();
             UiMarquee.reveal(graphics, boxX, boxWidth, start, span, scale);
@@ -1293,11 +1321,9 @@ public final class UiRender {
         fading = true;
     }
 
-    // WHY: на хвосте хода строка сдвигается на доли пикселя за кадр, и привязка пера к сетке
-    // WHY: превращала торможение в рывки по целому пикселю
     public static void marqueeDone() {
         fading = false;
-        floating(marqueeFloating);
+        UiRestFrame.retract();
         UiMarquee.conceal();
     }
 
@@ -1310,7 +1336,7 @@ public final class UiRender {
 
     public static void textTrackedLeft(GuiGraphics graphics, Font font, Component value, float x, float y, float scale, float tracking, int color) {
         if (value.getString().isEmpty()) return;
-        float pixels = pixelsPerUnit(graphics);
+        float pixels = textPixels(graphics);
         float snapped = crisp(REGULAR_BAKE, pixels, scale);
         layout(value, REGULAR, REGULAR, REGULAR_BAKE, pixels * snapped);
         drawGlyphs(graphics, font, x, y, snapped, tracking, color, false);
@@ -1336,10 +1362,10 @@ public final class UiRender {
     // WHY: на полупиксель: при медленном движении мыши буквы дрожат относительно друг друга
     public static float snapX(GuiGraphics graphics, float x) {
         Matrix4f matrix = graphics.pose().last().pose();
-        if (Math.abs(matrix.m01()) > 1.0E-4f || matrix.m00() <= 1.0E-4f) return x;
+        if (!upright(matrix)) return x;
 
         double gui = Math.max(1.0, Minecraft.getInstance().getWindow().getGuiScale());
-        return snap(x, matrix.m00(), matrix.m30(), gui);
+        return UiRestFrame.settleX(x, matrix, gui);
     }
 
     private static void tracked(GuiGraphics graphics, Font font, Component value, ResourceLocation[] faces,
@@ -1352,7 +1378,7 @@ public final class UiRender {
                               GlyphTone tone) {
         if (value.getString().isEmpty()) return;
 
-        float pixels = pixelsPerUnit(graphics);
+        float pixels = textPixels(graphics);
         float snapped = crisp(bakes, pixels, scale);
         layout(value, faces, faces, bakes, pixels * snapped);
         float span = span(font, pixels, snapped, tracking);
@@ -1367,14 +1393,8 @@ public final class UiRender {
         return previous;
     }
 
-    public static boolean rawScale(boolean enabled) {
-        boolean previous = rawScale;
-        rawScale = enabled;
-        return previous;
-    }
-
     private static float crisp(float[] bakes, float pixels, float desired) {
-        if (rawScale || MsdfFontSets.ready() || pixels <= 0.01f) return desired;
+        if (MsdfFontSets.ready() || pixels <= 0.01f) return desired;
         float best = 0.0f;
         for (float bake : bakes) {
             float candidate = bake / pixels;
@@ -1397,21 +1417,21 @@ public final class UiRender {
     }
 
     public static float measureLine(GuiGraphics graphics, Font font, FormattedCharSequence value, float scale) {
-        float pixels = pixelsPerUnit(graphics);
+        float pixels = textPixels(graphics);
         float snapped = crisp(REGULAR_BAKE, pixels, scale);
         collect(value, REGULAR_BAKE[step(REGULAR_BAKE, pixels * snapped * SUPERSAMPLE)]);
         return span(font, pixels, snapped, 0.0f);
     }
 
     public static void textLine(GuiGraphics graphics, Font font, FormattedCharSequence value, float x, float y, float scale, int color, boolean shadow) {
-        float pixels = pixelsPerUnit(graphics);
+        float pixels = textPixels(graphics);
         float snapped = crisp(REGULAR_BAKE, pixels, scale);
         collect(value, REGULAR_BAKE[step(REGULAR_BAKE, pixels * snapped * SUPERSAMPLE)]);
         drawGlyphs(graphics, font, x, y, snapped, 0.0f, color, shadow);
     }
 
     public static List<FormattedCharSequence> split(GuiGraphics graphics, Font font, Component value, float scale, int width) {
-        float pixels = pixelsPerUnit(graphics);
+        float pixels = textPixels(graphics);
         int variant = step(REGULAR_BAKE, pixels * crisp(REGULAR_BAKE, pixels, scale) * SUPERSAMPLE);
         UiFont.push(screenFace());
         try {
@@ -1496,11 +1516,14 @@ public final class UiRender {
                                    float tracking, int color, boolean shadow, GlyphTone tone) {
         if (glyphs == 0 || tone == null && vanishing(color)) return;
 
-        float em = pixelsPerUnit(graphics) * scale;
+        float em = textPixels(graphics) * scale;
         graphics.pose().pushPose();
         translate(graphics, x, y, scale);
         UiFont.push(screenFace());
         beginText(graphics, false);
+        if (upright(graphics.pose().last().pose())) {
+            UiRestFrame.lend(Math.max(1.0, Minecraft.getInstance().getWindow().getGuiScale()));
+        }
 
         // WHY: набор идёт чужим пером и чужим атласом, а между push и pop лежит целая строка:
         // WHY: одна осечка на глифе оставляла бы поднятую позу и сбитый шрифт на весь кадр
@@ -1508,6 +1531,7 @@ public final class UiRender {
             paintGlyphs(graphics, font, em, scale, tracking, color, tone);
         } finally {
             endText(graphics);
+            UiRestFrame.reclaim();
             UiFont.pop();
             graphics.pose().popPose();
         }
@@ -1538,14 +1562,23 @@ public final class UiRender {
 
     private static void translate(GuiGraphics graphics, float x, float y, float scale) {
         Matrix4f matrix = graphics.pose().last().pose();
-        float unit = matrix.m00();
-        if (!floating && Math.abs(matrix.m01()) < 1.0E-4f && unit > 1.0E-4f) {
+        if (!floating && upright(matrix)) {
             double gui = Math.max(1.0, Minecraft.getInstance().getWindow().getGuiScale());
-            x = snap(x, unit, matrix.m30(), gui);
-            y = snap(y, matrix.m11(), matrix.m31(), gui);
+            x = UiRestFrame.settleX(x, matrix, gui);
+            y = UiRestFrame.settleY(y, matrix, gui);
         }
         graphics.pose().translate(x, y, 0.0f);
         graphics.pose().scale(scale, scale, 1.0f);
+    }
+
+    private static boolean upright(Matrix4f matrix) {
+        return Math.abs(matrix.m01()) < 1.0E-4f && Math.abs(matrix.m10()) < 1.0E-4f && matrix.m00() > 1.0E-4f;
+    }
+
+    // WHY: перо и ширина строки считаются в пикселях покоя: иначе растяжение хода сдвигало
+    // WHY: округление каждой буквы, и в начале и конце нажатия цифры прыгали друг относительно друга
+    private static float textPixels(GuiGraphics graphics) {
+        return pixelsPerUnit(graphics) / UiRestFrame.stretchX();
     }
 
     private static float snap(float value, float unit, float offset, double gui) {
@@ -1589,12 +1622,12 @@ public final class UiRender {
     }
 
     private static int ringShape(float x, float y, float width, float height, float radius, int step,
-                                 boolean round, float[] outX, float[] outY) {
+                                 int shape, float[] outX, float[] outY) {
         if (width <= 0.0f || height <= 0.0f) return 0;
 
-        float r = Mth.clamp(radius, 0.0f, Math.min(width, height) / 2.0f);
-        float[] ax = cornerX(round);
-        float[] ay = cornerY(round);
+        float r = cornerReach(width, height, Mth.clamp(radius, 0.0f, Math.min(width, height) / 2.0f));
+        float[] ax = cornerX(shape);
+        float[] ay = cornerY(shape);
 
         float left = x + r;
         float right = x + width - r;
@@ -1627,11 +1660,14 @@ public final class UiRender {
             return;
         }
 
-        boolean round = UiGlassStyle.circular(width, height, r);
-        float[] ax = cornerX(round);
-        float[] ay = cornerY(round);
-        int step = arcStep(r * pixels);
+        int shape = cornerShape(width, height, r);
+        float reach = cornerReach(width, height, r);
+        pushCorners(x, y, width, height, reach, shape, arcStep(reach * pixels));
+    }
 
+    private static void pushCorners(float x, float y, float width, float height, float r, int shape, int step) {
+        float[] ax = cornerX(shape);
+        float[] ay = cornerY(shape);
         float left = x + r;
         float right = x + width - r;
         float top = y + r;
@@ -1641,6 +1677,20 @@ public final class UiRender {
         for (int i = 0; i <= ARC_TABLE; i += step) push(right + ax[i] * r, bottom + ay[i] * r);
         for (int i = 0; i <= ARC_TABLE; i += step) push(left - ay[i] * r, bottom + ax[i] * r);
         for (int i = 0; i <= ARC_TABLE; i += step) push(left - ax[i] * r, top - ay[i] * r);
+    }
+
+    // WHY: меню ведёт сопряжение дальше радиуса (непрерывная кривизна), HUD и переключатели держат прежний
+    // WHY: квадрат r; полуширина остаётся потолком, чтобы соседние углы не наехали друг на друга
+    private static float cornerReach(float width, float height, float radius) {
+        return Math.min(UiGlassStyle.shapeReach(width, height, radius), Math.min(width, height) / 2.0f);
+    }
+
+    // WHY: форму угла переключателя берёт даже шайба, у которой стороны равны: общая проверка
+    // WHY: увела бы её в окружность мимо показателя, выбранного игроком
+    private static int cornerShape(float width, float height, float radius) {
+        if (UiGlassStyle.switching()) return SHAPE_SWITCH;
+        if (!UiCorner.hud()) return UiCorner.band(width, height, radius);
+        return UiGlassStyle.circular(width, height, radius) ? SHAPE_HUD_ROUND : SHAPE_HUD;
     }
 
     private static int arcStep(float radiusPixels) {
@@ -1819,16 +1869,18 @@ public final class UiRender {
         return previous;
     }
 
-    // WHY: форму угла переключателя берёт даже шайба, у которой стороны равны: общая проверка
-    // WHY: увела бы её в окружность мимо показателя, выбранного игроком
-    private static float[] cornerX(boolean round) {
-        if (UiGlassStyle.switching()) return SWITCH_X;
-        return round ? CIRCLE_X : SQUIRCLE_X;
+    private static float[] cornerX(int shape) {
+        if (shape == SHAPE_SWITCH) return SWITCH_X;
+        if (shape == SHAPE_HUD_ROUND) return CIRCLE_X;
+        if (shape == SHAPE_HUD) return SQUIRCLE_X;
+        return MENU_X[shape];
     }
 
-    private static float[] cornerY(boolean round) {
-        if (UiGlassStyle.switching()) return SWITCH_Y;
-        return round ? CIRCLE_Y : SQUIRCLE_Y;
+    private static float[] cornerY(int shape) {
+        if (shape == SHAPE_SWITCH) return SWITCH_Y;
+        if (shape == SHAPE_HUD_ROUND) return CIRCLE_Y;
+        if (shape == SHAPE_HUD) return SQUIRCLE_Y;
+        return MENU_Y[shape];
     }
 
     private static float skirtReach() {
@@ -1976,7 +2028,7 @@ public final class UiRender {
         private float centerV;
         private float sampleU;
         private float sampleV;
-        private boolean round;
+        private int shape;
         private float ringAlpha;
         private float prevAlpha;
         private int rings;
@@ -1993,8 +2045,8 @@ public final class UiRender {
             this.centerY = y + height / 2.0f;
             this.edge = feather(pixels);
             this.alpha = alpha;
-            this.round = UiGlassStyle.circular(width, height, this.radius);
-            this.step = arcStep(Math.max(this.radius, 2.0f) * pixels);
+            this.shape = cornerShape(width, height, this.radius);
+            this.step = arcStep(Math.max(cornerReach(width, height, this.radius), 2.0f) * pixels);
             this.count = outline();
             if (count < 3) return false;
 
@@ -2018,7 +2070,7 @@ public final class UiRender {
         }
 
         private int outline() {
-            int written = ringShape(left, top, width, height, radius, step, round, PATH_X, PATH_Y);
+            int written = ringShape(left, top, width, height, radius, step, shape, PATH_X, PATH_Y);
             if (written < 3) return written;
 
             miters(written, centerX, centerY);
@@ -2032,7 +2084,7 @@ public final class UiRender {
             float zoom = lensZoom(depth, reach);
             ringAlpha = alpha;
             ringShape(left + depth, top + depth, width - depth * 2.0f, height - depth * 2.0f,
-                    ringRadius(depth), step, round, RING_X, RING_Y);
+                    ringRadius(depth), step, shape, RING_X, RING_Y);
 
             for (int i = 0; i < count; i++) {
                 sample(RING_X[i] + NORMAL_X[i] * pull, RING_Y[i] + NORMAL_Y[i] * pull, zoom);

@@ -8,6 +8,7 @@ import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiTitle;
 import com.persiki84.shared.client.ui.UiAccent;
 import net.minecraft.client.Minecraft;
@@ -18,6 +19,7 @@ import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
@@ -25,7 +27,9 @@ import net.minecraftforge.registries.ForgeRegistries;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
@@ -73,6 +77,7 @@ public abstract class ManagerScreen extends GlassScreen {
     private static final int BACK_WIDTH = 62;
     private static final int BACK_HEIGHT = 18;
     private static final int SEARCH_WIDTH = 156;
+    private static final float BEACON_READY = 0.99f;
 
     private final Smooth page = new Smooth(1.0f, PAGE_SPEED);
     private final Smooth box = new Smooth(CONTENT_HEIGHT, BOX_SPEED);
@@ -81,6 +86,7 @@ public abstract class ManagerScreen extends GlassScreen {
     private final ScrollHint listAbove = new ScrollHint();
     private final ScrollHint listBelow = new ScrollHint();
     private final PaletteStack palettes = new PaletteStack();
+    private final SearchBeacon beacon = new SearchBeacon();
     private final List<UiButton> tabButtons = new ArrayList<>();
     private final List<Component> tabTitles = new ArrayList<>();
     private UiButton backButton;
@@ -89,6 +95,11 @@ public abstract class ManagerScreen extends GlassScreen {
     private Screen returnTo;
     private boolean returning;
     private int slide;
+    private String soughtKey;
+    private AbstractWidget lit;
+
+    public record Landmark(Component title, String key) {
+    }
 
     protected ManagerScreen(Component title) {
         super(title);
@@ -110,6 +121,7 @@ public abstract class ManagerScreen extends GlassScreen {
 
     @Override
     protected void init() {
+        turnToSought();
         rebuild();
     }
 
@@ -118,7 +130,66 @@ public abstract class ManagerScreen extends GlassScreen {
     protected void rebuild() {
         boolean typing = search != null && search.typing();
         layout();
+        soughtKey = null;
         if (typing) setFocused(search.box());
+    }
+
+    // WHY: строка, к которой привёл внешний поиск, на первой раскладке встаёт в середину окна и
+    // WHY: коротко подсвечивается: иначе на длинной вкладке её пришлось бы искать глазами второй раз
+    protected void seek(String rowKey) {
+        soughtKey = rowKey;
+    }
+
+    private void turnToSought() {
+        if (soughtKey == null) return;
+
+        int tab = tabHolding(soughtKey);
+        if (tab >= 0 && tab != activeTab()) pickTab(tab);
+    }
+
+    private int tabHolding(String key) {
+        List<Component> titles = tabs();
+        for (int index = 0; index < titles.size(); index++) {
+            if (key.equals(keyOf(titles.get(index))) || rowIndex(rowsOf(index), key) >= 0) return index;
+        }
+        return -1;
+    }
+
+    private static int rowIndex(List<AbstractWidget> rows, String key) {
+        if (rows == null) return -1;
+
+        for (int index = 0; index < rows.size(); index++) {
+            if (key.equals(keyOf(rows.get(index).getMessage()))) return index;
+        }
+        return -1;
+    }
+
+    private static String keyOf(Component text) {
+        if (!(text.getContents() instanceof TranslatableContents contents)) return null;
+        return contents.getArgs().length == 0 ? contents.getKey() : null;
+    }
+
+    // WHY: ориентиры собираются теми же сборщиками вкладок, что и сами строки: отдельный список
+    // WHY: названий для поиска разошёлся бы с экраном после первой же новой строки
+    protected List<Landmark> landmarks() {
+        List<Landmark> found = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        List<Component> titles = tabs();
+        for (int index = 0; index < titles.size(); index++) {
+            addLandmark(found, seen, titles.get(index));
+            List<AbstractWidget> rows = rowsOf(index);
+            if (rows == null) continue;
+
+            for (AbstractWidget row : rows) {
+                addLandmark(found, seen, row.getMessage());
+            }
+        }
+        return found;
+    }
+
+    private static void addLandmark(List<Landmark> found, Set<String> seen, Component title) {
+        String key = keyOf(title);
+        if (key != null && seen.add(key)) found.add(new Landmark(title, key));
     }
 
     private void layout() {
@@ -402,8 +473,7 @@ public abstract class ManagerScreen extends GlassScreen {
             backButton.render(graphics, mouseX, mouseY, partialTick);
         }
         if (searchShown()) {
-            search.render(graphics);
-            search.box().render(graphics, mouseX, mouseY, partialTick);
+            search.render(graphics, mouseX, mouseY, partialTick);
         }
         for (UiButton tab : tabButtons) {
             tab.render(graphics, mouseX, mouseY, partialTick);
@@ -415,8 +485,7 @@ public abstract class ManagerScreen extends GlassScreen {
     private void renderPage(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         float turned = UiAnim.easeOut(page.to(1.0f, UiFrame.delta()));
 
-        graphics.pose().pushPose();
-        graphics.pose().translate(slide * PAGE_SLIDE * (1.0f - turned), 0.0f, 0.0f);
+        UiRestFrame.shift(graphics, slide * PAGE_SLIDE * (1.0f - turned), 0.0f);
         RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, turned * shown());
         try {
             glideRows();
@@ -424,6 +493,7 @@ public abstract class ManagerScreen extends GlassScreen {
             clipToPanel(graphics);
             try {
                 renderWidgets(graphics, mouseX, mouseY, partialTick);
+                paintBeacon(graphics);
                 graphics.flush();
                 renderScrollHints(graphics);
             } finally {
@@ -431,7 +501,7 @@ public abstract class ManagerScreen extends GlassScreen {
             }
         } finally {
             RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, shown());
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
         }
     }
 
@@ -554,6 +624,7 @@ public abstract class ManagerScreen extends GlassScreen {
         List<AbstractWidget> rows = searching() ? found(source) : source;
         shownRows = rows.size();
         int capacity = rowCapacity(contentHeight() - PANEL_PAD * 2, rows.size());
+        if (soughtKey != null) rowScroll = centreOnSought(rows, capacity);
         rowScroll = clampScroll(rowScroll, rows.size(), capacity);
 
         int lead = lead(rowScroll);
@@ -572,6 +643,26 @@ public abstract class ManagerScreen extends GlassScreen {
             y += ROW_HEIGHT + ROW_GAP;
             index++;
         }
+    }
+
+    private int centreOnSought(List<AbstractWidget> rows, int capacity) {
+        int index = rowIndex(rows, soughtKey);
+        if (index < 0) return rowScroll;
+
+        lit = rows.get(index);
+        beacon.arm();
+        return index - (capacity - 1) / 2;
+    }
+
+    // WHY: вспышка ждёт, пока экран доиграет вход: на проявлении её съедает само проявление
+    private void paintBeacon(GuiGraphics graphics) {
+        boolean ready = !revealing() && !leaving() && shown() >= BEACON_READY;
+        float strength = beacon.advance(ready, UiFrame.delta());
+        if (!beacon.armed()) lit = null;
+        if (strength <= 0.0f || lit == null || !this.renderables.contains(lit)) return;
+
+        SearchBeacon.paint(graphics, lit.getX(), lit.getY(), lit.getWidth(), lit.getHeight(),
+                UiMetrics.radius(lit.getHeight()), strength);
     }
 
     // WHY: окно палитры одно на все экраны: выбор цвета стрелками по списку названий не показывал

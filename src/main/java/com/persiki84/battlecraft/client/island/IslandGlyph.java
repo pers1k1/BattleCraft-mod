@@ -10,7 +10,14 @@ import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.gui.GuiGraphics;
 
+// WHY: размеры полосок общие для острова HUD и острова рабочего стола: визуализатор один, и
+// WHY: на столе он обязан выглядеть так же, как в мире, а не своими пропорциями
 public final class IslandGlyph {
+    public static final float PILL_WIDTH = 11.0f;
+    public static final float PILL_HEIGHT = 9.5f;
+    public static final float CARD_WIDTH = 14.0f;
+    public static final float CARD_HEIGHT = 15.4f;
+
     private static final int BARS = MediaWatch.BANDS;
     private static final float GAP_SHARE = 0.69f;
     private static final float REST_SHARE = 0.078f;
@@ -50,6 +57,19 @@ public final class IslandGlyph {
 
     static float along(int column) {
         return (column * (1.0f + GAP_SHARE) + 0.5f) / (BARS + GAP_SHARE * (BARS - 1));
+    }
+
+    public static void drive() {
+        IslandModel.advanceFrame();
+        pulse(IslandModel.energy());
+    }
+
+    public static void pillBars(GuiGraphics graphics, float centerX, float centerY, float fade) {
+        visualizer(graphics, centerX, centerY, PILL_WIDTH, PILL_HEIGHT, fade);
+    }
+
+    public static void cardBars(GuiGraphics graphics, float centerX, float centerY, float fade) {
+        visualizer(graphics, centerX, centerY, CARD_WIDTH, CARD_HEIGHT, fade);
     }
 
     public static void visualizer(GuiGraphics graphics, float centerX, float centerY, float width, float height,

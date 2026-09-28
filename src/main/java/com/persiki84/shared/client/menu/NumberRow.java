@@ -6,6 +6,7 @@ import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiTheme;
@@ -175,16 +176,23 @@ public class NumberRow extends MenuRow {
         }
 
         if (progress < 0.999f && previous != shown) {
-            float outLift = -direction * ROLL_LIFT * progress;
-            UiRender.textCentered(graphics, font(), display(previous), centerX,
-                    UiRender.centerY(getY(), height, LABEL_SCALE) + outLift, LABEL_SCALE,
-                    UiTheme.alpha(tint, 1.0f - progress), false);
+            rolled(graphics, display(previous), centerX, -direction * ROLL_LIFT * progress,
+                    UiTheme.alpha(tint, 1.0f - progress));
         }
+        rolled(graphics, display(shown), centerX, direction * ROLL_LIFT * (1.0f - progress),
+                UiTheme.alpha(tint, progress));
+    }
 
-        float inLift = direction * ROLL_LIFT * (1.0f - progress);
-        UiRender.textCentered(graphics, font(), display(shown), centerX,
-                UiRender.centerY(getY(), height, LABEL_SCALE) + inLift, LABEL_SCALE,
-                UiTheme.alpha(tint, progress), false);
+    // WHY: прокрутка числа заявлена ходом от места покоя, иначе цифры шли ступенями по пикселю
+    // WHY: и в конце хода вставали на место последним рывком
+    private void rolled(GuiGraphics graphics, String text, float centerX, float lift, int color) {
+        UiRestFrame.shift(graphics, 0.0f, lift);
+        try {
+            UiRender.textCentered(graphics, font(), text, centerX,
+                    UiRender.centerY(getY(), height, LABEL_SCALE), LABEL_SCALE, color, false);
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
     }
 
     // WHY: мигающий курсор не входит в ширину набранного: вместе с ним строка центровалась

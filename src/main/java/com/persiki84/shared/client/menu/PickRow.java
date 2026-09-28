@@ -6,6 +6,7 @@ import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiTheme;
@@ -136,18 +137,25 @@ public class PickRow extends MenuRow {
     private void paintValue(GuiGraphics graphics, float centerX, float room, float turned) {
         int tint = this.active ? UiAccent.text() : UiAccent.textFaint();
         if (leaving != null && turned < SWAP_DONE) {
-            value(graphics, leaving, centerX - swapDirection * SWAP_TRAVEL * turned, room,
+            value(graphics, leaving, centerX, -swapDirection * SWAP_TRAVEL * turned, room,
                     UiTheme.alpha(tint, 1.0f - turned));
         } else {
             leaving = null;
         }
-        value(graphics, current(), centerX + swapDirection * SWAP_TRAVEL * (1.0f - turned), room,
+        value(graphics, current(), centerX, swapDirection * SWAP_TRAVEL * (1.0f - turned), room,
                 UiTheme.alpha(tint, turned));
     }
 
-    private void value(GuiGraphics graphics, Component text, float centerX, float room, int tint) {
-        UiRender.textTrackedFit(graphics, font(), text, centerX, getY(), height, room,
-                LABEL_SCALE, 0.0f, tint, false);
+    // WHY: ход значения заявлен от его места покоя: иначе строка ехала ступенями по пикселю
+    // WHY: и на хвосте замедления последний шаг приходил рывком влево или вправо
+    private void value(GuiGraphics graphics, Component text, float centerX, float travel, float room, int tint) {
+        UiRestFrame.shift(graphics, travel, 0.0f);
+        try {
+            UiRender.textTrackedFit(graphics, font(), text, centerX, getY(), height, room,
+                    LABEL_SCALE, 0.0f, tint, false);
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
     }
 
     private float renderIcon(GuiGraphics graphics) {

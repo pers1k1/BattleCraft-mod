@@ -1,5 +1,6 @@
 package com.persiki84.airdrop.client;
 
+import com.persiki84.battlecraft.client.hud.PointsView;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiSight;
@@ -48,14 +49,15 @@ public final class CacheMarkers {
 
         float width = minecraft.getWindow().getGuiScaledWidth();
         float height = minecraft.getWindow().getGuiScaledHeight();
+        boolean shown = PointsView.markersShown();
         for (ClientCacheField.Cell cell : ClientCacheField.cells()) {
-            if (!cell.missing()) place(minecraft.level, cell, camera, view, projection, width, height);
+            if (!cell.missing()) place(minecraft.level, cell, camera, view, projection, width, height, shown);
         }
         known.values().removeIf(marker -> marker.pass != pass);
     }
 
     private static void place(BlockGetter level, ClientCacheField.Cell cell, Vec3 camera, Matrix4f view,
-                              Matrix4f projection, float width, float height) {
+                              Matrix4f projection, float width, float height, boolean shown) {
         Marker marker = known.computeIfAbsent(cell.pos().asLong(), key -> new Marker());
         marker.pass = pass;
         double distance = Math.sqrt(cell.pos().distToCenterSqr(camera));
@@ -75,7 +77,7 @@ public final class CacheMarkers {
             return;
         }
         marker.relabel(cell);
-        boolean wanted = distance <= MARKER_RANGE && UiSight.clear(level, camera, cell.pos());
+        boolean wanted = shown && distance <= MARKER_RANGE && UiSight.clear(level, camera, cell.pos());
         live.add(marker.place(screenX, screenY, (int) distance, CacheTint.color(cell.tier()), wanted));
     }
 

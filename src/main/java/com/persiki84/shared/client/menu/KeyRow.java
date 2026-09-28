@@ -7,6 +7,7 @@ import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiSwap;
 import com.persiki84.shared.client.ui.UiTheme;
@@ -88,14 +89,20 @@ public class KeyRow extends MenuRow {
         float phase = swap.advance(shown, delta);
         Component leaving = swap.outgoing();
         int color = tint(focus, heard);
-        if (leaving != null) paintKey(graphics, leaving, left, top - phase * UiSwap.LIFT, color, 1.0f - phase);
-        paintKey(graphics, shown, left, top + (1.0f - phase) * UiSwap.LIFT, color, phase);
+        if (leaving != null) paintKey(graphics, leaving, left, top, -phase * UiSwap.LIFT, color, 1.0f - phase);
+        paintKey(graphics, shown, left, top, (1.0f - phase) * UiSwap.LIFT, color, phase);
     }
 
-    private void paintKey(GuiGraphics graphics, Component text, float left, float top, int color, float alpha) {
+    private void paintKey(GuiGraphics graphics, Component text, float left, float top, float lift, int color,
+                          float alpha) {
         if (alpha <= MIN_ALPHA) return;
-        UiRender.textTrackedBox(graphics, font(), text, left, top, BOX_HEIGHT, BOX_WIDTH,
-                LABEL_SCALE, 0.0f, UiTheme.alpha(color, alpha), false, ALIGN_CENTER);
+        UiRestFrame.shift(graphics, 0.0f, lift);
+        try {
+            UiRender.textTrackedBox(graphics, font(), text, left, top, BOX_HEIGHT, BOX_WIDTH,
+                    LABEL_SCALE, 0.0f, UiTheme.alpha(color, alpha), false, ALIGN_CENTER);
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
     }
 
     private int tint(float focus, float heard) {

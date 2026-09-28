@@ -3,6 +3,7 @@ package com.persiki84.battlecraft.client.hud;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.persiki84.battlecraft.BattleCraftMod;
 import com.persiki84.battlecraft.client.KeyInputHandler;
+import com.persiki84.shared.client.ui.UiHud;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -28,6 +29,12 @@ public final class PointsView {
 
     public static boolean shown() {
         return holding != HudConfig.pointsInHud();
+    }
+
+    // WHY: базы, магазины, метки и руды карьера висят поверх мира теми же плашками, что и точки:
+    // WHY: клавиша, гасящая одни и оставляющая другие, читалась игроком как сломанная
+    public static boolean markersShown() {
+        return shown() && !UiHud.rosterOpen();
     }
 
     public static Component keyName(Component unbound) {

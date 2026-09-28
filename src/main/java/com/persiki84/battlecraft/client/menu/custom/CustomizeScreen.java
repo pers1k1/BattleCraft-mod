@@ -95,6 +95,18 @@ public final class CustomizeScreen extends ManagerScreen {
         Minecraft.getInstance().setScreen(new CustomizeScreen());
     }
 
+    public static void openAt(String rowKey) {
+        CustomizeScreen screen = new CustomizeScreen();
+        screen.seek(rowKey);
+        Minecraft.getInstance().setScreen(screen);
+    }
+
+    // WHY: черновой экран без размера собирает строки вкладок только ради их названий и ключей,
+    // WHY: а сам никогда не показывается
+    public static List<Landmark> searchIndex() {
+        return new CustomizeScreen().landmarks();
+    }
+
     @Override
     protected List<Component> tabs() {
         return List.of(
@@ -342,12 +354,20 @@ public final class CustomizeScreen extends ManagerScreen {
         }));
         built.add(markerRow());
         built.add(pointsKeyRow());
+        addDesktopRows(built);
         addDamageRows(built);
         addIslandRows(built);
         addVoiceRows(built);
         addRadioRows(built);
         addElementRows(built);
         return built;
+    }
+
+    private void addDesktopRows(List<AbstractWidget> built) {
+        built.add(heading("battlecraft.custom.group.desktop"));
+        built.add(toggle("battlecraft.custom.desktop", HudConfig::menuDesktop, HudConfig::menuDesktop));
+        built.add(toggle("battlecraft.custom.wallpaper_dots", HudConfig::wallpaperDots, HudConfig::wallpaperDots));
+        built.add(toggle("battlecraft.custom.wallpaper_themed", HudConfig::wallpaperThemed, HudConfig::wallpaperThemed));
     }
 
     private void addElementRows(List<AbstractWidget> built) {

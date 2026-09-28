@@ -5,7 +5,10 @@ import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
+import com.persiki84.shared.client.ui.UiGlassStyle;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiReveal;
 import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -253,16 +256,27 @@ public final class MenuHint {
         float pivotY = below ? y : y + height;
 
         UiGlass.layer(graphics);
-        graphics.pose().pushPose();
-        graphics.pose().translate(pivotX, pivotY + lift, 0.0f);
-        graphics.pose().scale(scale, scale, 1.0f);
-        graphics.pose().translate(-pivotX, -pivotY, 0.0f);
+        UiRestFrame.push(graphics, pivotX, pivotY, scale, scale, 0.0f, lift);
+        try {
+            UiGlass.hush(graphics, x, y, width, height, RADIUS, eased);
+            paintBody(graphics, font, x, y, width, height, shown, drawn);
+            graphics.flush();
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
+    }
+
+    // WHY: подсказка входит своей альфой и масштабом, и линза стекла набирает силу вместе с ними, а не
+    // WHY: стоит в полную силу с первого кадра под гаснущей альфой. Ореол снаружи: его доля идёт альфой
+    private static void paintBody(GuiGraphics graphics, Font font, float x, float y, float width, float height,
+                                  float shown, List<FormattedCharSequence> drawn) {
+        float eased = UiAnim.easeOut(shown);
+        float outerPresence = UiGlassStyle.scalePresence(UiReveal.glassPresence(shown));
         try {
             UiGlass.window(graphics, x, y, width, height, RADIUS, eased);
             paintLines(graphics, font, x, y, width, eased, drawn);
-            graphics.flush();
         } finally {
-            graphics.pose().popPose();
+            UiGlassStyle.restorePresence(outerPresence);
         }
     }
 

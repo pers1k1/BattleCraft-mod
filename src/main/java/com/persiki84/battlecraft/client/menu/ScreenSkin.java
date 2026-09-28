@@ -8,6 +8,7 @@ import com.persiki84.shared.client.menu.ScreenVeil;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiBackdrop;
+import com.persiki84.shared.client.ui.UiFrame;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.ChatScreen;
@@ -61,6 +62,8 @@ public final class ScreenSkin {
 
     private static Screen opened;
     private static boolean lifted;
+    private static Screen backed;
+    private static long backedFrame = -1L;
 
     private ScreenSkin() {}
 
@@ -93,9 +96,11 @@ public final class ScreenSkin {
         return ENTER_LIFT * (1.0f - entrance());
     }
 
+    // WHY: въезд принадлежит открытому экрану: уходящий перерисовывается в позе покоя, иначе он
+    // WHY: подхватил бы въезд нового и дёрнулся бы на первом кадре ухода
     public static void begin(GuiGraphics graphics, Screen screen) {
         lifted = false;
-        if (settled() || !animated(screen)) return;
+        if (screen != opened || settled() || !animated(screen)) return;
 
         lifted = true;
         PoseStack pose = graphics.pose();
@@ -114,14 +119,9 @@ public final class ScreenSkin {
 
     public static boolean paint(Screen screen, GuiGraphics graphics) {
         if (seeThrough(screen) || screen instanceof MinimalTitleScreen) return false;
+        if (ScreenFarewell.painting(screen)) return paintLeaving(graphics);
 
-        boolean unwound = unwind(graphics, screen);
-        if (aurora(screen)) {
-            MenuBackground.shared().render(graphics, screen.width, screen.height);
-        } else {
-            ScreenDim.render(graphics, screen.width, screen.height, ScreenVeil.value());
-        }
-        if (unwound) graphics.pose().popPose();
+        if (!backedThisFrame(screen)) paintBackdrop(screen, graphics);
 
         // WHY: поля рисуются уже в позе входа: снятая под фон поза оставляла их единственным
         // WHY: неподвижным пятном, пока весь остальной экран наезжал
@@ -130,6 +130,34 @@ public final class ScreenSkin {
         UiBackdrop.capture();
         ScreenVeil.mark(screen);
         return true;
+    }
+
+    // WHY: уходящий экран рисуется без подложки: под ним уже лежит подложка нового экрана или мир с
+    // WHY: гаснущей вуалью, а пометка вуали и снимок фона принадлежат открытому экрану
+    private static boolean paintLeaving(GuiGraphics graphics) {
+        WidgetRestyle.paintFields(graphics);
+        return true;
+    }
+
+    // WHY: подложка под экран рисуется раз в кадр. Запасной проход в Render.Pre кладёт её до стадии
+    // WHY: проявления, а сам экран зовёт renderBackground уже внутри стадии: второй непрозрачный фон
+    // WHY: помечал весь кадр как интерфейс, и наводка резкости размывала и проявляла заново сами обои
+    private static boolean backedThisFrame(Screen screen) {
+        long frame = UiFrame.frame();
+        boolean done = screen == backed && frame == backedFrame;
+        backed = screen;
+        backedFrame = frame;
+        return done;
+    }
+
+    private static void paintBackdrop(Screen screen, GuiGraphics graphics) {
+        boolean unwound = unwind(graphics, screen);
+        if (aurora(screen)) {
+            MenuBackground.shared().render(graphics, screen.width, screen.height);
+        } else {
+            ScreenDim.render(graphics, screen.width, screen.height, ScreenVeil.value());
+        }
+        if (unwound) graphics.pose().popPose();
     }
 
     private static boolean unwind(GuiGraphics graphics, Screen screen) {

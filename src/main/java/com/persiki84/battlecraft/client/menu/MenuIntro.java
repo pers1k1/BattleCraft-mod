@@ -6,9 +6,14 @@ import com.persiki84.shared.client.ui.UiAssemble;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiMotion;
 import com.persiki84.shared.client.ui.UiMotionSet;
+import com.persiki84.shared.client.ui.UiReveal;
 
 public final class MenuIntro {
     private static final float IDLE = -1.0f;
+    private static final float MAX_STEP = 1.0f / 15.0f;
+    // WHY: второй кадр титульного экрана приходит после загрузки мира или ресурсов, и шаг без зажима
+    // WHY: проглатывал короткий вход целиком: как у экранов, не меньше шести кадров на вход
+    private static final float MIN_FRAMES = 6.0f;
 
     private static UiMotionSet set = UiMotionSet.IGNITE;
     private static float span = UiMotionSet.IGNITE.titleSeconds();
@@ -51,8 +56,13 @@ public final class MenuIntro {
         if (frame == stamp) return;
         stamp = frame;
 
-        elapsed += UiFrame.delta();
+        elapsed += Math.min(Math.min(MAX_STEP, span / MIN_FRAMES), UiFrame.delta());
         if (elapsed >= span) finish();
+    }
+
+    // WHY: линза титульного экрана набирает силу вместе с входом, а без стадии вход не играет
+    public static float presence(boolean staged) {
+        return staged ? UiReveal.glassPresence(phase()) : 1.0f;
     }
 
     public static void skip() {

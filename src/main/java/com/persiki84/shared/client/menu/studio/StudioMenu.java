@@ -5,8 +5,11 @@ import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
+import com.persiki84.shared.client.ui.UiGlassStyle;
 import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
+import com.persiki84.shared.client.ui.UiReveal;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.Minecraft;
@@ -112,6 +115,14 @@ public final class StudioMenu {
         armed = -1;
     }
 
+    // WHY: экран, ушедший под другой, не рисуется, и начатое угасание меню доигрывалось бы призраком
+    // WHY: при возврате на него: пункт меню часто сам уводит на другой экран
+    public void dismiss() {
+        close();
+        shown.snap(0.0f);
+        pillShown.snap(0.0f);
+    }
+
     public boolean showing() {
         return open;
     }
@@ -158,20 +169,30 @@ public final class StudioMenu {
 
         trackHover(mouseX, mouseY);
         float alpha = UiAnim.easeOut(amount);
-        float scale = open ? BORN_SCALE + (1.0f - BORN_SCALE) * UiAnim.easeOutBack(amount)
-                : BORN_SCALE + (1.0f - BORN_SCALE) * amount;
-        graphics.pose().pushPose();
-        graphics.pose().translate(originX, originY, DEPTH);
-        graphics.pose().scale(scale, scale, 1.0f);
-        graphics.pose().translate(-originX, -originY, 0.0f);
+        float scale = BORN_SCALE + (1.0f - BORN_SCALE) * (open ? alpha : amount);
+        UiRestFrame.push(graphics, originX, originY, scale, scale, 0.0f, 0.0f);
+        graphics.pose().translate(0.0f, 0.0f, DEPTH);
+        try {
+            UiGlass.hush(graphics, left, top, width, height(), RADIUS, alpha);
+            paintBody(graphics, amount, delta);
+            graphics.flush();
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
+    }
+
+    // WHY: меню входит своей альфой и масштабом, и линза стекла набирает силу вместе с ними, а не
+    // WHY: стоит в полную силу с первого кадра под гаснущей альфой. Ореол снаружи: его доля идёт альфой
+    private void paintBody(GuiGraphics graphics, float amount, float delta) {
+        float alpha = UiAnim.easeOut(amount);
+        float outerPresence = UiGlassStyle.scalePresence(UiReveal.glassPresence(amount));
         try {
             UiGlass.window(graphics, left, top, width, height(), RADIUS, alpha);
             UiGlass.layer(graphics);
             paintPill(graphics, alpha, delta);
             paintRows(graphics, alpha);
-            graphics.flush();
         } finally {
-            graphics.pose().popPose();
+            UiGlassStyle.restorePresence(outerPresence);
         }
     }
 

@@ -9,6 +9,7 @@ import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiInput;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.Minecraft;
@@ -49,7 +50,6 @@ public abstract class MenuRow extends AbstractWidget implements GlidingRow {
     private static final float PRESS_DAMPING = 0.60f;
     private static final float PRESS_SQUASH = 0.018f;
     private static final float PRESS_LIMIT = 0.35f;
-    private static final float SMOOTH_THRESHOLD = 0.0004f;
 
     private static final float APPEAR_MS = 190.0f;
     private static final float STAGGER_MS = 20.0f;
@@ -228,16 +228,11 @@ public abstract class MenuRow extends AbstractWidget implements GlidingRow {
         float pushed = Math.max(-PRESS_LIMIT, Math.min(1.0f, press.to(held ? 1.0f : 0.0f, delta)));
 
         float appear = appear();
-        float squash = pushed * PRESS_SQUASH;
-        boolean rawScale = UiRender.rawScale(false);
-        pushSquash(graphics, squash, (1.0f - appear) * slideFrom + drift.get());
-        boolean quantized = UiRender.rawScale(rawScale || Math.abs(squash) > SMOOTH_THRESHOLD);
-
+        pushSquash(graphics, pushed * PRESS_SQUASH, (1.0f - appear) * slideFrom + drift.get());
         try {
             renderBody(graphics, mouseX, mouseY, focus, pushed);
         } finally {
-            UiRender.rawScale(quantized);
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
         }
     }
 
@@ -278,15 +273,13 @@ public abstract class MenuRow extends AbstractWidget implements GlidingRow {
     // WHY: строка втягивается на нажатии одинаково со всех сторон, а не долей своей ширины: при
     // WHY: общем масштабе значение у правого края широкой строки ехало влево и отскакивало обратно,
     // WHY: и в конце нажатия число заметно смещалось относительно своих стрелок
+    // WHY: сжатие и подъём заявлены ходом: текст строки стоит на сетке покоя и едет за стеклом
+    // WHY: непрерывно, а не ступенями по пикселю с рывком в начале и в конце нажатия
     private void pushSquash(GuiGraphics graphics, float squash, float lift) {
         float centerX = getX() + width / 2.0f;
         float centerY = getY() + height / 2.0f;
         float across = width > 0 ? 1.0f - squash * height / (float) width : 1.0f;
-
-        graphics.pose().pushPose();
-        graphics.pose().translate(centerX, centerY + lift, 0.0f);
-        graphics.pose().scale(across, 1.0f - squash, 1.0f);
-        graphics.pose().translate(-centerX, -centerY, 0.0f);
+        UiRestFrame.push(graphics, centerX, centerY, across, 1.0f - squash, 0.0f, lift);
     }
 
     protected void flash() {
