@@ -20,6 +20,7 @@ import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiStage;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiVeil;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.OptionsScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -45,6 +46,10 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
     private static final float HINT_ALPHA = 0.9f;
     private static final float HINT_BREATH_LOW = 0.8f;
     private static final float HINT_BREATH_MS = 4200.0f;
+    private static final float HINT_BLUR = 6.0f;
+    private static final float HINT_BAND_ABOVE = 16.0f;
+    private static final float HINT_BAND_HEIGHT = 46.0f;
+    private static final float CHROME_BLUR = 6.0f;
     private static final Component UNLOCK = Component.translatable("battlecraft.desktop.sleep.unlock");
     // WHY: меню по правой кнопке рисуется поверх окна обоев и центра управления, а те подняты по
     // WHY: глубине до 350: без подъёма его текст отсекался тестом глубины, и строки были пустыми
@@ -60,6 +65,8 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
     private final StudioMenu context = new StudioMenu();
     private final DesktopIsland island = new DesktopIsland();
     private final DesktopSleep sleep = new DesktopSleep();
+    private final DesktopAbout about = new DesktopAbout();
+    private final DesktopWatermark watermark = new DesktopWatermark();
     private boolean introArmed = true;
 
     public DesktopTitleScreen() {
@@ -90,6 +97,7 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
     // WHY: мёртвым окном, поэтому поиск, открытый клавиатурой, сперва его закрывает
     private void search(String first) {
         context.close();
+        about.close();
         spotlight.show(this, first);
     }
 
@@ -150,14 +158,16 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
         int underX = shaded ? NOWHERE : mouseX;
         int underY = shaded ? NOWHERE : mouseY;
         clock(graphics);
-        dock(graphics, underX, underY, gone);
-        menuBar(graphics, underX, underY, gone);
+        chrome(graphics, underX, underY, gone);
         center.render(graphics, this.font, this.width - CENTER_MARGIN, DesktopMenuBar.HEIGHT + 3.0f,
                 menuBar.middleOf(DesktopMenuBar.Slot.CENTER), panelX, panelY);
         calendar.render(graphics, this.font, this.width - CENTER_MARGIN, DesktopMenuBar.HEIGHT + 3.0f,
                 menuBar.middleOf(DesktopMenuBar.Slot.CLOCK), panelX, panelY);
+        about.render(graphics, this.font, CENTER_MARGIN, DesktopMenuBar.HEIGHT + 3.0f,
+                menuBar.middleOf(DesktopMenuBar.Slot.BRAND));
         contextMenu(graphics, mouseX, mouseY);
         hint(graphics);
+        UiVeil.tidy();
     }
 
     // WHY: открытые поиск и меню по правой кнопке забирают любой щелчок себе, поэтому всё под ними
@@ -169,7 +179,7 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
     // WHY: центр управления и календарь лежат над островом и доком: курсор над ними не должен
     // WHY: подсвечивать и озвучивать кнопки, скрытые под панелью
     private boolean shaded(int mouseX, int mouseY) {
-        return center.contains(mouseX, mouseY) || calendar.contains(mouseX, mouseY);
+        return center.contains(mouseX, mouseY) || calendar.contains(mouseX, mouseY) || about.contains(mouseX, mouseY);
     }
 
     private void contextMenu(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -200,27 +210,25 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
         }
     }
 
-    private void dock(GuiGraphics graphics, int mouseX, int mouseY, float gone) {
+    // WHY: на засыпании Dock, строка меню и знак версии уходят в размытие, пробуждение проявляет их
+    // WHY: из него. Стекло ложится на кадр напрямую и только гаснет, значки и надписи идут одним слоем
+    // WHY: с радиусом по доле ухода и гаснут на его композите. Остров вне слоя: у его сворачивания
+    // WHY: своё размытие, а вложенный слой не берётся
+    private void chrome(GuiGraphics graphics, int mouseX, int mouseY, float gone) {
         if (gone >= 0.99f) return;
 
-        UiRestFrame.shift(graphics, 0.0f, DOCK_DROP * gone);
-        try {
-            dock.render(graphics, this.font, this.width, this.height, mouseX, mouseY, 1.0f - gone);
-        } finally {
-            UiRestFrame.pop(graphics);
-        }
-    }
-
-    private void menuBar(GuiGraphics graphics, int mouseX, int mouseY, float gone) {
-        if (gone >= 0.99f) return;
-
-        menuBar.hold(DesktopMenuBar.Slot.CENTER, center.open());
-        menuBar.hold(DesktopMenuBar.Slot.CLOCK, calendar.open());
         boolean overIsland = island.contains(mouseX, mouseY);
+        glass(graphics, overIsland ? NOWHERE : mouseX, overIsland ? NOWHERE : mouseY, mouseX, mouseY, gone);
+        boolean veiled = gone > 0.0f && UiVeil.begin(graphics);
+        try {
+            ink(graphics, veiled ? 1.0f : 1.0f - gone, gone);
+        } finally {
+            if (veiled) {
+                UiVeil.end(graphics, 0.0f, 0.0f, this.width, this.height, 0.0f, gone * CHROME_BLUR, 1.0f - gone);
+            }
+        }
         UiRestFrame.shift(graphics, 0.0f, -DesktopMenuBar.HEIGHT * gone);
         try {
-            menuBar.render(graphics, this.font, this.width, overIsland ? NOWHERE : mouseX,
-                    overIsland ? NOWHERE : mouseY, 1.0f - gone);
             island.render(graphics, this.font, this.width, menuBar.room(this.width / 2.0f), mouseX, mouseY,
                     1.0f - gone);
         } finally {
@@ -228,22 +236,68 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
         }
     }
 
+    private void glass(GuiGraphics graphics, int barX, int barY, int mouseX, int mouseY, float gone) {
+        UiRestFrame.shift(graphics, 0.0f, DOCK_DROP * gone);
+        try {
+            dock.renderBody(graphics, this.font, this.width, this.height, mouseX, mouseY, 1.0f - gone);
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
+        menuBar.hold(DesktopMenuBar.Slot.BRAND, about.open());
+        menuBar.hold(DesktopMenuBar.Slot.CENTER, center.open());
+        menuBar.hold(DesktopMenuBar.Slot.CLOCK, calendar.open());
+        UiRestFrame.shift(graphics, 0.0f, -DesktopMenuBar.HEIGHT * gone);
+        try {
+            menuBar.renderGlass(graphics, this.font, this.width, barX, barY, 1.0f - gone);
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
+    }
+
+    private void ink(GuiGraphics graphics, float alpha, float gone) {
+        UiRestFrame.shift(graphics, 0.0f, DOCK_DROP * gone);
+        try {
+            dock.renderIcons(graphics, alpha);
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
+        UiRestFrame.shift(graphics, 0.0f, -DesktopMenuBar.HEIGHT * gone);
+        try {
+            menuBar.renderInk(graphics, this.font, alpha);
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
+        watermark.render(graphics, this.font, this.width, this.height, dock.right(), alpha);
+    }
+
     // WHY: подсказка лежит поверх размытого фона обычным чётким текстом, без стекла: её читают с
-    // WHY: расстояния, а дыхание прозрачностью едва заметно, чтобы спящий экран не мигал
+    // WHY: расстояния, а дыхание прозрачностью едва заметно, чтобы спящий экран не мигал. Приходит
+    // WHY: она из размытия и уходит в него. В слое текст рисуется непрозрачным и гаснет на композите:
+    // WHY: прозрачность в цвете текста дала бы в офскрине квадрат альфы, и на выходе из слоя
+    // WHY: подсказка мигнула бы
     private void hint(GuiGraphics graphics) {
         float shown = sleep.hint();
         if (shown <= 0.01f) return;
 
-        float breath = UiAnim.pulse(HINT_BREATH_MS, HINT_BREATH_LOW, 1.0f);
-        UiRender.labelCentered(graphics, this.font, UNLOCK, this.width / 2.0f, this.height - HINT_BOTTOM,
-                HINT_SCALE, UiTheme.withAlpha(UiTheme.WHITE, HINT_ALPHA * breath * shown));
+        float alpha = HINT_ALPHA * UiAnim.pulse(HINT_BREATH_MS, HINT_BREATH_LOW, 1.0f) * shown;
+        float y = this.height - HINT_BOTTOM;
+        boolean veiled = shown < 1.0f && UiVeil.begin(graphics);
+        try {
+            UiRender.labelCentered(graphics, this.font, UNLOCK, this.width / 2.0f, y, HINT_SCALE,
+                    UiTheme.withAlpha(UiTheme.WHITE, veiled ? 1.0f : alpha));
+        } finally {
+            if (veiled) {
+                UiVeil.end(graphics, 0.0f, y - HINT_BAND_ABOVE, this.width, HINT_BAND_HEIGHT, 0.0f,
+                        (1.0f - shown) * HINT_BLUR, alpha);
+            }
+        }
     }
 
     // WHY: открытая панель, поиск и перетаскивание полосы - это работа игрока, а не простой: сон
     // WHY: не отнимает их из-под руки, даже если две минуты курсор стоит на месте
     private void doze() {
         boolean held = introArmed || MenuIntro.running() || UiBoot.busy() || spotlight.open() || island.seeking()
-                || center.open() || calendar.open() || context.showing();
+                || center.open() || calendar.open() || about.open() || context.showing();
         if (sleep.advance(held, UiFrame.delta())) fallAsleep();
         DesktopWallpaper.shared().sleep(sleep.amount());
     }
@@ -252,6 +306,7 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
         island.collapse();
         center.close();
         calendar.close();
+        about.close();
         context.close();
         spotlight.close();
     }
@@ -259,6 +314,7 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
     private void pickBar(DesktopMenuBar.Slot slot, float anchorX, float anchorY) {
         switch (slot) {
             case BRAND -> context.show(List.of(
+                    StudioMenu.Action.of("battlecraft.desktop.about", this::showAbout),
                     StudioMenu.Action.of("menu.options", this::openOptions),
                     StudioMenu.Action.of("battlecraft.desktop.customize", CustomizeScreen::open),
                     StudioMenu.Action.danger("menu.quit", this::quit)), anchorX, anchorY, this.width, this.height);
@@ -276,6 +332,12 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
                 calendar.toggle();
             }
         }
+    }
+
+    private void showAbout() {
+        center.close();
+        calendar.close();
+        about.show();
     }
 
     private List<StudioMenu.Action> viewActions() {
@@ -330,6 +392,8 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
     }
 
     private boolean leftClick(double mouseX, double mouseY) {
+        if (about.contains(mouseX, mouseY)) return true;
+        about.close();
         if (center.click(mouseX, mouseY) || calendar.click(mouseX, mouseY)
                 || !island.contains(mouseX, mouseY) && menuBar.click(mouseX, mouseY)) {
             island.collapse();
@@ -342,7 +406,9 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
     }
 
     private boolean rightClick(double mouseX, double mouseY) {
-        if (center.contains(mouseX, mouseY) || calendar.contains(mouseX, mouseY)) return true;
+        if (center.contains(mouseX, mouseY) || calendar.contains(mouseX, mouseY) || about.contains(mouseX, mouseY)) {
+            return true;
+        }
         if (island.mouseClicked(mouseX, mouseY, GLFW.GLFW_MOUSE_BUTTON_RIGHT)) return true;
         List<StudioMenu.Action> offered = clock.contains(mouseX, mouseY) ? clock.menu() : viewActions();
         context.show(offered, mouseX, mouseY, this.width, this.height);
@@ -403,6 +469,7 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
         if (context.showing()) context.close();
         else if (center.open()) center.close();
         else if (calendar.open()) calendar.close();
+        else if (about.open()) about.close();
         else if (island.expanded()) island.collapse();
         return true;
     }
@@ -435,6 +502,7 @@ public class DesktopTitleScreen extends MinimalTitleScreen {
         context.dismiss();
         center.dismiss();
         calendar.dismiss();
+        about.dismiss();
         island.dismiss();
         dock.forget();
         menuBar.forget();

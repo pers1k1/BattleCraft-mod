@@ -1,7 +1,6 @@
 package com.persiki84.battlecraft.client.menu;
 
 import com.persiki84.battlecraft.BattleCraftMod;
-import com.persiki84.shared.client.menu.GlassScreen;
 import com.persiki84.shared.client.ui.UiBackdrop;
 import com.persiki84.shared.client.ui.UiFarewell;
 import com.persiki84.shared.client.ui.UiFont;
@@ -47,9 +46,9 @@ public final class ScreenRestyle {
             tracked = screen;
             silent = true;
         }
-        if (!(screen instanceof GlassScreen)) {
-            UiBackdrop.suspend();
-        }
+        // WHY: HUD в мире снимает подложку раньше экрана, и без сброса стекло экрана читало бы мир без
+        // WHY: HUD: стеклянные карточки под ним выпадали из преломления
+        UiBackdrop.suspend();
         ScreenReveal.follow(screen);
         ScreenDress.shared().begin(event.getGuiGraphics(), screen);
         if (silent && ScreenSkin.needsFallback(screen)) ScreenSkin.paint(screen, event.getGuiGraphics());

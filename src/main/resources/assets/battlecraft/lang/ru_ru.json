@@ -399,7 +399,7 @@
   "battlecraft.custom.wallpaper_themed.hint": "Точки берут акцентный цвет темы вместо чёрно-белого.",
   "battlecraft.custom.glass.lift": "Сила подсветки",
   "battlecraft.custom.glass.edge": "Мягкость кромки",
-  "battlecraft.custom.glass.squircle": "Форма угла",
+  "battlecraft.custom.glass.squircle": "Форма угла HUD",
   "battlecraft.custom.glass.switchSquircle": "Форма угла переключателей",
   "battlecraft.custom.glass.radiusPanel": "Радиус панели",
   "battlecraft.custom.glass.radiusCell": "Радиус ячейки",
@@ -758,7 +758,7 @@
   "battlecraft.custom.glass.dissolve.hint": "Ширина юбки, которой кромка растворяется в фоне вместо ровного обрыва.",
   "battlecraft.custom.glass.dissolveChaos.hint": "Неровность юбки. Ноль это ровное кольцо, выше это рваный край.",
   "battlecraft.custom.glass.dissolveDrift.hint": "Скорость, с которой рваный край шевелится.",
-  "battlecraft.custom.glass.squircle.hint": "Показатель степени угла. Два это настоящая окружность, выше это сквиркл.",
+  "battlecraft.custom.glass.squircle.hint": "Показатель степени угла у HUD и его образцов в превью. Два это окружность, выше это сквиркл. Меню и окна берут «Форму угла интерфейса».",
   "battlecraft.custom.glass.switchSquircle.hint": "Форма угла у жёлоба и шайбы переключателя. Считается отдельно от панелей.",
   "battlecraft.custom.glass.radiusPanel.hint": "Радиус скругления больших панелей и окон.",
   "battlecraft.custom.glass.radiusCell.hint": "Радиус скругления мелких ячеек: кнопок, плиток, полос.",
@@ -1123,5 +1123,8 @@
   "battlecraft.desktop.clock.frost.clear": "почти нет",
   "battlecraft.desktop.clock.frost.light": "слабая",
   "battlecraft.desktop.clock.frost.regular": "обычная",
-  "battlecraft.desktop.clock.frost.strong": "сильная"
+  "battlecraft.desktop.clock.frost.strong": "сильная",
+  "battlecraft.desktop.build": "Сборка %s",
+  "battlecraft.desktop.about": "О BattleCraft",
+  "battlecraft.desktop.about.name": "BattleCraft"
 }

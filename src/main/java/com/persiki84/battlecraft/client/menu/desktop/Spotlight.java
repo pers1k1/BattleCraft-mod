@@ -191,6 +191,7 @@ final class Spotlight {
     }
 
     private void paintField(GuiGraphics graphics, Font font, float alpha) {
+        UiGlass.above(graphics, left, top, WIDTH, FIELD);
         UiGlass.hush(graphics, left, top, WIDTH, FIELD, FIELD / 2.0f, alpha);
         UiGlass.window(graphics, left, top, WIDTH, FIELD, FIELD / 2.0f, alpha, 0.2f);
         UiIcon.draw(graphics, UiIcon.Kind.SEARCH, left + 14.0f, top + FIELD / 2.0f, 9.0f,
@@ -214,6 +215,7 @@ final class Spotlight {
         if (results.isEmpty()) return;
         float listTop = top + FIELD + GAP;
         float height = results.size() * ROW + 8.0f;
+        UiGlass.above(graphics, left, listTop, WIDTH, height);
         UiGlass.hush(graphics, left, listTop, WIDTH, height, 12.0f, alpha);
         UiGlass.window(graphics, left, listTop, WIDTH, height, 12.0f, alpha);
         UiGlass.layer(graphics);

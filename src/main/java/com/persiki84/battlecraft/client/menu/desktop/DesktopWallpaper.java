@@ -26,7 +26,7 @@ public final class DesktopWallpaper {
     private static final long RECHECK_MS = 2000L;
     // WHY: сон подобран стендом: фон слегка расфокусирован и гаснет до 0.4 яркости, картина ещё
     // WHY: читается, но уже не спорит с тем, что лежит поверх
-    private static final float SLEEP_HAZE = 0.35f;
+    private static final float SLEEP_HAZE = 0.9f;
     private static final float SLEEP_DIM = 0.6f;
     // WHY: битый кеш или неотображённая текстура не отдадут кадр никогда, и стол не ждёт их вечно
     private static final long LOAD_LIMIT_MS = 3000L;

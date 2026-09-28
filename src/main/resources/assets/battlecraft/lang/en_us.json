@@ -399,7 +399,7 @@
   "battlecraft.custom.wallpaper_themed.hint": "Dots take the accent colour of the theme instead of black and white.",
   "battlecraft.custom.glass.lift": "Highlight strength",
   "battlecraft.custom.glass.edge": "Edge softness",
-  "battlecraft.custom.glass.squircle": "Corner shape",
+  "battlecraft.custom.glass.squircle": "HUD corner shape",
   "battlecraft.custom.glass.switchSquircle": "Toggle corner shape",
   "battlecraft.custom.glass.radiusPanel": "Panel radius",
   "battlecraft.custom.glass.radiusCell": "Cell radius",
@@ -758,7 +758,7 @@
   "battlecraft.custom.glass.dissolve.hint": "Width of the skirt that dissolves the edge into the backdrop instead of cutting it off.",
   "battlecraft.custom.glass.dissolveChaos.hint": "Skirt roughness. Zero is an even ring, higher is a ragged edge.",
   "battlecraft.custom.glass.dissolveDrift.hint": "How fast the ragged edge stirs.",
-  "battlecraft.custom.glass.squircle.hint": "Corner exponent. Two is a true circle, higher is a squircle.",
+  "battlecraft.custom.glass.squircle.hint": "Corner exponent for the HUD and its samples in the preview. Two is a true circle, higher is a squircle. Menus and windows use Interface corner shape.",
   "battlecraft.custom.glass.switchSquircle.hint": "Corner shape of the toggle track and knob. Kept apart from panels.",
   "battlecraft.custom.glass.radiusPanel.hint": "Corner radius of large panels and windows.",
   "battlecraft.custom.glass.radiusCell.hint": "Corner radius of small cells: buttons, tiles, bars.",
@@ -1123,5 +1123,8 @@
   "battlecraft.desktop.clock.frost.clear": "Almost none",
   "battlecraft.desktop.clock.frost.light": "Light",
   "battlecraft.desktop.clock.frost.regular": "Regular",
-  "battlecraft.desktop.clock.frost.strong": "Strong"
+  "battlecraft.desktop.clock.frost.strong": "Strong",
+  "battlecraft.desktop.build": "Build %s",
+  "battlecraft.desktop.about": "About BattleCraft",
+  "battlecraft.desktop.about.name": "BattleCraft"
 }

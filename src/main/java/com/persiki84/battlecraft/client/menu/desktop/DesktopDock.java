@@ -76,8 +76,16 @@ final class DesktopDock {
         return mouseX >= left && mouseX <= left + width() && mouseY >= top && mouseY <= top + height();
     }
 
-    void render(GuiGraphics graphics, Font font, float screenWidth, float screenHeight, int mouseX, int mouseY,
-                float alpha) {
+    float right() {
+        return left + width();
+    }
+
+    // WHY: Dock рисуется в два прохода. Стекло, разделитель, круг наведения и подписи ложатся на кадр
+    // WHY: напрямую, а значки идут вторым проходом, который стол на засыпании кладёт в слой размытия:
+    // WHY: полупрозрачная заливка поверх стекла в офскрине заменила бы альфу стекла своей, и сквозь
+    // WHY: Dock проступили бы обои
+    void renderBody(GuiGraphics graphics, Font font, float screenWidth, float screenHeight, int mouseX, int mouseY,
+                    float alpha) {
         float width = width();
         left = (screenWidth - width) / 2.0f;
         top = screenHeight - BOTTOM - height();
@@ -87,9 +95,19 @@ final class DesktopDock {
         float x = left + PAD;
         for (int index = 0; index < items.size(); index++) {
             if (items.get(index).divided()) x = divider(graphics, x, alpha);
-            x = tile(graphics, index, x, alpha);
+            glow(graphics, index, x, alpha);
+            x += size(index) + GAP;
         }
         labels(graphics, font, alpha);
+    }
+
+    void renderIcons(GuiGraphics graphics, float alpha) {
+        float x = left + PAD;
+        for (int index = 0; index < items.size(); index++) {
+            if (items.get(index).divided()) x += DIVIDER;
+            icon(graphics, index, x, alpha);
+            x += size(index) + GAP;
+        }
     }
 
     private float width() {
@@ -111,16 +129,20 @@ final class DesktopDock {
         return x + DIVIDER;
     }
 
-    private float tile(GuiGraphics graphics, int index, float x, float alpha) {
+    private void glow(GuiGraphics graphics, int index, float x, float alpha) {
         float size = size(index);
-        float y = top + PAD;
         float lift = grow[index].get();
-        UiRender.panel(graphics, x, y, size, size, size / 2.0f, UiTheme.alpha(UiTheme.WHITE, HOVER_GLOW * lift * alpha));
+        UiRender.panel(graphics, x, top + PAD, size, size, size / 2.0f,
+                UiTheme.alpha(UiTheme.WHITE, HOVER_GLOW * lift * alpha));
+    }
+
+    private void icon(GuiGraphics graphics, int index, float x, float alpha) {
+        float size = size(index);
+        float lift = grow[index].get();
         float scale = (1.0f + HOVER_SCALE * lift) * (index == launching ? 1.0f - press.get() * 0.08f : 1.0f);
         int ink = UiTheme.mix(UiAccent.text(), UiTheme.WHITE, lift * 0.35f);
-        UiIcon.draw(graphics, items.get(index).glyph(), x + size / 2.0f, y + size / 2.0f, size * scale * 0.56f,
-                UiTheme.alpha(ink, alpha));
-        return x + size + GAP;
+        UiIcon.draw(graphics, items.get(index).glyph(), x + size / 2.0f, top + PAD + size / 2.0f,
+                size * scale * 0.56f, UiTheme.alpha(ink, alpha));
     }
 
     private void labels(GuiGraphics graphics, Font font, float alpha) {

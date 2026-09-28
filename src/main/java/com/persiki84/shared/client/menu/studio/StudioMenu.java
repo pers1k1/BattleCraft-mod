@@ -173,6 +173,7 @@ public final class StudioMenu {
         UiRestFrame.push(graphics, originX, originY, scale, scale, 0.0f, 0.0f);
         graphics.pose().translate(0.0f, 0.0f, DEPTH);
         try {
+            UiGlass.above(graphics, left, top, width, height());
             UiGlass.hush(graphics, left, top, width, height(), RADIUS, alpha);
             paintBody(graphics, amount, delta);
             graphics.flush();

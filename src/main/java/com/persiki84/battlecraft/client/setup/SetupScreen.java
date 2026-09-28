@@ -19,8 +19,10 @@ import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiGlow;
 import com.persiki84.shared.client.ui.UiQuality;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiVeil;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
@@ -61,6 +63,7 @@ public final class SetupScreen extends GlassScreen implements Ambient, UiMotion.
     private static final float TURN_SECONDS = 0.7f;
     private static final float TURN_SHIFT = 26.0f;
     private static final float TURN_HALF = 0.5f;
+    private static final float TURN_BLUR = 3.0f;
     private static final float SETTLED = -1.0f;
 
     private final List<SetupStep> queue = new ArrayList<>();
@@ -289,19 +292,29 @@ public final class SetupScreen extends GlassScreen implements Ambient, UiMotion.
         UiBackdrop.restage();
     }
 
+    // WHY: страница уходит в размытие и приходит из него, как слайды настройки Mac. Сдвиг заявлен
+    // WHY: ходом покоя: голый translate вёл текст ступенями по пикселю. В слое страница рисуется
+    // WHY: непрозрачной, а гаснет на композите: текстовые шейдеры пишут альфу без раздельного
+    // WHY: смешения, и прозрачность, заложенная в цвет, в офскрине дала бы квадрат альфы
     @Override
     protected void renderContent(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         advanceTime();
 
-        graphics.pose().pushPose();
-        graphics.pose().translate(0.0f, pageShift(), 0.0f);
-        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, pageAlpha());
+        float alpha = pageAlpha();
+        boolean veiled = turn >= 0.0f && UiVeil.begin(graphics);
+        UiRestFrame.shift(graphics, 0.0f, pageShift());
+        RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, veiled ? 1.0f : alpha);
         try {
             paintPage(graphics, mouseX, mouseY, partialTick);
         } finally {
             RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
+            if (veiled) {
+                UiVeil.end(graphics, -this.width, -this.height, this.width * 3.0f, this.height * 3.0f, 0.0f,
+                        Math.max(fadeOut(), fadeIn()) * TURN_BLUR, alpha);
+            }
         }
+        if (!veiled) UiVeil.tidy();
     }
 
     private void paintPage(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {

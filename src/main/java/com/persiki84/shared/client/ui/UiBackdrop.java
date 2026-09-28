@@ -23,7 +23,7 @@ public final class UiBackdrop {
     private static final float MAX_DOWN_REACH = 2.0f;
     private static final float MAX_UP_REACH = 1.2f;
     private static final float PASS_EPSILON = 0.001f;
-    private static final int MAX_LAYERS = 3;
+    private static final int MAX_LAYERS = 6;
 
     private static final Matrix4f FLAT = new Matrix4f();
 
@@ -61,6 +61,7 @@ public final class UiBackdrop {
         stamp = -1L;
         layers = 0;
         substitute = 0;
+        UiCover.clear();
     }
 
     public static void capture() {
@@ -69,6 +70,7 @@ public final class UiBackdrop {
         captured = false;
         layers = 0;
         substitute = 0;
+        UiCover.clear();
         if (!enabled || failed || !wanted()) return;
 
         take(Minecraft.getInstance().getMainRenderTarget().frameBufferId);
@@ -85,6 +87,7 @@ public final class UiBackdrop {
         substitute = 0;
         layers++;
         take(GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING));
+        UiCover.clear();
     }
 
     // WHY: снимок со сцены уже лежит в координатах плоской отрисовки, и переносить сэмпл по мировой
@@ -155,6 +158,7 @@ public final class UiBackdrop {
         blurred = kept;
         layers = heldLayers;
         captured = true;
+        UiCover.flood();
     }
 
     private static TextureTarget keeper() {

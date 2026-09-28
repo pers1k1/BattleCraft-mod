@@ -1238,6 +1238,13 @@ public final class UiRender {
         int tint(int index, int count, int base);
 
         float rise(int index, int count);
+
+        // WHY: разгон букв идёт сдвигом глифа вокруг середины строки, а не межбуквенным зазором:
+        // WHY: зазор округляется пером до пикселя у каждой буквы в свой момент, и буквы съезжались
+        // WHY: рывками по одной. Сдвиг в единицах шрифта, как tracking, в покое равен нулю
+        default float spread() {
+            return 0.0f;
+        }
     }
 
     public static void textHeroToned(GuiGraphics graphics, Font font, Component value, float centerX, float y,
@@ -1544,12 +1551,14 @@ public final class UiRender {
         float unit = em > 0.01f ? 1.0f / em : 1.0f;
         int pen = 0;
         float lift = scale > 0.001f ? 1.0f / scale : 1.0f;
+        float spread = tone == null ? 0.0f : tone.spread();
         for (int i = 0; i < glyphs; i++) {
             float step = advance(font, i);
             int tint = faded(tone == null ? color : tone.tint(i, glyphs, color), pen * unit + step / 2.0f);
             float rise = tone == null ? 0.0f : tone.rise(i, glyphs) * lift;
+            float drift = (i - (glyphs - 1) * 0.5f) * spread;
             if (!vanishing(tint)) {
-                font.drawInBatch(CURSOR, pen * unit, -rise, tint, false, pose, buffer,
+                font.drawInBatch(CURSOR, pen * unit + drift, -rise, tint, false, pose, buffer,
                         Font.DisplayMode.NORMAL, 0, FULL_BRIGHT);
             }
             pen += Math.max(0, Math.round((step + tracking) * em));

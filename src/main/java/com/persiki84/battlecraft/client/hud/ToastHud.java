@@ -222,6 +222,7 @@ public final class ToastHud {
         float eased = UiAnim.easeOut(note.alphaValue);
         float x = note.targetX + HudLayout.slideX(HudSlot.TOASTS, (1.0f - eased) * SLIDE_TRAVEL);
         float noteY = note.y.to(note.targetY, delta);
+        UiGlass.above(graphics, x, noteY, note.width, note.height);
         UiGlass.hush(graphics, x, noteY, note.width, note.height, UiMetrics.radius(note.height), note.alphaValue);
 
         float outerPresence = UiGlassStyle.scalePresence(UiReveal.glassPresence(note.alphaValue));

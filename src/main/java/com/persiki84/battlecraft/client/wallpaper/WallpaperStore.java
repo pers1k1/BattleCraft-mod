@@ -29,6 +29,7 @@ final class WallpaperStore {
     private static final int STEM_LIMIT = 32;
     private static final String INCOMING = ".incoming";
     private static final String NEXT = ".next";
+    private static final String GONE = ".gone";
     private static final int CLEAR_ATTEMPTS = 4;
     private static final long CLEAR_PAUSE_NANOS = 60_000_000L;
     // WHY: в обои идут только первые секунды ролика, а копия исходника живёт в папке обоев
@@ -60,7 +61,7 @@ final class WallpaperStore {
         Path caches = folder.resolve(CACHE);
         if (!Files.isDirectory(caches)) return;
 
-        try (DirectoryStream<Path> staged = Files.newDirectoryStream(caches, "*" + NEXT)) {
+        try (DirectoryStream<Path> staged = Files.newDirectoryStream(caches, "*{" + NEXT + "," + GONE + "*}")) {
             for (Path next : staged) forget(next);
         } catch (IOException error) {
             BattleCraftMod.LOGGER.warn("[battlecraft] wallpaper leftovers not swept: {}", error.toString());
@@ -222,6 +223,7 @@ final class WallpaperStore {
         String id = attempt.id();
         Path next = staging(id);
         try {
+            if (outside != null && builtAlready(outside, placed, id)) return;
             WallpaperCache.clear(next);
             Files.createDirectories(WallpaperCache.frames(next));
             Path file = outside == null ? placed : copy(outside, placed.getFileName());
@@ -232,6 +234,15 @@ final class WallpaperStore {
         } catch (IOException error) {
             throw new WallpaperFailure(WallpaperFailure.WRITE, error.toString());
         }
+    }
+
+    // WHY: тот же файл, брошенный повторно из другой папки, уже описан кешем: копия до 2 ГиБ ушла бы
+    // WHY: в запись впустую, и импорт висел бы всё время копирования
+    private boolean builtAlready(Path outside, Path placed, String id) throws IOException {
+        if (!Files.exists(placed)) return false;
+        WallpaperMeta existing = WallpaperMeta.read(cache(id));
+        return existing != null && existing.describes(placed.getFileName().toString(), Files.size(outside),
+                Files.getLastModifiedTime(outside).toMillis());
     }
 
     private Path copy(Path source, Path name) throws WallpaperFailure {
@@ -329,6 +340,20 @@ final class WallpaperStore {
         };
     }
 
+    // WHY: у видеообоев сотни кадров, и их удаление в рендер-потоке замораживало кадр на сотни
+    // WHY: миллисекунд: кеш атомарно отодвигается под другое имя, а стирается в потоке импорта.
+    // WHY: Если папку держит декодер и переезд не удался, она стирается на месте, как раньше
+    private void retire(Path cache) throws IOException {
+        Path gone = cache.resolveSibling(cache.getFileName() + GONE + System.nanoTime());
+        try {
+            Files.move(cache, gone, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException busy) {
+            WallpaperCache.clear(cache);
+            return;
+        }
+        worker.execute(() -> forget(gone));
+    }
+
     boolean remove(String id) {
         if (!VALID_ID.matcher(id).matches() || running.containsKey(id)) return false;
 
@@ -336,7 +361,7 @@ final class WallpaperStore {
         try {
             removed = deleteSources(id);
             if (Files.exists(cache(id))) {
-                WallpaperCache.clear(cache(id));
+                retire(cache(id));
                 removed = true;
             }
         } catch (IOException error) {

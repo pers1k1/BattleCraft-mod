@@ -8,11 +8,11 @@ import com.persiki84.shared.client.ui.UiAnim;
 // WHY: половине, подсказка проявляется последней, и обратный ход разворачивает тот же порядок
 final class DesktopSleep {
     private static final long IDLE_NANOS = 120_000_000_000L;
-    private static final float FALL_SECONDS = 0.9f;
-    private static final float WAKE_SECONDS = 0.5f;
+    private static final float FALL_SECONDS = 1.3f;
+    private static final float WAKE_SECONDS = 0.6f;
     private static final float CHROME_FROM = 0.05f;
     private static final float CHROME_UNTIL = 0.55f;
-    private static final float HINT_FROM = 0.7f;
+    private static final float HINT_FROM = 0.62f;
     // WHY: пока строка меню и док видны меньше чем наполовину, щелчок по ним был бы щелчком вслепую
     private static final float BLIND_ABOVE = 0.3f;
     private static final double MOVE_PIXELS = 2.0;

@@ -160,6 +160,7 @@ final class DesktopCalendar {
     }
 
     private void paint(GuiGraphics graphics, Font font, float alpha) {
+        UiGlass.above(graphics, left, top, WIDTH, HEIGHT);
         UiGlass.hush(graphics, left, top, WIDTH, HEIGHT, RADIUS, alpha);
         UiGlass.window(graphics, left, top, WIDTH, HEIGHT, RADIUS, alpha);
         UiGlass.layer(graphics);

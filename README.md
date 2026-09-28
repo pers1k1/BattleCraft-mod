@@ -883,6 +883,12 @@ Built from screen recordings of macOS 27 and iOS 26, measured frame by frame rat
 - **Marker hiding.** The points key and the player list now also fade out base, shop and map markers and quarry ore markers.
 - **Wallpaper window** scrolls instead of growing past the screen; imports are capped at 2 GiB per file and 8 GiB in total; the wallpaper player frees its video memory while you are in a world.
 
+- **Glass over glass.** Pop-ups that open over other glass (control centre, calendar, Spotlight, context menus, stacked toasts) refract and blur the glass beneath them; mod screens opened in the world refract the HUD. The backdrop is re-captured only when glass is actually under the pop-up.
+- **Island.** The HUD island no longer squeezes and no longer twitches with the FPS, ping and timer digits; closing mid-open picks up from the current shape and blur without a jump.
+- **Desktop.** The build version sits in the bottom-right corner as a quiet watermark, and the brand menu has an About BattleCraft panel. Sleep mode blurs the wallpaper more strongly, and the Dock, menu bar and unlock hint blur in and out.
+- **First launch.** Greeting lines and page turns come in from a soft blur and leave into it, and letters no longer snap into place one by one.
+- **Customization preview.** HUD samples follow the HUD corner shape, menu parts follow the interface corner shape.
+
 Version 2026.09.28 - built but not played through, so report anything that looks wrong.
 
 ## Releases

@@ -82,7 +82,9 @@ final class DesktopMenuBar {
         pillShown.snap(0.0f);
     }
 
-    void render(GuiGraphics graphics, Font font, float screenWidth, int mouseX, int mouseY, float alpha) {
+    // WHY: капсулы стекла и пункты рисуются отдельными проходами: на засыпании стол кладёт пункты
+    // WHY: в слой размытия, а стекло остаётся на кадре, как у Dock
+    void renderGlass(GuiGraphics graphics, Font font, float screenWidth, int mouseX, int mouseY, float alpha) {
         layout(font, screenWidth);
         advance(mouseX, mouseY);
         paintHeld(graphics, alpha);
@@ -90,6 +92,9 @@ final class DesktopMenuBar {
             UiGlass.window(graphics, pillX.get(), 1.0f, pillWidth.get(), HEIGHT - 2.0f, (HEIGHT - 2.0f) / 2.0f,
                     pillShown.get() * alpha, 0.4f);
         }
+    }
+
+    void renderInk(GuiGraphics graphics, Font font, float alpha) {
         for (Place place : places) paintPlace(graphics, font, place, alpha);
     }
 

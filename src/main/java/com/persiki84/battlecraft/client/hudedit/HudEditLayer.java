@@ -9,6 +9,7 @@ import com.persiki84.battlecraft.client.hud.HudInk;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
+import com.persiki84.shared.client.ui.UiCorner;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiScale;
@@ -62,10 +63,23 @@ public final class HudEditLayer {
 
     private HudEditLayer() {}
 
+    // WHY: слой зовут и из экрана чата, и из прохода Gui; образцы и рамки держат форму угла HUD,
+    // WHY: а всплывающее меню слота форму меню, где бы ни шёл вызов
     public static void render(GuiGraphics graphics) {
         float presence = HudEditSession.presence();
         if (presence <= 0.004f) return;
 
+        boolean previous = UiCorner.hud(true);
+        try {
+            drawLayer(graphics, presence);
+            UiCorner.hud(false);
+            HudSlotMenu.render(graphics);
+        } finally {
+            UiCorner.hud(previous);
+        }
+    }
+
+    private static void drawLayer(GuiGraphics graphics, float presence) {
         float ui = UiScale.factor();
         float width = Minecraft.getInstance().getWindow().getGuiScaledWidth() / ui;
         float height = Minecraft.getInstance().getWindow().getGuiScaledHeight() / ui;
@@ -83,7 +97,6 @@ public final class HudEditLayer {
         } finally {
             graphics.pose().popPose();
         }
-        HudSlotMenu.render(graphics);
     }
 
     private static void measureHidden(GuiGraphics graphics) {

@@ -67,6 +67,10 @@ public final class IslandHud {
     private static final float SEEK_HEAD_CARD = 1.15f;
     private static final float SEEK_HEAD_LIT = 0.55f;
 
+    // WHY: цифры FPS, пинга и таймера меняют ширину строки на пару единиц (99 -> 100, 9:59 -> 10:00),
+    // WHY: и остров прыгал шире и уже вместе с ними; ширина держит свой максимум и отпускает его,
+    // WHY: только когда строка стала короче больше чем на запас (другой набор цифр или скрыт счётчик)
+    private static final float HOLD_SLACK = 10.0f;
     private static final float TITLE_MIN = 36.0f;
     private static final float TITLE_MAX = 70.0f;
     private static final float CARD_TEXT_MIN = 84.0f;
@@ -84,12 +88,14 @@ public final class IslandHud {
     private static final IslandText timing = new IslandText();
     private static final IslandText pillRow = new IslandText();
     private static final Frame frame = new Frame();
-    private static final IslandMorph morph = new IslandMorph();
+    private static final IslandMorph morph = IslandMorph.flat();
 
     private static MediaTrack shownTrack = MediaTrack.NONE;
     private static long shownPlayed = -1L;
     private static long shownWhole = -1L;
     private static long morphedFrame = -1L;
+    private static float statsPeak;
+    private static float timingPeak;
 
     private IslandHud() {}
 
@@ -150,7 +156,8 @@ public final class IslandHud {
         frame.height = lerp(PILL_HEIGHT, CARD_HEIGHT, frame.shape);
         frame.face = HudConfig.islandAvatar() || showsArt() ? FACE : 0.0f;
         frame.art = HudConfig.islandAvatar() || showsArt() ? ART : 0.0f;
-        frame.stats = statsWidth(graphics, font);
+        statsPeak = held(statsPeak, statsWidth(graphics, font));
+        frame.stats = statsPeak;
         frame.waveSlot = HudConfig.islandVisualizer() ? IslandGlyph.PILL_WIDTH + WAVE_GAP : 0.0f;
         frame.cardWaveSlot = HudConfig.islandVisualizer() ? IslandGlyph.CARD_WIDTH + WAVE_GAP : 0.0f;
         measureWidths(graphics, font);
@@ -164,8 +171,8 @@ public final class IslandHud {
     private static void measureWidths(GuiGraphics graphics, Font font) {
         float pillTitle = PAD + FACE + GAP + clamp(UiRender.measure(graphics, font, title.value(),
                 TITLE_PILL_SCALE), TITLE_MIN, TITLE_MAX) + frame.waveSlot + PAD;
-        float pillTiming = PAD + FACE + GAP + UiRender.measure(graphics, font, pillRow.value(), TIME_SCALE)
-                + (untimed() ? 0.0f : PILL_TIME_GAP + PILL_BAR_MIN) + PAD;
+        timingPeak = held(timingPeak, UiRender.measure(graphics, font, pillRow.value(), TIME_SCALE));
+        float pillTiming = PAD + FACE + GAP + timingPeak + (untimed() ? 0.0f : PILL_TIME_GAP + PILL_BAR_MIN) + PAD;
         float pill = Math.max(pillTitle, pillTiming * (1.0f - frame.blind));
         float idle = PAD + FACE + GAP + UiRender.measure(graphics, font, IslandModel.nick(), NICK_SCALE)
                 + STAT_INSET + frame.stats + PAD;
@@ -177,6 +184,10 @@ public final class IslandHud {
         float collapsed = lerp(frame.pillWidth, Math.min(EMPTY_WIDTH, frame.pillWidth),
                 morph.squeeze() * frame.media);
         frame.width = lerp(collapsed, frame.cardWidth, frame.shape);
+    }
+
+    private static float held(float peak, float measured) {
+        return measured > peak || measured < peak - HOLD_SLACK ? measured : peak;
     }
 
     public static void preview(GuiGraphics graphics, HudBox box, float alpha) {

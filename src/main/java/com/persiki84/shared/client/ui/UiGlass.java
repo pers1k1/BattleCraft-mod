@@ -55,6 +55,7 @@ public final class UiGlass {
         float insetHeight = height - border * 2.0f;
         float insetRadius = Math.max(0.0f, radius - border);
 
+        UiCover.add(graphics.pose().last().pose(), x, y, width, height);
         if (!pane(graphics, insetX, insetY, insetWidth, insetHeight, insetRadius, alpha, lift, tint)) {
             boolean previous = UiRender.dissolving(true);
             try {
@@ -70,6 +71,14 @@ public final class UiGlass {
     public static void layer(GuiGraphics graphics) {
         graphics.flush();
         UiBackdrop.restage();
+    }
+
+    // WHY: всплывающее стекло читает снимок, снятый до всего, что легло после него, и нижняя стеклянная
+    // WHY: панель выпадала из преломления. Пересъёмка стоит пирамиду, поэтому она идёт, только когда
+    // WHY: под будущей панелью с прошлого снимка действительно легло стекло
+    public static void above(GuiGraphics graphics, float x, float y, float width, float height) {
+        if (!UiCover.meets(graphics.pose().last().pose(), x, y, width, height)) return;
+        layer(graphics);
     }
 
     private static boolean pane(GuiGraphics graphics, float x, float y, float width, float height,

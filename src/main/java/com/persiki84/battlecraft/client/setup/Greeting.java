@@ -6,7 +6,9 @@ import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlow;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiVeil;
 import com.persiki84.shared.client.ui.UiWave;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -77,8 +79,35 @@ public final class Greeting implements SetupPage {
     private static final float BETWEEN = 0.55f;
     private static final float AGAIN = 1.4f;
 
+    private static final float LINE_BLUR = 4.0f;
+    private static final float BAND_ABOVE = 14.0f;
+    private static final float BAND_HEIGHT = 54.0f;
+
+    private static final Component MARK = Component.translatable("battlecraft.menu.title");
+    private static final Component HINT = Component.translatable("battlecraft.setup.greeting.hint");
+
+    private enum Line {
+        MARK(MARK_DELAY, MARK_TOP),
+        RULE(RULE_DELAY, RULE_TOP),
+        HEAD(HEAD_DELAY, HEAD_TOP),
+        LEAD(LEAD_DELAY, LEAD_TOP),
+        HINT(HINT_DELAY, HINT_TOP);
+
+        private final float delay;
+        private final float top;
+
+        Line(float delay, float top) {
+            this.delay = delay;
+            this.top = top;
+        }
+    }
+
+    private static final Line[] LINES = Line.values();
+
     private final UiWave wave = new UiWave(WAVE_SECONDS, WAVE_SPREAD);
     private final Smooth glow = new Smooth(0.0f, GLOW_SPEED);
+    private final Loose loose = new Loose();
+    private final HeadTone headTone = new HeadTone();
 
     private SetupScreen host;
     private WordRule rule;
@@ -129,42 +158,59 @@ public final class Greeting implements SetupPage {
         elapsed = READY;
     }
 
-    // WHY: в приветствии всё время что-то плывёт, поэтому строки рисуются мимо пиксельной сетки:
-    // WHY: привязка к ней превращает медленный подъём подсказки в ступеньки
     @Override
     public void paint(GuiGraphics graphics, Font font, int left, int top, int width, float leaving) {
         advance();
 
         float centerX = width / 2.0f;
         float centerY = Minecraft.getInstance().getWindow().getGuiScaledHeight() / 2.0f;
-        boolean snapped = UiRender.floating(true);
-        try {
-            UiGlow.halo(graphics, HALO * glow.get() * (1.0f - leaving),
-                    () -> paintLight(graphics, font, centerX, centerY, leaving));
-            paintInk(graphics, font, centerX, centerY, leaving);
-        } finally {
-            UiRender.floating(snapped);
-        }
+        UiGlow.halo(graphics, HALO * glow.get() * (1.0f - leaving),
+                () -> paintLight(graphics, font, centerX, centerY, leaving));
+        for (Line line : LINES) paintInk(graphics, font, line, width, centerX, centerY, leaving);
     }
 
-    private void paintInk(GuiGraphics graphics, Font font, float centerX, float centerY, float leaving) {
-        paintMark(graphics, font, centerX, centerY, leaving, UiAccent.textFaint());
-        paintRule(graphics, centerX, centerY, leaving);
-        paintHead(graphics, font, centerX, centerY, leaving, false);
-        paintLead(graphics, font, centerX, centerY, leaving);
-        paintWordRules(graphics, font, centerX, centerY, leaving, false);
-        paintHint(graphics, font, centerX, centerY, leaving, UiAccent.textFaint());
+    // WHY: строка приходит из размытия, как надписи экрана приветствия Apple: радиус спадает вместе
+    // WHY: с подъёмом и к концу входа ровно в ноль. Слой держится только на время входа строки,
+    // WHY: в покое строка рисуется мимо офскрина. Внутри перехода страницы вложенный слой не
+    // WHY: берётся, и строка размывается вместе со всей страницей
+    private void paintInk(GuiGraphics graphics, Font font, Line line, float width, float centerX, float centerY,
+                          float leaving) {
+        float shown = shown(line.delay);
+        if (shown <= 0.0f) return;
+
+        boolean veiled = shown < 1.0f && UiVeil.begin(graphics);
+        try {
+            paintLine(graphics, font, line, centerX, centerY, leaving, false);
+        } finally {
+            if (veiled) {
+                UiVeil.end(graphics, 0.0f, centerY + line.top - BAND_ABOVE, width, BAND_HEIGHT, 0.0f,
+                        (1.0f - shown) * LINE_BLUR, 1.0f);
+            }
+        }
     }
 
     // WHY: свет снимается тем же набором надписей, только цвет несёт яркость свечения, а не чернила:
     // WHY: полотно ореола чёрное, поэтому альфа буквы и есть сила её света
     private void paintLight(GuiGraphics graphics, Font font, float centerX, float centerY, float leaving) {
-        paintMark(graphics, font, centerX, centerY, leaving,
-                UiTheme.alpha(UiAccent.color(), MARK_GLOW * breath()));
-        paintHead(graphics, font, centerX, centerY, leaving, true);
-        paintWordRules(graphics, font, centerX, centerY, leaving, true);
-        paintHint(graphics, font, centerX, centerY, leaving,
-                UiTheme.alpha(UiAccent.color(), HINT_GLOW * breath()));
+        for (Line line : LINES) paintLine(graphics, font, line, centerX, centerY, leaving, true);
+    }
+
+    private void paintLine(GuiGraphics graphics, Font font, Line line, float centerX, float centerY,
+                           float leaving, boolean light) {
+        switch (line) {
+            case MARK -> paintMark(graphics, font, centerX, centerY, leaving,
+                    light ? UiTheme.alpha(UiAccent.color(), MARK_GLOW * breath()) : UiAccent.textFaint());
+            case RULE -> {
+                if (!light) paintRule(graphics, centerX, centerY, leaving);
+            }
+            case HEAD -> paintHead(graphics, font, centerX, centerY, leaving, light);
+            case LEAD -> {
+                if (!light) paintLead(graphics, font, centerX, centerY, leaving);
+                paintWordRules(graphics, font, centerX, centerY, leaving, light);
+            }
+            case HINT -> paintHint(graphics, font, centerX, centerY, leaving,
+                    light ? UiTheme.alpha(UiAccent.color(), HINT_GLOW * breath()) : UiAccent.textFaint());
+        }
     }
 
     // WHY: каскад ждёт только свет проявления: строки должны пойти сразу за ним, а не под ним,
@@ -223,9 +269,13 @@ public final class Greeting implements SetupPage {
         float shown = shown(MARK_DELAY);
         if (shown <= 0.0f) return;
 
-        UiRender.textTitle(graphics, font, Component.translatable("battlecraft.menu.title"),
-                centerX, centerY + MARK_TOP + rise(shown, LIFT), MARK_SCALE,
-                MARK_TRACKING + spread(shown, leaving, MARK_SPREAD), tint(color, shown, leaving));
+        UiRestFrame.shift(graphics, 0.0f, rise(shown, LIFT));
+        try {
+            UiRender.textTitleToned(graphics, font, MARK, centerX, centerY + MARK_TOP, MARK_SCALE, MARK_TRACKING,
+                    tint(color, shown, leaving), loose.spreading(spread(shown, leaving, MARK_SPREAD)));
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
     }
 
     // WHY: черта раскрывается из середины наружу, поэтому у неё своя ширина, а не альфа
@@ -246,39 +296,29 @@ public final class Greeting implements SetupPage {
         if (shown <= 0.0f) return;
 
         int base = light ? UiAccent.color() : UiAccent.text();
-        UiRender.textHeroToned(graphics, font, title(), centerX,
-                centerY + HEAD_TOP + rise(shown, HEAD_LIFT), HEAD_SCALE,
-                HEAD_TRACKING + spread(shown, leaving, HEAD_SPREAD),
-                tint(base, shown, leaving), letters(light, shown, leaving));
-    }
-
-    private UiRender.GlyphTone letters(boolean light, float shown, float leaving) {
-        return new UiRender.GlyphTone() {
-            @Override
-            public int tint(int index, int count, int base) {
-                float weight = wave.weight(index, count);
-                if (light) {
-                    float force = HEAD_GLOW_REST + (HEAD_GLOW_PEAK - HEAD_GLOW_REST) * weight;
-                    return UiTheme.alpha(base, force * shown * (1.0f - leaving));
-                }
-                return UiTheme.alpha(UiTheme.lighten(base, LETTER_LIGHTEN * weight),
-                        shown * (1.0f - leaving));
-            }
-
-            @Override
-            public float rise(int index, int count) {
-                return wave.weight(index, count) * LETTER_LIFT;
-            }
-        };
+        headTone.light = light;
+        headTone.visible = shown * (1.0f - leaving);
+        headTone.spread = spread(shown, leaving, HEAD_SPREAD);
+        UiRestFrame.shift(graphics, 0.0f, rise(shown, HEAD_LIFT));
+        try {
+            UiRender.textHeroToned(graphics, font, title(), centerX, centerY + HEAD_TOP, HEAD_SCALE, HEAD_TRACKING,
+                    tint(base, shown, leaving), headTone);
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
     }
 
     private void paintLead(GuiGraphics graphics, Font font, float centerX, float centerY, float leaving) {
         float shown = shown(LEAD_DELAY);
         if (shown <= 0.0f) return;
 
-        UiRender.textTracked(graphics, font, note(), centerX, centerY + LEAD_TOP + rise(shown, LIFT),
-                LEAD_SCALE, LEAD_TRACKING + spread(shown, leaving, LEAD_SPREAD),
-                tint(UiAccent.textDim(), shown, leaving));
+        UiRestFrame.shift(graphics, 0.0f, rise(shown, LIFT));
+        try {
+            UiRender.textTrackedToned(graphics, font, note(), centerX, centerY + LEAD_TOP, LEAD_SCALE, LEAD_TRACKING,
+                    tint(UiAccent.textDim(), shown, leaving), loose.spreading(spread(shown, leaving, LEAD_SPREAD)));
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
     }
 
     private void paintWordRules(GuiGraphics graphics, Font font, float centerX, float centerY,
@@ -333,9 +373,13 @@ public final class Greeting implements SetupPage {
         float shown = shown(HINT_DELAY);
         if (shown <= 0.0f) return;
 
-        UiRender.textTracked(graphics, font, Component.translatable("battlecraft.setup.greeting.hint"),
-                centerX, centerY + HINT_TOP + rise(shown, LIFT) - bob(shown), HINT_SCALE, HINT_TRACKING,
-                tint(color, shown, leaving));
+        boolean snapped = UiRender.floating(true);
+        try {
+            UiRender.textTracked(graphics, font, HINT, centerX, centerY + HINT_TOP + rise(shown, LIFT) - bob(shown),
+                    HINT_SCALE, HINT_TRACKING, tint(color, shown, leaving));
+        } finally {
+            UiRender.floating(snapped);
+        }
     }
 
     // WHY: подсказка не мигает, а всплывает: медленная синусоида поднимает её на пару единиц,
@@ -363,5 +407,54 @@ public final class Greeting implements SetupPage {
 
     private static int tint(int color, float shown, float leaving) {
         return UiTheme.alpha(color, shown * (1.0f - leaving));
+    }
+
+    private static final class Loose implements UiRender.GlyphTone {
+        private float spread;
+
+        Loose spreading(float value) {
+            spread = value;
+            return this;
+        }
+
+        @Override
+        public int tint(int index, int count, int base) {
+            return base;
+        }
+
+        @Override
+        public float rise(int index, int count) {
+            return 0.0f;
+        }
+
+        @Override
+        public float spread() {
+            return spread;
+        }
+    }
+
+    private final class HeadTone implements UiRender.GlyphTone {
+        private boolean light;
+        private float visible;
+        private float spread;
+
+        @Override
+        public int tint(int index, int count, int base) {
+            float weight = wave.weight(index, count);
+            if (light) {
+                return UiTheme.alpha(base, (HEAD_GLOW_REST + (HEAD_GLOW_PEAK - HEAD_GLOW_REST) * weight) * visible);
+            }
+            return UiTheme.alpha(UiTheme.lighten(base, LETTER_LIGHTEN * weight), visible);
+        }
+
+        @Override
+        public float rise(int index, int count) {
+            return wave.weight(index, count) * LETTER_LIFT;
+        }
+
+        @Override
+        public float spread() {
+            return spread;
+        }
     }
 }

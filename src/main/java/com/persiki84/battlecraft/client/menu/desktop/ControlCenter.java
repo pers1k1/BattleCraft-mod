@@ -115,6 +115,7 @@ final class ControlCenter {
     }
 
     private void paint(GuiGraphics graphics, Font font, int mouseX, int mouseY, float alpha, float delta) {
+        UiGlass.above(graphics, left, top, WIDTH, HEIGHT);
         UiGlass.hush(graphics, left, top, WIDTH, HEIGHT, RADIUS, alpha);
         UiGlass.window(graphics, left, top, WIDTH, HEIGHT, RADIUS, alpha);
         UiGlass.layer(graphics);

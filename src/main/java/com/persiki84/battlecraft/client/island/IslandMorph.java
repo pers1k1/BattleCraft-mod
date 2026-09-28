@@ -7,9 +7,9 @@ import net.minecraft.client.gui.GuiGraphics;
 // WHY: морф таблетки в карточку и обратно по просьбе владельца идёт не перетеканием одних и тех
 // WHY: же элементов, а через размытие, как у Apple: старое содержимое размывается и гаснет, форма
 // WHY: меняется пустой, новое приходит из размытия, и размытие снимается только к самому концу.
-// WHY: Закрытие сперва сжимает карточку в маленькую пустую таблетку и только потом раздвигает её
-// WHY: под обложку, текст и полоски. Ход обратимый: повторный щелчок посреди морфа ведёт ту же
-// WHY: дорожку назад, а не начинает другую, поэтому ни один элемент не прыгает
+// WHY: На столе закрытие сперва сжимает карточку в маленькую пустую таблетку и только потом
+// WHY: раздвигает её под обложку, текст и полоски; остров HUD по слову владельца не сжимается
+// WHY: вовсе, поэтому глубина сжатия задаётся экземпляру, а не зашита в ход
 public final class IslandMorph {
     public static final float BLUR = 4.0f;
     private static final float SHRINK = 0.06f;
@@ -19,26 +19,44 @@ public final class IslandMorph {
     private static final float HOLLOW = 0.02f;
     // WHY: владелец просил сжатие при закрытии мельче: пустая таблетка проходит лишь треть пути
     // WHY: к узкой, то есть на 15-25 % уже итоговой, и читается как вдох, а не провал
-    private static final float SQUEEZE_DEPTH = 0.3f;
+    private static final float DESK_SQUEEZE = 0.3f;
     private static final float OPEN_LEAVE = 0.32f;
     private static final float CLOSE_LEAVE = 0.28f;
+    private static final float SQUEEZE_RISE = 0.3f;
+    private static final float SQUEEZE_FALL = 0.4f;
     private static final float SWAP_HOLLOW = 0.4f;
 
     private enum Path { REST, OPEN, CLOSE, SWAP }
 
+    private final float depth;
     private Path path = Path.REST;
     private boolean open;
     private float phase;
-    private int heading = 1;
-    private float lag;
     private float shape;
     private float squeeze;
     private float pill = 1.0f;
     private float card;
     private float blur;
+    private float fromShape;
+    private float fromSqueeze;
+    private float fromPill = 1.0f;
+    private float fromCard;
+    private float fromBlur;
+
+    private IslandMorph(float depth) {
+        this.depth = depth;
+    }
+
+    public static IslandMorph squeezing() {
+        return new IslandMorph(DESK_SQUEEZE);
+    }
+
+    public static IslandMorph flat() {
+        return new IslandMorph(0.0f);
+    }
 
     public void advance(boolean wanted, float delta) {
-        steer(wanted);
+        if (wanted != target()) depart(wanted ? Path.OPEN : Path.CLOSE);
         if (path != Path.REST) run(delta);
         sample();
     }
@@ -46,79 +64,50 @@ public final class IslandMorph {
     public void swap() {
         if (path != Path.REST) return;
 
-        path = Path.SWAP;
-        phase = 0.0f;
-        heading = 1;
-        lag = 0.0f;
+        depart(Path.SWAP);
     }
 
     public void snap(boolean wanted) {
         open = wanted;
         path = Path.REST;
         phase = 0.0f;
-        lag = 0.0f;
         sample();
+        hold();
     }
 
-    private void steer(boolean wanted) {
-        if (wanted == target()) return;
-
-        if (path == Path.SWAP) {
-            divert(wanted);
-            return;
-        }
-        if (path == Path.REST) {
-            path = wanted ? Path.OPEN : Path.CLOSE;
-            phase = 0.0f;
-            heading = 1;
-            lag = 0.0f;
-            return;
-        }
-        heading = -heading;
+    // WHY: щелчок посреди любого хода (раскрытия, закрытия, смены трека) не ведёт ту же дорожку
+    // WHY: назад и не начинает новую с нуля: новый ход подхватывает каждый канал с его текущего
+    // WHY: значения, поэтому закрытие посреди раскрытия идёт полным сценарием закрытия со сжатием,
+    // WHY: а первый кадр совпадает с последним кадром прерванного хода
+    private void depart(Path next) {
+        hold();
+        path = next;
+        phase = 0.0f;
     }
 
-    // WHY: щелчок посреди смены трека не ждёт её конца: морф подхватывает содержимое с той же
-    // WHY: видимости (обратная smoothstep даёт долю ухода), а форма начинает свой ход с места
-    // WHY: подхвата (lag), иначе она прыгнула бы на долю, которую успела бы пройти с начала морфа
-    private void divert(boolean wanted) {
-        float leaving = unsmooth(1.0f - (open ? card : pill));
-        path = wanted ? Path.OPEN : Path.CLOSE;
-        phase = leaving * (wanted ? OPEN_LEAVE : CLOSE_LEAVE);
-        lag = phase;
-        heading = 1;
-    }
-
-    private static float unsmooth(float share) {
-        double turn = Math.asin(1.0 - 2.0 * UiAnim.clamp01(share)) / 3.0;
-        return (float) (0.5 - Math.sin(turn));
-    }
-
-    private float lagged(float t) {
-        if (lag <= 0.0f) return t;
-        return UiAnim.clamp01((t - lag) / (1.0f - lag));
+    private void hold() {
+        fromShape = shape;
+        fromSqueeze = squeeze;
+        fromPill = pill;
+        fromCard = card;
+        fromBlur = blur;
     }
 
     private boolean target() {
-        if (path == Path.REST || path == Path.SWAP) return open;
-        boolean forward = heading > 0;
-        return path == Path.OPEN == forward;
+        return switch (path) {
+            case OPEN -> true;
+            case CLOSE -> false;
+            default -> open;
+        };
     }
 
     private void run(float delta) {
-        phase += heading * delta / seconds();
-        if (phase >= 1.0f) {
-            if (path != Path.SWAP) open = path == Path.OPEN;
-            path = Path.REST;
-            phase = 0.0f;
-            lag = 0.0f;
-            return;
-        }
-        if (phase > 0.0f) return;
+        phase += delta / seconds();
+        if (phase < 1.0f) return;
 
-        open = path == Path.CLOSE;
+        if (path != Path.SWAP) open = path == Path.OPEN;
         path = Path.REST;
         phase = 0.0f;
-        lag = 0.0f;
     }
 
     private float seconds() {
@@ -147,19 +136,27 @@ public final class IslandMorph {
     }
 
     private void opening(float t) {
-        pill = 1.0f - UiAnim.smoothstep(0.0f, OPEN_LEAVE, t);
-        card = UiAnim.smoothstep(0.42f, 0.82f, t);
-        shape = UiAnim.smoothstep(0.06f, 0.74f, lagged(t));
-        squeeze = 0.0f;
-        blur = Math.min(UiAnim.smoothstep(0.0f, 0.34f, t), 1.0f - UiAnim.smoothstep(0.42f, 1.0f, t));
+        pill = fromPill * (1.0f - UiAnim.smoothstep(0.0f, OPEN_LEAVE, t));
+        card = arrive(fromCard, UiAnim.smoothstep(0.42f, 0.82f, t));
+        shape = arrive(fromShape, UiAnim.smoothstep(0.06f, 0.74f, t));
+        squeeze = fromSqueeze * (1.0f - UiAnim.smoothstep(0.0f, SQUEEZE_FALL, t));
+        float fog = arrive(fromBlur, UiAnim.smoothstep(0.0f, 0.34f, t));
+        blur = Math.min(fog, 1.0f - UiAnim.smoothstep(0.42f, 1.0f, t));
     }
 
     private void closing(float t) {
-        card = 1.0f - UiAnim.smoothstep(0.0f, CLOSE_LEAVE, t);
-        shape = 1.0f - UiAnim.smoothstep(0.06f, 0.5f, lagged(t));
-        squeeze = SQUEEZE_DEPTH * (1.0f - UiAnim.smoothstep(0.5f, 0.8f, lagged(t)));
-        pill = UiAnim.smoothstep(0.56f, 0.86f, t);
-        blur = Math.min(UiAnim.smoothstep(0.0f, 0.3f, t), 1.0f - UiAnim.smoothstep(0.56f, 1.0f, t));
+        card = fromCard * (1.0f - UiAnim.smoothstep(0.0f, CLOSE_LEAVE, t));
+        shape = fromShape * (1.0f - UiAnim.smoothstep(0.06f, 0.5f, t));
+        float inhale = fromSqueeze + (depth - fromSqueeze) * UiAnim.smoothstep(0.0f, SQUEEZE_RISE, t);
+        squeeze = inhale * (1.0f - UiAnim.smoothstep(0.5f, 0.8f, t));
+        float lingering = fromPill * (1.0f - UiAnim.smoothstep(0.0f, CLOSE_LEAVE, t));
+        pill = lingering + UiAnim.smoothstep(0.56f, 0.86f, t);
+        float fog = arrive(fromBlur, UiAnim.smoothstep(0.0f, 0.3f, t));
+        blur = Math.min(fog, 1.0f - UiAnim.smoothstep(0.56f, 1.0f, t));
+    }
+
+    private static float arrive(float from, float share) {
+        return from + (1.0f - from) * share;
     }
 
     private void swapping(float t) {

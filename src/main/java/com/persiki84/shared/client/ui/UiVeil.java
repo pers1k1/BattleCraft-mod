@@ -141,13 +141,14 @@ public final class UiVeil {
         float centreX = (float) (UiRender.screenX(graphics, middleX, middleY) * gui);
         float centreY = (float) (window.getHeight() - UiRender.screenY(graphics, middleX, middleY) * gui);
         veilShader.safeGetUniform("VeilShape").set(centreX, centreY, width * pixels / 2.0f, height * pixels / 2.0f);
-        veilShader.safeGetUniform("VeilCorner").set(radius * pixels, UiGlassStyle.shapePower(width, height, radius));
+        float reach = Math.min(UiGlassStyle.shapeReach(width, height, radius), Math.min(width, height) * 0.5f);
+        veilShader.safeGetUniform("VeilCorner").set(reach * pixels, UiGlassStyle.shapePower(width, height, radius));
         veilShader.safeGetUniform("VeilBlur").set(blur * pixels, UiAnim.clamp01(alpha));
     }
 
     private static void compose(Matrix4f matrix, float x, float y, float width, float height) {
         RenderSystem.setShaderTexture(0, layer.getColorTextureId());
-        UiRender.standardBlend();
+        premultipliedBlend();
         UiRender.ignoreDepth();
         RenderSystem.setShader(() -> veilShader);
         BufferBuilder builder = Tesselator.getInstance().getBuilder();
@@ -159,5 +160,14 @@ public final class UiVeil {
         Tesselator.getInstance().end();
         UiRender.resumeDepth();
         UiRender.standardBlend();
+    }
+
+    // WHY: слой уже хранит цвет, умноженный на альфу, и шейдер отдаёт его так же; обычное смешивание
+    // WHY: умножило бы на альфу второй раз, и содержимое на морфе тускнело бы квадратом доли.
+    // WHY: Ставится явно: ванильный BlendMode.apply пропускает смену по устаревшему lastApplied
+    private static void premultipliedBlend() {
+        RenderSystem.enableBlend();
+        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
     }
 }

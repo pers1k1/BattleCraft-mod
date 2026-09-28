@@ -51,7 +51,7 @@ public final class DesktopIsland {
     private static final int DIM_INK = 0xFF8E8E93;
     private static final int PLACEHOLDER = 0xFF2C2C2E;
 
-    private final IslandMorph morph = new IslandMorph();
+    private final IslandMorph morph = IslandMorph.squeezing();
     private final Spring shown = new Spring(SHOW_RESPONSE, SHOW_DAMPING, 0.0f);
     private final Spring pillWidth = new Spring(WIDTH_RESPONSE, WIDTH_DAMPING);
     private final Spring cardWidth = new Spring(WIDTH_RESPONSE, WIDTH_DAMPING);
@@ -294,7 +294,7 @@ public final class DesktopIsland {
             return true;
         }
         if (MediaControl.canSeek() && bar.press(frame, mouseX, mouseY)) return true;
-        if (!frame.onHeader(mouseX, mouseY)) return true;
+        if (morph.opened() && !frame.onHeader(mouseX, mouseY)) return true;
 
         UiSound.press();
         collapse();

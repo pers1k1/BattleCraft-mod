@@ -2,6 +2,7 @@ package com.persiki84.battlecraft.client.menu.custom;
 
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
+import com.persiki84.shared.client.ui.UiCorner;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiGlassStyle;
@@ -67,10 +68,17 @@ public final class PreviewPane {
         drawText(graphics, font, inner, cursor);
     }
 
+    // WHY: карточка здоровья и тост это образцы HUD, поэтому рисуются формой угла HUD, а не меню,
+    // WHY: в котором стоит экран кастомизации: иначе превью слушало бы не ту ручку
     private float drawVitalCard(GuiGraphics graphics, Font font, float x, float y, float width) {
-        UiVital.card(graphics, x, y, width, CARD_HEIGHT, UiMetrics.radius(CARD_HEIGHT), 1.0f);
-        drawVitals(graphics, font, x, y + PAD * 0.6f, width);
-        drawDials(graphics, font, x + width / 2.0f, y + PAD * 0.6f + VITAL_ROW + 8.0f);
+        boolean previous = UiCorner.hud(true);
+        try {
+            UiVital.card(graphics, x, y, width, CARD_HEIGHT, UiMetrics.radius(CARD_HEIGHT), 1.0f);
+            drawVitals(graphics, font, x, y + PAD * 0.6f, width);
+            drawDials(graphics, font, x + width / 2.0f, y + PAD * 0.6f + VITAL_ROW + 8.0f);
+        } finally {
+            UiCorner.hud(previous);
+        }
         return y + CARD_HEIGHT + GAP;
     }
 
@@ -130,13 +138,18 @@ public final class PreviewPane {
     }
 
     private float drawToast(GuiGraphics graphics, Font font, float x, float y, float width) {
-        UiVital.card(graphics, x, y, width, TOAST_HEIGHT, 1.0f);
-        UiRender.panel(graphics, x + 4.0f, y + 4.0f, 2.4f, TOAST_HEIGHT - 8.0f, 1.2f,
-                UiTheme.alpha(UiPalette.alert(), 0.9f));
-        UiRender.textTrackedLeft(graphics, font, Component.translatable("battlecraft.custom.preview.toast"),
-                x + 12.0f, y + 7.0f, 0.9f, 0.2f, UiAccent.text());
-        UiGlass.progress(graphics, x + 12.0f, y + TOAST_HEIGHT - 8.0f, width - 20.0f, 2.6f, 0.45f,
-                UiPalette.alert(), 0.9f);
+        boolean previous = UiCorner.hud(true);
+        try {
+            UiVital.card(graphics, x, y, width, TOAST_HEIGHT, 1.0f);
+            UiRender.panel(graphics, x + 4.0f, y + 4.0f, 2.4f, TOAST_HEIGHT - 8.0f, 1.2f,
+                    UiTheme.alpha(UiPalette.alert(), 0.9f));
+            UiRender.textTrackedLeft(graphics, font, Component.translatable("battlecraft.custom.preview.toast"),
+                    x + 12.0f, y + 7.0f, 0.9f, 0.2f, UiAccent.text());
+            UiGlass.progress(graphics, x + 12.0f, y + TOAST_HEIGHT - 8.0f, width - 20.0f, 2.6f, 0.45f,
+                    UiPalette.alert(), 0.9f);
+        } finally {
+            UiCorner.hud(previous);
+        }
         return y + TOAST_HEIGHT + GAP;
     }
 
