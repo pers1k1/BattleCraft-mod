@@ -67,4 +67,9 @@ public final class Spring {
         primed = true;
     }
 
+    public void shove(float speed) {
+        velocity += speed;
+        primed = true;
+    }
+
 }

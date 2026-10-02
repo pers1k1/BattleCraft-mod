@@ -1,6 +1,7 @@
 package com.persiki84.battlecraft.client.menu.desktop;
 
 import com.persiki84.battlecraft.client.island.IslandGlyph;
+import com.persiki84.battlecraft.client.island.IslandMorph;
 import com.persiki84.shared.client.ui.UiRender;
 
 final class DesktopIslandFrame {
@@ -14,7 +15,6 @@ final class DesktopIslandFrame {
     private static final float ART = 30.0f;
     private static final float PILL_GAP = 5.0f;
     private static final float CARD_GAP = 7.0f;
-    private static final float MAX_RADIUS = 19.0f;
     private static final float TITLE_TOP = 4.0f;
     private static final float ARTIST_TOP = 16.0f;
     private static final float BAR_CENTER = 50.0f;
@@ -76,13 +76,13 @@ final class DesktopIslandFrame {
         return Math.min(body, screenWidth - SCREEN_EDGE * 2.0f);
     }
 
-    void lay(float middle, float top, float shape, float pill, float card, boolean bars) {
+    void lay(float middle, float top, float liveWidth, float liveHeight, float pill, float card, boolean bars) {
         centerX = middle;
-        width = lerp(pill, card, shape);
-        height = lerp(PILL_HEIGHT, CARD_HEIGHT, shape);
+        width = liveWidth;
+        height = liveHeight;
         x = middle - width / 2.0f;
         y = top;
-        radius = Math.min(height / 2.0f, MAX_RADIUS);
+        radius = IslandMorph.radius(height, PILL_HEIGHT);
         layPill(middle, top, pill, bars);
         layCard(middle, top, card);
     }
@@ -140,10 +140,6 @@ final class DesktopIslandFrame {
 
     boolean onHeader(double mouseX, double mouseY) {
         return inside(mouseX, mouseY) && mouseY <= y + CARD_PAD + ART + 3.0f;
-    }
-
-    private static float lerp(float from, float to, float weight) {
-        return from + (to - from) * weight;
     }
 
     private static float clamp(float value, float low, float high) {

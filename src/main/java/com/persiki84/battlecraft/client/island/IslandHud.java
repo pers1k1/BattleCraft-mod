@@ -36,9 +36,6 @@ public final class IslandHud {
     private static final float CAPSULE_GAP = 4.0f;
     private static final float CAPSULE_PAD = 6.0f;
     private static final float MAX_RADIUS = 13.0f;
-    private static final float PILL_DRIFT = 1.5f;
-    private static final float CARD_DRIFT = -3.0f;
-    private static final float FLIGHT_EDGE = 0.002f;
     private static final float SWAP_SECONDS = 0.3f;
     private static final float SWAP_LIFT = 4.0f;
     private static final float LEAVE_UNTIL = 0.6f;
@@ -155,10 +152,9 @@ public final class IslandHud {
     private static void measure(GuiGraphics graphics, Font font) {
         frame.media = IslandModel.media();
         frame.blind = IslandModel.blind() * frame.media;
-        frame.shape = morph.shape() * frame.media;
         frame.pill = lerp(1.0f, morph.pill(), frame.media);
         frame.card = morph.card() * frame.media;
-        frame.height = lerp(PILL_HEIGHT, CARD_HEIGHT, frame.shape);
+        frame.height = morph.height(PILL_HEIGHT, CARD_HEIGHT);
         frame.face = HudConfig.islandAvatar() || showsArt() ? FACE : 0.0f;
         frame.art = HudConfig.islandAvatar() || showsArt() ? ART : 0.0f;
         statsPeak = held(statsPeak, statsWidth(graphics, font));
@@ -186,7 +182,7 @@ public final class IslandHud {
                 UiRender.measure(graphics, font, artist.value(), ARTIST_SCALE)),
                 CARD_TEXT_MIN, CARD_TEXT_MAX) + frame.cardWaveSlot + PAD;
         frame.pillWidth = lerp(idle, pill, frame.media);
-        frame.width = lerp(frame.pillWidth, frame.cardWidth, frame.shape);
+        frame.width = morph.width(frame.pillWidth, frame.cardWidth);
     }
 
     private static float held(float peak, float measured) {
@@ -202,52 +198,59 @@ public final class IslandHud {
     }
 
     private static void paint(GuiGraphics graphics, Font font, MediaTrack track, float x, float y, float alpha) {
-        float radius = Math.min(frame.height / 2.0f, MAX_RADIUS);
-        UiVital.card(graphics, x, y, frame.width, frame.height, radius, alpha);
-
+        float radius = IslandMorph.radius(frame.height, PILL_HEIGHT);
         boolean outer = UiRender.floating(true);
         UiRender.floating(outer || !morph.resting());
         try {
-            paintContent(graphics, font, track, x, y, radius, alpha);
+            paintIsland(graphics, font, track, x, y, radius, alpha);
         } finally {
             UiRender.floating(outer);
         }
         drawCounter(graphics, font, x, y, alpha);
     }
 
-    // WHY: в покое содержимое рисуется прямо в кадр; офскрин размытия живёт только на время морфа
-    private static void paintContent(GuiGraphics graphics, Font font, MediaTrack track, float x, float y,
-                                     float radius, float alpha) {
-        boolean veiled = !morph.resting() && frame.media > 0.02f && UiVeil.begin(graphics);
-        if (!veiled) UiRender.clip(graphics, x, y, frame.width, frame.height);
-        float pillX = x + (frame.width - frame.pillWidth) / 2.0f;
-        float cardX = x + (frame.width - frame.cardWidth) / 2.0f;
+    // WHY: в покое остров рисуется прямо в кадр. На ходу стекло и содержимое ложатся в один офскрин
+    // WHY: и размываются вместе, кромка расплывается наружу на радиус размытия: так размывается всё
+    // WHY: окно, как у iOS, а не одно содержимое внутри резкой рамки
+    private static void paintIsland(GuiGraphics graphics, Font font, MediaTrack track, float x, float y,
+                                    float radius, float alpha) {
+        boolean veiled = morph.veiling() && frame.media > 0.02f && UiVeil.begin(graphics);
         try {
-            drawPill(graphics, font, track, pillX, y, alpha * frame.pill);
-            drawCard(graphics, font, track, cardX, y, alpha * frame.card);
-            if (flying()) drawFlight(graphics, font, track, pillX, cardX, y, alpha);
+            UiVital.card(graphics, x, y, frame.width, frame.height, radius, alpha);
+            paintContent(graphics, font, track, x, y, alpha);
         } finally {
             if (veiled) {
-                UiVeil.end(graphics, x, y, frame.width, frame.height, radius, morph.blur() * IslandMorph.BLUR, 1.0f);
-            } else {
-                graphics.disableScissor();
+                float blur = morph.blur() * IslandMorph.BLUR;
+                UiVeil.end(graphics, x, y, frame.width, frame.height, radius, blur, 1.0f, blur);
             }
         }
-        if (morph.resting()) UiVeil.tidy();
+        if (!morph.veiling()) UiVeil.tidy();
+    }
+
+    private static void paintContent(GuiGraphics graphics, Font font, MediaTrack track, float x, float y,
+                                     float alpha) {
+        UiRender.clip(graphics, x, y, frame.width, frame.height);
+        try {
+            drawPill(graphics, font, track, x + (frame.width - frame.pillWidth) / 2.0f, y, alpha * frame.pill);
+            drawCard(graphics, font, track, x + (frame.width - frame.cardWidth) / 2.0f, y, alpha * frame.card);
+        } finally {
+            graphics.disableScissor();
+        }
     }
 
     private static void drawPill(GuiGraphics graphics, Font font, MediaTrack track, float x, float y, float alpha) {
         if (alpha <= 0.02f) return;
 
-        IslandMorph.pose(graphics, x + frame.pillWidth / 2.0f, y + PILL_HEIGHT / 2.0f, frame.pill, PILL_DRIFT);
+        IslandMorph.fit(graphics, x + frame.pillWidth / 2.0f, y + PILL_HEIGHT / 2.0f, y + frame.height / 2.0f,
+                frame.width / frame.pillWidth);
         try {
-            if (frame.face > 0.0f && !flying()) {
+            if (frame.face > 0.0f) {
                 IslandFace.draw(graphics, x + PAD + FACE / 2.0f, y + PILL_HEIGHT / 2.0f, FACE, alpha, showsArt(),
                         HudConfig.islandAvatar());
             }
             drawMainLine(graphics, font, x, y, alpha);
-            if (!flying() || untimed()) drawHairline(graphics, font, track, x, y, alpha);
-            if (!flying()) drawPillBars(graphics, x, y, alpha);
+            drawHairline(graphics, font, track, x, y, alpha);
+            drawPillBars(graphics, x, y, alpha);
         } finally {
             UiRestFrame.pop(graphics);
         }
@@ -256,15 +259,16 @@ public final class IslandHud {
     private static void drawCard(GuiGraphics graphics, Font font, MediaTrack track, float x, float y, float alpha) {
         if (alpha <= 0.02f) return;
 
-        IslandMorph.pose(graphics, x + frame.cardWidth / 2.0f, y + CARD_HEIGHT / 2.0f, frame.card, CARD_DRIFT);
+        IslandMorph.fit(graphics, x + frame.cardWidth / 2.0f, y + CARD_HEIGHT / 2.0f, y + frame.height / 2.0f,
+                frame.width / frame.cardWidth);
         try {
-            if (frame.art > 0.0f && !flying()) {
+            if (frame.art > 0.0f) {
                 IslandFace.draw(graphics, x + PAD + ART / 2.0f, y + CARD_HEIGHT / 2.0f, ART, alpha, showsArt(),
                         HudConfig.islandAvatar());
             }
             drawCardText(graphics, font, x, y, alpha);
-            if (!flying() || untimed()) drawCardBar(graphics, font, track, x, y, alpha);
-            if (frame.cardWaveSlot > 0.0f && !flying()) {
+            drawCardBar(graphics, font, track, x, y, alpha);
+            if (frame.cardWaveSlot > 0.0f) {
                 IslandGlyph.cardBars(graphics, x + frame.cardWidth - PAD - IslandGlyph.CARD_WIDTH / 2.0f,
                         y + WAVE_CARD_CENTER, alpha);
             }
@@ -291,7 +295,7 @@ public final class IslandHud {
         UiRender.clip(graphics, textX - margin, y, slot + margin * 2.0f, PILL_HEIGHT);
         try {
             if (HudConfig.islandNick()) drawNick(graphics, font, textX, y, slot, alpha * (1.0f - frame.media));
-            if (HudConfig.islandTitle() && !flying()) drawTitle(graphics, font, textX, y, slot, alpha * frame.media);
+            if (HudConfig.islandTitle()) drawTitle(graphics, font, textX, y, slot, alpha * frame.media);
         } finally {
             graphics.disableScissor();
         }
@@ -342,7 +346,7 @@ public final class IslandHud {
         float margin = UiMarquee.margin(slot, TITLE_CARD_SCALE);
         UiRender.clip(graphics, textX - margin, y, slot + margin * 2.0f, CARD_HEIGHT);
         try {
-            if (HudConfig.islandTitle() && !flying()) {
+            if (HudConfig.islandTitle()) {
                 swapped(graphics, title, leavingTitle, alpha, (text, shown) -> line(graphics, font, text.value(),
                         text.raw, textX, y + CARD_TITLE_TOP, slot, TITLE_CARD_SCALE, UiTheme.alpha(inked(), shown)));
             }
@@ -415,99 +419,6 @@ public final class IslandHud {
             return;
         }
         UiRender.panel(graphics, x, y, span, thick, thick / 2.0f, color);
-    }
-
-    private static boolean flying() {
-        return frame.shape > FLIGHT_EDGE && frame.shape < 1.0f - FLIGHT_EDGE;
-    }
-
-    private static void drawFlight(GuiGraphics graphics, Font font, MediaTrack track, float pillX, float cardX,
-                                   float y, float alpha) {
-        float k = frame.shape;
-        if (frame.face > 0.0f) {
-            IslandFace.draw(graphics, lerp(pillX + PAD + FACE / 2.0f, cardX + PAD + ART / 2.0f, k),
-                    y + lerp(PILL_HEIGHT, CARD_HEIGHT, k) / 2.0f, lerp(FACE, ART, k), alpha, showsArt(),
-                    HudConfig.islandAvatar());
-        }
-        if (HudConfig.islandTitle()) flyTitle(graphics, font, pillX, cardX, y, k, alpha);
-        if (!untimed()) flyTiming(graphics, font, track, pillX, cardX, y, k, alpha);
-        if (frame.waveSlot > 0.0f) flyBars(graphics, pillX, cardX, y, k, alpha * frame.media);
-    }
-
-    private static void flyTitle(GuiGraphics graphics, Font font, float pillX, float cardX, float y, float k,
-                                 float alpha) {
-        float pillText = pillX + PAD + frame.face + GAP;
-        float cardText = cardX + PAD + frame.art + GAP;
-        float slot = lerp(pillX + frame.pillWidth - PAD - frame.waveSlot - pillText,
-                cardX + frame.cardWidth - PAD - frame.cardWaveSlot - cardText, k);
-        if (slot <= 4.0f) return;
-
-        float scale = lerp(TITLE_PILL_SCALE / TITLE_CARD_SCALE, 1.0f, k);
-        float left = lerp(pillText, cardText, k);
-        float top = y + CARD_TITLE_TOP;
-        float margin = UiMarquee.margin(slot, TITLE_CARD_SCALE * scale);
-        UiRender.clip(graphics, left - margin, y, slot + margin * 2.0f, frame.height);
-        UiRestFrame.push(graphics, cardText, top, scale, scale, left - cardText, (titleLive(y) - top) * (1.0f - k));
-        try {
-            swapped(graphics, title, leavingTitle, alpha, (text, shown) -> line(graphics, font, text.value(),
-                    text.raw, cardText, top, slot / scale, TITLE_CARD_SCALE, UiTheme.alpha(inked(), shown)));
-        } finally {
-            UiRestFrame.pop(graphics);
-            graphics.disableScissor();
-        }
-    }
-
-    private static void flyTiming(GuiGraphics graphics, Font font, MediaTrack track, float pillX, float cardX,
-                                  float y, float k, float alpha) {
-        float fade = alpha * (1.0f - frame.blind);
-        if (fade <= 0.02f || !track.present()) return;
-
-        float pillLeft = pillX + PAD + frame.face + GAP;
-        float cardLeft = cardX + PAD + frame.art + GAP;
-        float timed = 0.0f;
-        if (HudConfig.islandTime()) {
-            float back = 1.0f - k;
-            UiRestFrame.shift(graphics, (pillLeft - cardLeft) * back, (PILL_TIME_TOP - CARD_TIME_TOP) * back);
-            try {
-                UiRender.labelScaled(graphics, font, timing.value(), cardLeft, y + CARD_TIME_TOP, TIME_SCALE,
-                        UiTheme.alpha(inked(), fade));
-            } finally {
-                UiRestFrame.pop(graphics);
-            }
-            timed = UiRender.measure(graphics, font, pillRow.value(), TIME_SCALE) + PILL_TIME_GAP;
-        }
-        if (!HudConfig.islandBar()) return;
-
-        float left = lerp(pillLeft + timed, cardLeft, k);
-        float span = lerp(pillX + frame.pillWidth - PAD - pillLeft - timed,
-                cardX + frame.cardWidth - PAD - cardLeft, k);
-        flyBar(graphics, left, span, y, k, fade);
-    }
-
-    private static void flyBar(GuiGraphics graphics, float left, float span, float y, float k, float fade) {
-        if (span <= 4.0f) return;
-
-        float thick = lerp(HAIRLINE, BAR_HEIGHT, k);
-        float top = lerp(y + PILL_BAR_CENTER, y + CARD_BAR_TOP + BAR_HEIGHT / 2.0f, k) - thick / 2.0f;
-        float value = IslandProgress.value();
-        float hair = fade * (1.0f - k);
-        strip(graphics, left, top, span, thick, UiTheme.withAlpha(UiTheme.WHITE, 0.16f * hair));
-        strip(graphics, left, top, span * value, thick, UiTheme.alpha(UiAccent.color(), hair));
-        float glass = fade * k;
-        UiGlass.sunken(graphics, left, top, span, thick, thick / 2.0f, glass * 0.9f);
-        UiGlass.progress(graphics, left, top, span, thick, value, UiTheme.alpha(UiAccent.color(), glass), glass);
-        drawSeekHead(graphics, left + span * value, top + thick / 2.0f,
-                thick * lerp(SEEK_HEAD_PILL, SEEK_HEAD_CARD, k), fade);
-    }
-
-    private static void flyBars(GuiGraphics graphics, float pillX, float cardX, float y, float k, float fade) {
-        float pillY = y + lerp(PILL_ROW_CENTER, PILL_HEIGHT / 2.0f, frame.blind);
-        IslandGlyph.visualizer(graphics,
-                lerp(pillX + frame.pillWidth - PAD - IslandGlyph.PILL_WIDTH / 2.0f,
-                        cardX + frame.cardWidth - PAD - IslandGlyph.CARD_WIDTH / 2.0f, k),
-                lerp(pillY, y + WAVE_CARD_CENTER, k),
-                lerp(IslandGlyph.PILL_WIDTH, IslandGlyph.CARD_WIDTH, k),
-                lerp(IslandGlyph.PILL_HEIGHT, IslandGlyph.CARD_HEIGHT, k), fade);
     }
 
     private interface Stroke {
@@ -709,7 +620,6 @@ public final class IslandHud {
     private static final class Frame {
         private float media;
         private float blind;
-        private float shape;
         private float pill;
         private float card;
         private float width;

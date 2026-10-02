@@ -75,6 +75,19 @@ public final class UiVeil {
 
     public static void end(GuiGraphics graphics, float x, float y, float width, float height, float radius,
                            float blur, float alpha) {
+        end(graphics, x, y, width, height, radius, blur, alpha, 0.0f);
+    }
+
+    // WHY: когда в слой легла и сама поверхность хозяина, её кромка тоже размывается и обязана
+    // WHY: расплыться наружу: форма среза раздувается на разлёт, иначе размытый край обрезался бы
+    // WHY: по прежнему контуру и читался бы резкой стенкой вокруг мутного пятна
+    public static void end(GuiGraphics graphics, float x, float y, float width, float height, float radius,
+                           float blur, float alpha, float spread) {
+        if (spread > 0.0f) {
+            end(graphics, x - spread, y - spread, width + spread * 2.0f, height + spread * 2.0f, radius + spread,
+                    blur, alpha, 0.0f);
+            return;
+        }
         if (!held) return;
 
         graphics.flush();

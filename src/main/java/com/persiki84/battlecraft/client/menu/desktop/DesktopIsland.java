@@ -43,10 +43,7 @@ public final class DesktopIsland {
     private static final float RIM_HOVER_ALPHA = 0.22f;
     private static final float HOVER_SPEED = 12.0f;
     private static final float NOTE_SHARE = 0.5f;
-    private static final float PILL_DRIFT = 1.5f;
-    private static final float CARD_DRIFT = -3.0f;
     private static final float STILL = 0.001f;
-    private static final float FLIGHT_EDGE = 0.002f;
     private static final int BODY = 0xFF000000;
     private static final int TITLE_INK = 0xFFFFFFFF;
     private static final int DIM_INK = 0xFF8E8E93;
@@ -69,6 +66,7 @@ public final class DesktopIsland {
     private float laidPill;
     private float laidCard;
     private boolean moving;
+    private boolean pressing;
 
     public void render(GuiGraphics graphics, Font font, float screenWidth, float room, int mouseX, int mouseY,
                        float alpha) {
@@ -78,7 +76,7 @@ public final class DesktopIsland {
 
         float scale = HIDDEN_SCALE + (1.0f - HIDDEN_SCALE) * UiAnim.clamp01(shown.get());
         boolean outer = UiRender.floating(true);
-        UiRender.floating(outer || moving);
+        UiRender.floating(outer || moving || !morph.resting());
         UiRestFrame.push(graphics, frame.centerX, frame.y + frame.height / 2.0f, scale, scale, 0.0f, 0.0f);
         try {
             paint(graphics, font, visible);
@@ -116,7 +114,9 @@ public final class DesktopIsland {
 
     private void lay(float screenWidth) {
         float top = (DesktopMenuBar.HEIGHT - DesktopIslandFrame.PILL_HEIGHT) / 2.0f;
-        frame.lay(screenWidth / 2.0f, top, morph.shape(), pillWidth.get(), cardWidth.get(), bars);
+        frame.lay(screenWidth / 2.0f, top, morph.width(pillWidth.get(), cardWidth.get()),
+                morph.height(DesktopIslandFrame.PILL_HEIGHT, DesktopIslandFrame.CARD_HEIGHT), pillWidth.get(),
+                cardWidth.get(), bars);
         frame.layBar(text.timeSlot());
         frame.reveal = morph.card();
         settle();
@@ -148,23 +148,31 @@ public final class DesktopIsland {
         return live;
     }
 
+    // WHY: на ходу капсула, ободок и содержимое ложатся в один офскрин и размываются вместе, кромка
+    // WHY: расплывается наружу на радиус размытия: размывается всё окно, как у iOS
     private void paint(GuiGraphics graphics, Font font, float alpha) {
-        paintBody(graphics, alpha);
-        boolean veiled = !morph.resting() && UiVeil.begin(graphics);
-        if (!veiled) UiRender.clip(graphics, frame.x, frame.y, frame.width, frame.height);
+        boolean veiled = morph.veiling() && UiVeil.begin(graphics);
+        try {
+            paintBody(graphics, alpha);
+            paintContent(graphics, font, alpha);
+        } finally {
+            if (veiled) {
+                float blur = morph.blur() * IslandMorph.BLUR;
+                UiVeil.end(graphics, frame.x, frame.y, frame.width, frame.height, frame.radius, blur, 1.0f,
+                        blur + RIM);
+            }
+        }
+        if (!morph.veiling()) UiVeil.tidy();
+    }
+
+    private void paintContent(GuiGraphics graphics, Font font, float alpha) {
+        UiRender.clip(graphics, frame.x, frame.y, frame.width, frame.height);
         try {
             paintPill(graphics, font, alpha * morph.pill());
             paintCard(graphics, font, alpha * morph.card());
-            if (flying()) paintFlight(graphics, font, alpha);
         } finally {
-            if (veiled) {
-                UiVeil.end(graphics, frame.x, frame.y, frame.width, frame.height, frame.radius,
-                        morph.blur() * IslandMorph.BLUR, 1.0f);
-            } else {
-                graphics.disableScissor();
-            }
+            graphics.disableScissor();
         }
-        if (morph.resting()) UiVeil.tidy();
     }
 
     // WHY: тонкий светлый ободок отделяет чёрную капсулу от тёмных обоев; под ней он не виден.
@@ -189,14 +197,13 @@ public final class DesktopIsland {
     private void paintPill(GuiGraphics graphics, Font font, float alpha) {
         if (alpha <= 0.01f) return;
 
-        IslandMorph.pose(graphics, frame.centerX, frame.pillCoverY, morph.pill(), PILL_DRIFT);
+        IslandMorph.fit(graphics, frame.centerX, frame.pillCoverY, frame.y + frame.height / 2.0f,
+                frame.width / frame.pillWidth);
         try {
-            if (!flying()) {
-                paintCover(graphics, frame.pillCoverX, frame.pillCoverY, frame.faceSize(), alpha);
-                pillTitle(graphics, font, text.leaving(), alpha * text.fading(), text.leaveShift());
-                pillTitle(graphics, font, text.shown(), alpha * text.entering(), text.enterShift());
-                if (bars) IslandGlyph.pillBars(graphics, frame.pillWaveX, frame.pillCoverY, alpha);
-            }
+            paintCover(graphics, frame.pillCoverX, frame.pillCoverY, frame.faceSize(), alpha);
+            pillTitle(graphics, font, text.leaving(), alpha * text.fading(), text.leaveShift());
+            pillTitle(graphics, font, text.shown(), alpha * text.entering(), text.enterShift());
+            if (bars) IslandGlyph.pillBars(graphics, frame.pillWaveX, frame.pillCoverY, alpha);
         } finally {
             UiRestFrame.pop(graphics);
         }
@@ -205,13 +212,13 @@ public final class DesktopIsland {
     private void paintCard(GuiGraphics graphics, Font font, float alpha) {
         if (alpha <= 0.01f) return;
 
-        IslandMorph.pose(graphics, frame.centerX, frame.y + DesktopIslandFrame.CARD_HEIGHT / 2.0f, morph.card(),
-                CARD_DRIFT);
+        IslandMorph.fit(graphics, frame.centerX, frame.y + DesktopIslandFrame.CARD_HEIGHT / 2.0f,
+                frame.y + frame.height / 2.0f, frame.width / frame.cardWidth);
         try {
-            if (!flying()) paintCover(graphics, frame.coverX, frame.coverY, frame.coverSize(), alpha);
+            paintCover(graphics, frame.coverX, frame.coverY, frame.coverSize(), alpha);
             cardFace(graphics, font, text.leaving(), alpha * text.fading(), text.leaveShift());
             cardFace(graphics, font, text.shown(), alpha * text.entering(), text.enterShift());
-            if (bars && !flying()) IslandGlyph.cardBars(graphics, frame.waveX, frame.coverY, alpha);
+            if (bars) IslandGlyph.cardBars(graphics, frame.waveX, frame.coverY, alpha);
             paintControls(graphics, font, alpha);
         } finally {
             UiRestFrame.pop(graphics);
@@ -251,54 +258,13 @@ public final class DesktopIsland {
 
         UiRestFrame.shift(graphics, 0.0f, lift);
         try {
-            if (!flying()) {
-                line(graphics, font, face.title(), face.titleRaw(), face.cardTitleWidth(), frame.textX, frame.titleY,
-                        frame.titleSlot, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha));
-            }
+            line(graphics, font, face.title(), face.titleRaw(), face.cardTitleWidth(), frame.textX, frame.titleY,
+                    frame.titleSlot, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha));
             line(graphics, font, face.artist(), face.artistRaw(), face.artistWidth(), frame.textX, frame.artistY,
                     frame.titleSlot, DesktopIslandText.ARTIST_SCALE, UiTheme.alpha(DIM_INK, alpha));
         } finally {
             UiRestFrame.pop(graphics);
         }
-    }
-
-    private boolean flying() {
-        float shape = morph.shape();
-        return shape > FLIGHT_EDGE && shape < 1.0f - FLIGHT_EDGE;
-    }
-
-    private void paintFlight(GuiGraphics graphics, Font font, float alpha) {
-        float k = morph.shape();
-        paintCover(graphics, lerp(frame.pillCoverX, frame.coverX, k), lerp(frame.pillCoverY, frame.coverY, k),
-                lerp(frame.faceSize(), frame.coverSize(), k), alpha);
-        flyTitle(graphics, font, text.leaving(), k, alpha * text.fading(), text.leaveShift());
-        flyTitle(graphics, font, text.shown(), k, alpha * text.entering(), text.enterShift());
-        if (!bars) return;
-
-        IslandGlyph.visualizer(graphics, lerp(frame.pillWaveX, frame.waveX, k),
-                lerp(frame.pillCoverY, frame.coverY, k), lerp(IslandGlyph.PILL_WIDTH, IslandGlyph.CARD_WIDTH, k),
-                lerp(IslandGlyph.PILL_HEIGHT, IslandGlyph.CARD_HEIGHT, k), alpha);
-    }
-
-    private void flyTitle(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float k, float alpha,
-                          float lift) {
-        if (alpha <= 0.01f) return;
-
-        float scale = lerp(DesktopIslandText.PILL_TITLE_SCALE / DesktopIslandText.CARD_TITLE_SCALE, 1.0f, k);
-        float left = lerp(frame.pillTextX, frame.textX, k);
-        float slot = lerp(frame.pillTitleSlot, frame.titleSlot, k);
-        UiRestFrame.push(graphics, frame.textX, frame.titleY, scale, scale, left - frame.textX,
-                (frame.pillTitleY - frame.titleY) * (1.0f - k) + lift);
-        try {
-            line(graphics, font, face.title(), face.titleRaw(), face.cardTitleWidth(), frame.textX, frame.titleY,
-                    slot / scale, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha));
-        } finally {
-            UiRestFrame.pop(graphics);
-        }
-    }
-
-    private static float lerp(float from, float to, float weight) {
-        return from + (to - from) * weight;
     }
 
     private void paintControls(GuiGraphics graphics, Font font, float alpha) {
@@ -334,11 +300,7 @@ public final class DesktopIsland {
             return false;
         }
         if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return true;
-        if (!wanted) {
-            wanted = true;
-            UiSound.press();
-            return true;
-        }
+        if (!wanted) return press();
         return clickCard(mouseX, mouseY);
     }
 
@@ -350,10 +312,25 @@ public final class DesktopIsland {
         }
         if (MediaControl.canSeek() && bar.press(frame, mouseX, mouseY)) return true;
         if (morph.opened() && !frame.onHeader(mouseX, mouseY)) return true;
+        return press();
+    }
 
-        UiSound.press();
-        collapse();
+    // WHY: по записи iOS остров вздувается под пальцем и меняет состояние, только когда его отпустили
+    private boolean press() {
+        pressing = true;
+        morph.press(true);
         return true;
+    }
+
+    private void release() {
+        pressing = false;
+        morph.press(false);
+        UiSound.press();
+        if (wanted) {
+            collapse();
+            return;
+        }
+        wanted = true;
     }
 
     private void trigger(DesktopIslandKeys.Key key) {
@@ -374,6 +351,10 @@ public final class DesktopIsland {
     }
 
     public boolean mouseReleased() {
+        if (pressing) {
+            release();
+            return true;
+        }
         if (!bar.dragging()) return false;
 
         long target = (long) (bar.release() * held.durationMs());
@@ -397,6 +378,8 @@ public final class DesktopIsland {
 
     public void collapse() {
         wanted = false;
+        pressing = false;
+        morph.press(false);
         bar.cancel();
         keys.forget();
     }

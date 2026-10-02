@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.09.28v4` in files, `28.09.26v4 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.03` in files, `03.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -903,6 +903,27 @@ Version 2026.09.28v3 - built but not played through, so report anything that loo
 - **Faster, same curves.** Opening and closing the island now takes 0.34 s instead of 0.42 s, the blur pulse on a track change 0.3 s instead of 0.38 s, and the title and artist swap 0.3 s instead of 0.36 s. The easing, the blur over the move and the flight of the shared parts are unchanged, so the motion stays smooth, only shorter. The HUD island and the desktop island share this.
 
 Version 2026.09.28v4 - built but not played through, so report anything that looks wrong.
+
+## The island moves like the iPhone one, 29 September 2026
+
+The timing comes from a 60 fps screen recording of the Dynamic Island on an iPhone, measured frame by frame: the outline of the island was traced on every frame and damped springs were fitted to the curves. The HUD island and the desktop island share it.
+
+- **Opening.** The pill first draws in to 0.815 of its width and 0.94 of its height over 0.2 s. Then it springs into the card (response 0.51 s, damping 0.815), overshooting its size by about one percent and settling back.
+- **Closing.** The card springs straight back into the pill (response 0.47 s, damping 0.86), with no draw-in.
+- **Each state keeps its own layout.** The pill and the card draw their contents in their final layout and scale them with the live outline around its middle, as on the phone. The parts no longer fly from one layout to the other.
+- **Corners.** The corner radius follows the height continuously: half the height on the pill, growing by 0.166 of every extra unit of height on the card.
+- **Track change.** A new track now gives the island a short swell, peaking at about 6 % wider and 5 % taller after 0.15 s and settling with a small bounce. The contents still pass through the blur.
+- **Press on the desktop.** Pressing the desktop island swells it by 9 % in width and 6 % in height. It opens or closes only when you let go, and the swell springs back with a light bounce.
+
+Version 2026.09.29v1 - built but not played through, so report anything that looks wrong.
+
+## The whole island blurs on the move, 29 September 2026 (v2)
+
+- **Nothing disappears.** The contents no longer fade out ahead of the move, so the island never stands as empty glass for a moment. The pill and the card layouts cross-fade into each other under the blur: on opening between 0.12 s and 0.32 s, on closing between 0.04 s and 0.22 s, and the two always add up to one.
+- **The whole window blurs.** The glass, its rim and everything on it go into one off-screen layer and blur together, and the blurred rim spreads outward by the blur radius instead of being cut at the old outline. The blur rises in 0.12 s and clears over the last 0.2 s of the move: 0.52 s when the island opens with the draw-in, 0.36 s when it closes. The FPS and ping capsule under the island stays sharp.
+- **Springs unchanged.** The draw-in, the overshoot on opening, the closing spring and the swell on a track change are the same as in v1. A click in the middle of a move picks the blur up from where it is rather than dropping it to zero.
+
+Version 2026.09.29v2 - built but not played through, so report anything that looks wrong.
 
 ## Releases
 
