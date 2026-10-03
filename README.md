@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.03hotfix` in files, `03.10.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.03v3` in files, `03.10.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -941,6 +941,32 @@ The v2 blur took the whole window with it and read as the island melting rather 
 - **Springs unchanged.** The draw-in, the overshoot on opening, the closing spring and the swell are the same as before.
 
 Version 2026.10.03hotfix - built but not played through, so report anything that looks wrong.
+
+## Lyrics and fast track switches, 3 October 2026 (v3)
+
+Skipping several tracks in a row could leave the island on a song that was not playing, or on the cover of the previous one. Both came from the media bridge, not from the island.
+
+- **The right session.** On a fast switch the browser answers the media properties query slower than usual. The bridge waited 0.3 s, skipped the playing session and showed the next one that had a title: another tab or a paused player with a different song. The playing session now gets up to 1 s, and among playing sessions the one Windows marks as current comes first: SoundCloud does not move the session's last update time between tracks, so freshness alone picked a leftover.
+- **The right cover.** Windows publishes the new title before the new cover, and Chrome can deliver the previous track's picture after the new title. The bridge took the first picture after a title change and stopped looking. Covers are now compared by content (FNV-1a) on every poll: the previous track's picture is held off for six polls, and a picture that arrives late replaces a wrong one mid-track. A track whose cover matches the previous one (same album) still turns the cover after the wait.
+- **Faster settling.** After a track change the bridge polls about every 0.1 s instead of every 0.5 s until the title and the cover settle.
+
+### Synced lyrics
+
+The line being sung takes the place of the title in the HUD island and in the desktop island of the main menu, and the title moves next to the artist in the card. During the intro, a break longer than 4 s and after the last line the title comes back. Lyrics are on by default: **Customization > Island > Lyrics**, with **Lyrics offset** from -3 to +3 s for lyrics that run ahead of or behind the singing.
+
+- **Lit with the voice.** Every letter of the line gets its own time window: from the word timings when the lyrics have them, otherwise the line is split evenly. Sung letters are at full ink with the glow, the coming ones at 42 %, and the letter being sung lifts 0.55 units and settles. The soft edge of the sweep spans one and a half letters, so it follows the tempo.
+- **Paced by the song.** Lines change with the same letter morph as the title (`UiMorphText`), but the change takes at most 30 % of the line: from 0.14 s in fast verses to 0.6 s in slow songs.
+- **One width per song.** The island keeps the width of the longest line (within the usual title limit); a longer line scrolls after the sweep instead of on its own clock. A long line that was scrolled leaves from where it stood when the next one comes in.
+- **Where the text comes from.** [lrclib.net](https://lrclib.net), a free public database of synced lyrics, over HTTPS; the title and the artist are sent there. Titles are cleaned of platform noise (`(Official Video)`, `[Lyrics]`, `feat.`, `- Topic` and `VEVO` channels, the artist written into the title). The lookup tries the full artist, then the first of the co-artists, then a free query, half a second apart. A candidate must match the title, the artist and the length within 3 s, and the text must have at least 4 lines with growing timestamps that end by the end of the track; junk entries like `[00:00.00]probe` are dropped.
+- **The updater.** One request at a time, only for a track that has played for 1.2 s, no more than once every 3 s and 10 times a minute, on a monotonic clock. Server failures double the pause from 15 s up to 2 minutes; a 503 or a broken connection never records the song as missing. The response is parsed as a stream that skips the plain-text copies (a rap search reply is over 800 KB), capped at 4 MB, and the body read is closed by a 10 s deadline. A reply is stored under its own track key, so a late reply for the previous song never lands on the current one. Found and missing lyrics are cached in `.minecraft/battlecraft/lyrics` (up to 300 files, misses rechecked after a day), outside the config folder that the server compares.
+- **Hostile text.** Track titles, artists and lyric lines are cleaned of control and format characters (zero width, direction overrides), the section sign and stacked combining marks, and capped at 200 characters, so a crafted title cannot cost thousands of glyphs a frame.
+
+### Audit fixes
+
+- **Bridge.** A write error is retried instead of leaving the track without a cover; a late picture of the previous track can no longer replace the right one; a session closed right after a track change no longer keeps the bridge polling five times faster. Paths are passed literally, so game folders with square brackets start the bridge. Covers are checked by their header before decoding, metafiles are refused and pictures are shrunk to 512 px. The library is named by the hash of its source and built through a staging file, so a stale or planted library is never loaded.
+- **Game side.** Bridge lines are published under the monitor that retires the bridge, the restart count resets on the first good line, NaN bands are dropped, the cover file is read whole and capped at 8 MB, and the bar colors land together with their own cover. The pill row of an untimed track no longer widens the pill past the title limit.
+
+Version 2026.10.03v3 - built but not played through, so report anything that looks wrong.
 
 ## Releases
 

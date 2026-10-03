@@ -43,15 +43,15 @@ public final class IslandTone {
 
     private IslandTone() {}
 
-    public static void read(NativeImage image) {
+    // WHY: цвета снимаются в фоне, а встают только вместе со своей обложкой: подготовка старого
+    // WHY: трека, закончившаяся последней, иначе перекрашивала полоски поверх новой обложки
+    public static Runnable read(NativeImage image) {
         float[][] plane = shrunk(image);
-        if (total(plane[3]) <= 0.0f) {
-            cells = null;
-            return;
-        }
+        if (total(plane[3]) <= 0.0f) return () -> cells = null;
 
         float[][] soft = blurred(plane);
-        cells = sampled(soft, topLight(soft));
+        Cells sampled = sampled(soft, topLight(soft));
+        return () -> cells = sampled;
     }
 
     public static void advance(float delta) {

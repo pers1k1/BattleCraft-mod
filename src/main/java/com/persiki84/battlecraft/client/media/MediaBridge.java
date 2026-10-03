@@ -177,12 +177,24 @@ public final class MediaBridge {
         try (BufferedReader lines = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             String line;
             while ((line = lines.readLine()) != null) {
-                if (!primary || process == owner) sink.accept(line);
+                if (!primary) sink.accept(line);
+                else deliver(owner, sink, line);
             }
         } catch (IOException ignored) {
             BattleCraftMod.LOGGER.debug("[battlecraft] media bridge pipe broke");
         }
         if (primary && disown(owner)) retire(owner);
+    }
+
+    // WHY: проверка владельца и публикация идут под тем же монитором, что и снятие моста с учёта:
+    // WHY: строка, прочитанная в момент stop, иначе публиковала старый трек уже после пустого.
+    // WHY: Первая разобранная строка сбрасывает счётчик падений: три сбоя за часы работы не должны
+    // WHY: выключать музыку до перезапуска игры
+    private static synchronized void deliver(Process owner, LineReader sink, String line) {
+        if (process != owner) return;
+
+        sink.accept(line);
+        restarts = 0;
     }
 
     // WHY: запись в трубу блокирует, пока мост её не вычитал, а команды жмут на игровом потоке: при
@@ -262,7 +274,8 @@ public final class MediaBridge {
     private static float[] spectrum(com.google.gson.JsonArray sent) {
         float[] fresh = new float[MediaWatch.BANDS];
         for (int index = 0; index < fresh.length && index < sent.size(); index++) {
-            fresh[index] = Math.max(0.0f, sent.get(index).getAsFloat());
+            float value = sent.get(index).getAsFloat();
+            fresh[index] = Float.isFinite(value) ? Math.max(0.0f, value) : 0.0f;
         }
         return fresh;
     }
@@ -270,7 +283,7 @@ public final class MediaBridge {
     // WHY: если захват потока не поднялся, мост шлёт один пик, и полоски идут от него все разом
     private static float[] spread(float peak) {
         float[] fresh = new float[MediaWatch.BANDS];
-        java.util.Arrays.fill(fresh, Math.max(0.0f, peak));
+        java.util.Arrays.fill(fresh, Float.isFinite(peak) ? Math.max(0.0f, peak) : 0.0f);
         return fresh;
     }
 

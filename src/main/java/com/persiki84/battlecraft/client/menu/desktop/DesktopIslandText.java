@@ -1,8 +1,12 @@
 package com.persiki84.battlecraft.client.menu.desktop;
 
+import com.persiki84.battlecraft.client.island.IslandLyrics;
+import com.persiki84.battlecraft.client.lyrics.LyricLine;
+import com.persiki84.battlecraft.client.lyrics.LyricText;
 import com.persiki84.battlecraft.client.media.MediaTrack;
 import com.persiki84.shared.client.ui.UiMorphText;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiSweep;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.locale.Language;
@@ -19,8 +23,11 @@ final class DesktopIslandText {
 
     private static final Component NO_CONTROL = Component.translatable("battlecraft.desktop.island.no_control");
     private static final Component TIME_SAMPLE = Component.literal("-00:00");
+    private static final int FIELD_LIMIT = 200;
 
     private final Face shown = new Face();
+    private final IslandLyrics lyrics = new IslandLyrics();
+    private boolean measuredEngaged;
     private final UiMorphText elapsed = new UiMorphText();
     private final UiMorphText remaining = new UiMorphText();
     private MediaTrack described = MediaTrack.NONE;
@@ -36,18 +43,33 @@ final class DesktopIslandText {
         shown.advance(delta);
         elapsed.advance(delta);
         remaining.advance(delta);
-        if (track.sameTrack(described)) return false;
-
-        boolean swapping = visible && described.present() && track.present();
-        described = track;
-        shown.write(track.title().isEmpty() ? track.origin() : track.title(), artistOf(track), swapping);
-        measuredPixels = -1.0f;
+        boolean swapping = false;
+        if (!track.sameTrack(described)) {
+            swapping = visible && described.present() && track.present();
+            described = track;
+            shown.write(titleOf(track), artistOf(track), swapping);
+            measuredPixels = -1.0f;
+        }
+        shown.sing(lyrics.line(track, System.currentTimeMillis()), visible);
+        if (lyrics.engaged() != measuredEngaged) measuredPixels = -1.0f;
         return swapping;
+    }
+
+    // WHY: название и исполнитель приходят со страницы: чистятся от управляющих символов, знака
+    // WHY: параграфа и залго и режутся по длине, иначе строка рисовалась бы тысячами глифов за кадр
+    private static String titleOf(MediaTrack track) {
+        String clean = LyricText.clean(track.title(), FIELD_LIMIT);
+        return clean.isEmpty() ? track.origin() : clean;
     }
 
     private static String artistOf(MediaTrack track) {
         if (track.blind()) return NO_CONTROL.getString();
-        return track.artist().isEmpty() ? track.origin() : track.artist();
+        String clean = LyricText.clean(track.artist(), FIELD_LIMIT);
+        return clean.isEmpty() ? track.origin() : clean;
+    }
+
+    UiSweep sweep() {
+        return lyrics.sweep();
     }
 
     void time(long elapsedMs, long durationMs) {
@@ -68,10 +90,11 @@ final class DesktopIslandText {
         Language language = Language.getInstance();
         if (pixels == measuredPixels && language == measuredLanguage) return;
 
-        if (language != measuredLanguage && described.blind()) shown.artist.snap(NO_CONTROL.getString());
+        if (language != measuredLanguage && described.blind()) shown.relabel(NO_CONTROL.getString());
         measuredPixels = pixels;
         measuredLanguage = language;
-        shown.measure(graphics, font);
+        measuredEngaged = lyrics.engaged();
+        shown.measure(graphics, font, lyrics);
         timeSlot = UiRender.measureToned(graphics, font, TIME_SAMPLE, TIME_SCALE);
     }
 
@@ -101,8 +124,14 @@ final class DesktopIslandText {
         private float pillTitleWidth;
         private float cardTitleWidth;
         private float artistWidth;
+        private String titleText = "";
+        private String artistText = "";
+        private String pairedArtist = "";
 
         private void write(String titleText, String artistText, boolean morphing) {
+            this.titleText = titleText;
+            this.artistText = artistText;
+            pairedArtist = titleText.isEmpty() ? artistText : artistText + " \u00b7 " + titleText;
             if (morphing) {
                 title.set(titleText);
                 artist.set(artistText);
@@ -112,15 +141,42 @@ final class DesktopIslandText {
             artist.snap(artistText);
         }
 
+        private void relabel(String artistText) {
+            this.artistText = artistText;
+            artist.snap(artistText);
+        }
+
+        // WHY: пока поётся строка, она стоит на месте названия, а название уходит к исполнителю в
+        // WHY: карточке. Вне глаз игрока строка встаёт сразу, без морфа
+        private void sing(LyricLine line, boolean visible) {
+            String nextTitle = line == null ? titleText : line.text();
+            String nextArtist = line == null ? artistText : pairedArtist;
+            if (!visible) {
+                title.snap(nextTitle);
+                artist.snap(nextArtist);
+                return;
+            }
+            title.set(nextTitle, line == null ? 0.0f : IslandLyrics.pace(line));
+            artist.set(nextArtist);
+        }
+
         private void advance(float delta) {
             title.advance(delta);
             artist.advance(delta);
         }
 
-        private void measure(GuiGraphics graphics, Font font) {
-            pillTitleWidth = title.measure(graphics, font, PILL_TITLE_SCALE);
-            cardTitleWidth = title.measure(graphics, font, CARD_TITLE_SCALE);
+        private void measure(GuiGraphics graphics, Font font, IslandLyrics lyrics) {
+            pillTitleWidth = titleWidth(graphics, font, PILL_TITLE_SCALE, lyrics);
+            cardTitleWidth = titleWidth(graphics, font, CARD_TITLE_SCALE, lyrics);
             artistWidth = artist.measure(graphics, font, ARTIST_SCALE);
+        }
+
+        // WHY: у песни с лирикой ширина держится по самой длинной её строке и по названию, а не по
+        // WHY: строке, что стояла в момент замера: замер идёт только на смене трека и плотности пикселей
+        private float titleWidth(GuiGraphics graphics, Font font, float scale, IslandLyrics lyrics) {
+            if (!lyrics.engaged()) return title.measure(graphics, font, scale);
+            return Math.max(lyrics.widest(graphics, font, scale),
+                    UiRender.measureToned(graphics, font, Component.literal(titleText), scale));
         }
 
         UiMorphText title() {

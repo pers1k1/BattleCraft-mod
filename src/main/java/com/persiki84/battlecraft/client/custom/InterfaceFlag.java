@@ -19,6 +19,7 @@ public enum InterfaceFlag {
     ISLAND_COVER("islandCover", true, HudConfig::islandCover, HudConfig::islandCover),
     ISLAND_TITLE("islandTitle", true, HudConfig::islandTitle, HudConfig::islandTitle),
     ISLAND_ARTIST("islandArtist", true, HudConfig::islandArtist, HudConfig::islandArtist),
+    ISLAND_LYRICS("islandLyrics", true, HudConfig::islandLyrics, HudConfig::islandLyrics),
     ISLAND_BAR("islandBar", true, HudConfig::islandBar, HudConfig::islandBar),
     ISLAND_TIME("islandTime", true, HudConfig::islandTime, HudConfig::islandTime),
     ISLAND_VISUALIZER("islandVisualizer", true, HudConfig::islandVisualizer, HudConfig::islandVisualizer),

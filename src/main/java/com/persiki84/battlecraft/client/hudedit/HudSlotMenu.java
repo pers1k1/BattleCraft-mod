@@ -81,6 +81,7 @@ public final class HudSlotMenu {
             new IslandPart("cover", HudConfig::islandCover, HudConfig::islandCover),
             new IslandPart("title", HudConfig::islandTitle, HudConfig::islandTitle),
             new IslandPart("artist", HudConfig::islandArtist, HudConfig::islandArtist),
+            new IslandPart("lyrics", HudConfig::islandLyrics, HudConfig::islandLyrics),
             new IslandPart("bar", HudConfig::islandBar, HudConfig::islandBar),
             new IslandPart("time", HudConfig::islandTime, HudConfig::islandTime),
             new IslandPart("visualizer", HudConfig::islandVisualizer, HudConfig::islandVisualizer),

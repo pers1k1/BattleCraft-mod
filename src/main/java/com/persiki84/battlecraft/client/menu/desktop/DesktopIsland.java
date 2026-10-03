@@ -18,6 +18,7 @@ import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiIcon;
 import com.persiki84.shared.client.ui.UiMarquee;
 import com.persiki84.shared.client.ui.UiMorphText;
+import com.persiki84.shared.client.ui.UiSweep;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
@@ -238,14 +239,14 @@ public final class DesktopIsland {
 
         line(graphics, font, face.title(), face.pillTitleWidth(), frame.pillTextX,
                 frame.pillTitleY, frame.pillTitleSlot, DesktopIslandText.PILL_TITLE_SCALE,
-                UiTheme.alpha(TITLE_INK, alpha));
+                UiTheme.alpha(TITLE_INK, alpha), text.sweep());
     }
 
     private void cardTitle(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float alpha) {
         if (alpha <= 0.01f) return;
 
         line(graphics, font, face.title(), face.cardTitleWidth(), frame.textX, frame.titleY,
-                frame.titleSlot, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha));
+                frame.titleSlot, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha), text.sweep());
     }
 
     private void cardArtist(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float alpha) {
@@ -277,7 +278,7 @@ public final class DesktopIsland {
                 (frame.pillTitleY - frame.titleY) * (1.0f - k));
         try {
             line(graphics, font, face.title(), face.cardTitleWidth(), frame.textX, frame.titleY,
-                    slot / scale, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha));
+                    slot / scale, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha), text.sweep());
         } finally {
             UiRestFrame.pop(graphics);
         }
@@ -298,18 +299,30 @@ public final class DesktopIsland {
     // WHY: доли секунды, а ход бегущей строки начинается после паузы
     private void line(GuiGraphics graphics, Font font, UiMorphText text, float span, float x, float y,
                       float slot, float scale, int color) {
+        line(graphics, font, text, span, x, y, slot, scale, color, UiSweep.NONE);
+    }
+
+    // WHY: у строки лирики удержанная ширина острова больше её самой: бегущую строку решает ширина
+    // WHY: текущей строки, а едет она за волной подсветки
+    private void line(GuiGraphics graphics, Font font, UiMorphText text, float span, float x, float y,
+                      float slot, float scale, int color, UiSweep sweep) {
         if (slot <= 4.0f || (color >>> 24) < 3) return;
 
-        if (span <= slot || text.morphing()) {
-            text.draw(graphics, font, x, y, scale, color);
+        float actual = sweep == UiSweep.NONE ? span : text.measure(graphics, font, scale);
+        if (actual <= slot || text.morphing()) {
+            if (!text.morphing()) text.scrolled(0.0f);
+            text.draw(graphics, font, x, y, scale, color, sweep);
             return;
         }
         float margin = UiMarquee.margin(slot, scale);
-        float start = x - UiRender.marqueeShift(graphics, text.raw(), span - slot);
+        float shift = sweep == UiSweep.NONE ? UiRender.marqueeShift(graphics, text.raw(), actual - slot)
+                : text.follow(graphics, font, scale, slot, sweep);
+        float start = x - shift;
+        text.scrolled(shift);
         UiRender.clip(graphics, x - margin, frame.y, slot + margin * 2.0f, frame.height);
-        UiRender.marqueeFrom(graphics, x, slot, start, span, scale);
+        UiRender.marqueeFrom(graphics, x, slot, start, actual, scale);
         try {
-            text.draw(graphics, font, start, y, scale, color);
+            text.draw(graphics, font, start, y, scale, color, sweep);
         } finally {
             UiRender.marqueeDone();
             graphics.disableScissor();

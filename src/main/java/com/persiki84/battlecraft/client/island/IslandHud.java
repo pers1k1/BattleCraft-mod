@@ -5,6 +5,8 @@ import com.persiki84.battlecraft.client.custom.HudLayout;
 import com.persiki84.battlecraft.client.custom.HudSlot;
 import com.persiki84.battlecraft.client.hud.HudConfig;
 import com.persiki84.battlecraft.client.hud.HudInk;
+import com.persiki84.battlecraft.client.lyrics.LyricLine;
+import com.persiki84.battlecraft.client.lyrics.LyricText;
 import com.persiki84.battlecraft.client.media.MediaTrack;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAccent;
@@ -17,6 +19,7 @@ import com.persiki84.shared.client.ui.UiMorphText;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiScale;
+import com.persiki84.shared.client.ui.UiSweep;
 import com.persiki84.shared.client.ui.UiTheme;
 import com.persiki84.shared.client.ui.UiVeil;
 import com.persiki84.shared.client.ui.UiVital;
@@ -85,6 +88,8 @@ public final class IslandHud {
     private static final UiMorphText artist = new UiMorphText();
     private static final UiMorphText timing = new UiMorphText();
     private static final UiMorphText pillRow = new UiMorphText();
+    private static final IslandLyrics lyrics = new IslandLyrics();
+    private static final int FIELD_LIMIT = 200;
     private static final Frame frame = new Frame();
     private static final IslandMorph morph = new IslandMorph();
     // WHY: волосок таблетки стоит за удержанной наибольшей шириной таймера и доезжает к ней плавно:
@@ -92,6 +97,10 @@ public final class IslandHud {
     private static final Smooth barShift = new Smooth(BAR_SHIFT_SPEED);
 
     private static MediaTrack shownTrack = MediaTrack.NONE;
+    private static String titleText = "";
+    private static String artistText = "";
+    private static String pairedArtist = "";
+    private static Component titleValue = Component.empty();
     private static long shownPlayed = -1L;
     private static long shownWhole = -1L;
     private static long morphedFrame = -1L;
@@ -188,20 +197,28 @@ public final class IslandHud {
     // WHY: остров тянется за названием, но верхний предел держит его подальше от «Счёта и точек»
     // WHY: в центре экрана: всё, что длиннее слота, уезжает бегущей строкой
     private static void measureWidths(GuiGraphics graphics, Font font) {
-        float pillTitle = PAD + FACE + GAP + clamp(title.measure(graphics, font, TITLE_PILL_SCALE),
+        float pillTitle = PAD + FACE + GAP + clamp(titleWidth(graphics, font, TITLE_PILL_SCALE),
                 TITLE_MIN, TITLE_MAX) + frame.waveSlot + PAD;
         timingPeak = held(timingPeak, pillRow.measure(graphics, font, TIME_SCALE));
-        float pillTiming = PAD + FACE + GAP + timingPeak + (untimed() ? 0.0f : PILL_TIME_GAP + PILL_BAR_MIN) + PAD;
+        float pillTiming = PAD + FACE + GAP + Math.min(timingPeak, TITLE_MAX)
+                + (untimed() ? 0.0f : PILL_TIME_GAP + PILL_BAR_MIN) + PAD;
         float pill = Math.max(pillTitle, pillTiming * (1.0f - frame.blind));
         float idle = PAD + FACE + GAP + UiRender.measure(graphics, font, IslandModel.nick(), NICK_SCALE)
                 + STAT_INSET + frame.stats + PAD;
         frame.cardWidth = PAD + ART + GAP + clamp(Math.max(
-                title.measure(graphics, font, TITLE_CARD_SCALE),
+                titleWidth(graphics, font, TITLE_CARD_SCALE),
                 artist.measure(graphics, font, ARTIST_SCALE)),
                 CARD_TEXT_MIN, CARD_TEXT_MAX) + frame.cardWaveSlot + PAD;
         frame.pillWidth = lerp(idle, pill, frame.media);
         frame.steady = morph.steadyWidth(frame.pillWidth, frame.cardWidth);
         frame.width = morph.width(frame.pillWidth, frame.cardWidth);
+    }
+
+    // WHY: пока у песни есть лирика, ширина держится по самой длинной её строке и по названию:
+    // WHY: строки сменяются каждые две-три секунды, и стекло не должно ходить за каждой
+    private static float titleWidth(GuiGraphics graphics, Font font, float scale) {
+        if (!lyrics.engaged()) return title.measure(graphics, font, scale);
+        return Math.max(lyrics.widest(graphics, font, scale), UiRender.measureToned(graphics, font, titleValue, scale));
     }
 
     private static float held(float peak, float measured) {
@@ -353,7 +370,7 @@ public final class IslandHud {
         UiRestFrame.push(graphics, textX, titleTop, scale, scale, 0.0f, move);
         try {
             morphLine(graphics, font, title, textX, titleTop, slot, TITLE_PILL_SCALE,
-                    UiTheme.alpha(inked(), alpha));
+                    UiTheme.alpha(inked(), alpha), lyrics.sweep());
         } finally {
             UiRestFrame.pop(graphics);
         }
@@ -374,7 +391,7 @@ public final class IslandHud {
         try {
             if (HudConfig.islandTitle()) {
                 morphLine(graphics, font, title, textX, y + CARD_TITLE_TOP, slot, TITLE_CARD_SCALE,
-                        UiTheme.alpha(inked(), shared));
+                        UiTheme.alpha(inked(), shared), lyrics.sweep());
             }
             if (HudConfig.islandArtist()) {
                 float rise = lerp(CARD_TITLE_TOP, CARD_ARTIST_TOP, frame.card);
@@ -480,7 +497,7 @@ public final class IslandHud {
         UiRestFrame.push(graphics, cardText, top, scale, scale, left - cardText, (titleLive(y) - top) * (1.0f - k));
         try {
             morphLine(graphics, font, title, cardText, top, slot / scale, TITLE_CARD_SCALE,
-                    UiTheme.alpha(inked(), alpha));
+                    UiTheme.alpha(inked(), alpha), lyrics.sweep());
         } finally {
             UiRestFrame.pop(graphics);
             graphics.disableScissor();
@@ -544,17 +561,27 @@ public final class IslandHud {
     // WHY: строки: смена длится доли секунды, а ход бегущей строки начинается после паузы
     private static void morphLine(GuiGraphics graphics, Font font, UiMorphText text, float x, float y,
                                   float slot, float scale, int color) {
+        morphLine(graphics, font, text, x, y, slot, scale, color, UiSweep.NONE);
+    }
+
+    // WHY: строка лирики длиннее слота едет за волной подсветки, обычная строка своей бегущей строкой
+    private static void morphLine(GuiGraphics graphics, Font font, UiMorphText text, float x, float y,
+                                  float slot, float scale, int color, UiSweep sweep) {
         if ((color >>> 24) < 3) return;
 
         float span = text.measure(graphics, font, scale);
         if (span <= slot || text.morphing()) {
-            text.draw(graphics, font, x, y, scale, color);
+            if (!text.morphing()) text.scrolled(0.0f);
+            text.draw(graphics, font, x, y, scale, color, sweep);
             return;
         }
-        float start = x - UiRender.marqueeShift(graphics, text.raw(), span - slot);
+        float shift = sweep == UiSweep.NONE ? UiRender.marqueeShift(graphics, text.raw(), span - slot)
+                : text.follow(graphics, font, scale, slot, sweep);
+        float start = x - shift;
+        text.scrolled(shift);
         UiRender.marqueeFrom(graphics, x, slot, start, span, scale);
         try {
-            text.draw(graphics, font, start, y, scale, color);
+            text.draw(graphics, font, start, y, scale, color, sweep);
         } finally {
             UiRender.marqueeDone();
         }
@@ -695,20 +722,40 @@ public final class IslandHud {
     private static void refresh(MediaTrack track) {
         if (!track.sameTrack(shownTrack)) retitle(track);
 
-        stampTiming(Math.max(0L, IslandClock.elapsedMs(track, System.currentTimeMillis()) / 1000L),
+        long now = System.currentTimeMillis();
+        sing(lyrics.line(track, now));
+        stampTiming(Math.max(0L, IslandClock.elapsedMs(track, now) / 1000L),
                 Math.max(0L, track.durationMs() / 1000L));
     }
 
     // WHY: у слепого трека название есть, только если плеер пишет его в заголовок окна, иначе в
-    // WHY: строке стоит площадка или плеер, с которого шёл звук
+    // WHY: строке стоит площадка или плеер, с которого шёл звук. Название и исполнитель приходят со
+    // WHY: страницы: чистятся от управляющих символов, знака параграфа и залго и режутся по длине,
+    // WHY: иначе строка из тысяч невидимых знаков рисовалась бы тысячами глифов за кадр
     private static void retitle(MediaTrack track) {
         if (IslandModel.media() > 0.02f && shownTrack.present()) {
             morph.pulse();
         }
         shownTrack = track;
         shownPlayed = -1L;
-        title.set(track.blind() && track.title().isEmpty() ? track.origin() : track.title());
-        artist.set(track.artist().isEmpty() ? track.origin() : track.artist());
+        String cleanTitle = LyricText.clean(track.title(), FIELD_LIMIT);
+        String cleanArtist = LyricText.clean(track.artist(), FIELD_LIMIT);
+        titleText = track.blind() && cleanTitle.isEmpty() ? track.origin() : cleanTitle;
+        artistText = cleanArtist.isEmpty() ? track.origin() : cleanArtist;
+        titleValue = Component.literal(titleText);
+        pairedArtist = titleText.isEmpty() ? artistText : artistText + " \u00b7 " + titleText;
+    }
+
+    // WHY: пока поётся строка, она стоит на месте названия, а название уходит к исполнителю в
+    // WHY: карточке: так видно и что поют, и что играет
+    private static void sing(LyricLine line) {
+        if (line == null) {
+            title.set(titleText);
+            artist.set(artistText);
+            return;
+        }
+        title.set(line.text(), IslandLyrics.pace(line));
+        artist.set(pairedArtist);
     }
 
     // WHY: у трека без длины полосе нечего показывать, и строка таблетки отдаётся исполнителю
@@ -724,7 +771,7 @@ public final class IslandHud {
             return;
         }
         timing.set(clock(played));
-        pillRow.set(artist.raw().isEmpty() ? clock(played) : artist.raw() + " · " + clock(played));
+        pillRow.set(artistText.isEmpty() ? clock(played) : artistText + " · " + clock(played));
     }
 
     private static boolean untimed() {

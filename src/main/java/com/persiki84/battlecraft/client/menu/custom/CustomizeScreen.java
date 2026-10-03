@@ -461,6 +461,7 @@ public final class CustomizeScreen extends ManagerScreen {
         built.add(toggle("battlecraft.custom.island.cover", HudConfig::islandCover, HudConfig::islandCover));
         built.add(toggle("battlecraft.custom.island.title", HudConfig::islandTitle, HudConfig::islandTitle));
         built.add(toggle("battlecraft.custom.island.artist", HudConfig::islandArtist, HudConfig::islandArtist));
+        built.add(toggle("battlecraft.custom.island.lyrics", HudConfig::islandLyrics, HudConfig::islandLyrics));
         built.add(toggle("battlecraft.custom.island.bar", HudConfig::islandBar, HudConfig::islandBar));
         built.add(toggle("battlecraft.custom.island.time", HudConfig::islandTime, HudConfig::islandTime));
         built.add(toggle("battlecraft.custom.island.visualizer", HudConfig::islandVisualizer, HudConfig::islandVisualizer));
@@ -471,6 +472,15 @@ public final class CustomizeScreen extends ManagerScreen {
         built.add(dial("battlecraft.custom.visualizer_color", HudConfig::visualizerColor, HudConfig::visualizerColor));
         built.add(dial("battlecraft.custom.visualizer_attack", HudConfig::visualizerAttack, HudConfig::visualizerAttack));
         built.add(dial("battlecraft.custom.island_flip", HudConfig::islandFlipSpeed, HudConfig::islandFlipSpeed));
+        built.add(lyricsOffsetRow());
+    }
+
+    private SliderRow lyricsOffsetRow() {
+        SliderRow row = new SliderRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("battlecraft.custom.island_lyrics_offset"),
+                HudConfig::islandLyricsOffset, HudConfig::islandLyricsOffset, -3.0f, 3.0f, 0.1f);
+        row.hint("battlecraft.custom.island_lyrics_offset" + HINT_SUFFIX);
+        return row.readout(1, 1.0f, "");
     }
 
     // WHY: у индикатора урона нет своей вкладки: выключатели, размер, время и оба цвета стоят

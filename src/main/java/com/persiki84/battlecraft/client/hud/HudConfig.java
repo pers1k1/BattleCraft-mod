@@ -56,6 +56,8 @@ public final class HudConfig {
     private static ForgeConfigSpec.BooleanValue ISLAND_BAR;
     private static ForgeConfigSpec.BooleanValue ISLAND_TITLE;
     private static ForgeConfigSpec.BooleanValue ISLAND_ARTIST;
+    private static ForgeConfigSpec.BooleanValue ISLAND_LYRICS;
+    private static ForgeConfigSpec.DoubleValue ISLAND_LYRICS_OFFSET;
     private static ForgeConfigSpec.BooleanValue ISLAND_TIME;
     private static ForgeConfigSpec.BooleanValue ISLAND_VISUALIZER;
     private static ForgeConfigSpec.BooleanValue ISLAND_COVER_TINT;
@@ -193,6 +195,8 @@ public final class HudConfig {
         ISLAND_BAR = defineIslandPart("islandBar", "Полоса прогресса трека");
         ISLAND_TITLE = defineIslandPart("islandTitle", "Название играющего трека");
         ISLAND_ARTIST = defineIslandPart("islandArtist", "Исполнитель играющего трека");
+        ISLAND_LYRICS = defineIslandPart("islandLyrics", "Лирика на месте названия; текст ищется на lrclib.net, туда уходят название и исполнитель трека");
+        ISLAND_LYRICS_OFFSET = BUILDER.comment("Сдвиг лирики в секундах: плюс позже, минус раньше").defineInRange("islandLyricsOffset", 0.0, -3.0, 3.0);
         ISLAND_TIME = defineIslandPart("islandTime", "Таймер трека");
         ISLAND_VISUALIZER = defineIslandPart("islandVisualizer", "Визуализатор звука в острове");
         ISLAND_COVER_TINT = defineIslandPart("islandCoverTint", "Полоски визуализатора цветом обложки трека");
@@ -532,6 +536,22 @@ public final class HudConfig {
 
     public static boolean islandArtist() {
         return read(ISLAND_ARTIST, true);
+    }
+
+    public static boolean islandLyrics() {
+        return read(ISLAND_LYRICS, true);
+    }
+
+    public static void islandLyrics(boolean value) {
+        if (SPEC.isLoaded()) ISLAND_LYRICS.set(value);
+    }
+
+    public static float islandLyricsOffset() {
+        return SPEC.isLoaded() ? ISLAND_LYRICS_OFFSET.get().floatValue() : 0.0f;
+    }
+
+    public static void islandLyricsOffset(float value) {
+        if (SPEC.isLoaded()) ISLAND_LYRICS_OFFSET.set((double) Math.max(-3.0f, Math.min(3.0f, value)));
     }
 
     public static void islandTime(boolean value) {

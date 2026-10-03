@@ -15,11 +15,15 @@ using Windows.Storage.Streams;
 public static class BattleCraftMedia {
     const int AwaitSteps = 400;
     const int AwaitBriefSteps = 60;
+    const int AwaitLeadSteps = 200;
     const int AwaitSleepMs = 5;
     const float BlindGate = 0.0015f;
     const int BlindArm = 3;
     const int HeardHold = 6;
-    const int ArtTries = 6;
+    const int ArtSettlePolls = 6;
+    const int SettlePolls = 4;
+    const long ArtPixelLimit = 4096L * 4096L;
+    const int ArtEdge = 512;
     const int FieldLimit = 512;
 
     static readonly string[] Sites = {
@@ -48,7 +52,11 @@ public static class BattleCraftMedia {
     static int heardQuiet;
     static string captionApp = "";
     static string captionText = "";
-    static int artTries;
+    static bool artOwed;
+    static int artWait;
+    static int settlePolls;
+    static ulong artHash;
+    static ulong retiredHash;
     static long artCounter;
     static long artStamp;
 
@@ -70,18 +78,39 @@ public static class BattleCraftMedia {
     // WHY: сессия без названия и сессия, у которой падает опрос свойств, это остаток убитой вкладки.
     // WHY: браузер держит его в списке, а SoundCloud не двигает LastUpdatedTime между треками, поэтому
     // WHY: по одной свежести такой остаток перебивает живую сессию и остров пустеет
+    // WHY: на быстрой смене трека браузер отвечает на запрос свойств дольше обычного. С коротким
+    // WHY: ожиданием первую сессию пропускали и показывали следующую с названием: соседнюю вкладку
+    // WHY: или плеер на паузе с совсем другой песней. Первой сессии дают полное ожидание
     static Chosen Pick() {
         var sessions = manager.GetSessions();
         if (sessions == null || sessions.Count == 0) return null;
 
+        string current = CurrentApp();
         Chosen spare = null;
-        foreach (var session in sessions.OrderByDescending(Live).ThenByDescending(Seen)) {
-            var properties = Describe(session);
+        bool first = true;
+        foreach (var session in sessions.OrderByDescending(Live).ThenByDescending(s => Current(s, current)).ThenByDescending(Seen)) {
+            var properties = Describe(session, first && Live(session) == 1 ? AwaitLeadSteps : AwaitBriefSteps);
+            first = false;
             if (properties == null) continue;
             if (!string.IsNullOrEmpty(properties.Title)) return new Chosen(session, properties);
             if (spare == null) spare = new Chosen(session, properties);
         }
         return spare;
+    }
+
+    // WHY: SoundCloud не двигает LastUpdatedTime между треками, и среди играющих сессий по одной
+    // WHY: свежести побеждал остаток. Сессия, которую Windows считает текущей, идёт раньше
+    static string CurrentApp() {
+        try {
+            var session = manager.GetCurrentSession();
+            return session == null ? "" : session.SourceAppUserModelId ?? "";
+        } catch {
+            return "";
+        }
+    }
+
+    static int Current(GlobalSystemMediaTransportControlsSession session, string current) {
+        return current.Length > 0 && session.SourceAppUserModelId == current ? 1 : 0;
     }
 
     static int Live(GlobalSystemMediaTransportControlsSession session) {
@@ -102,9 +131,9 @@ public static class BattleCraftMedia {
     }
 
     static GlobalSystemMediaTransportControlsSessionMediaProperties Describe(
-            GlobalSystemMediaTransportControlsSession session) {
+            GlobalSystemMediaTransportControlsSession session, int steps) {
         try {
-            return Await(session.TryGetMediaPropertiesAsync(), AwaitBriefSteps);
+            return Await(session.TryGetMediaPropertiesAsync(), steps);
         } catch {
             return null;
         }
@@ -160,14 +189,23 @@ public static class BattleCraftMedia {
     static string Blind() {
         string app = Sounding();
         if (app.Length == 0) {
-            signature = "";
+            Unsettle();
             return "{\"ok\":false}";
         }
         return Heard(app, lastSite);
     }
 
-    static string Heard(string app, string site) {
+    // WHY: сессия, закрытая сразу после смены трека, оставляла ожидание обложки взведённым, и мост
+    // WHY: опрашивал впятеро чаще до конца игры, хотя ничего не играло
+    static void Unsettle() {
         signature = "";
+        artOwed = false;
+        artWait = 0;
+        settlePolls = 0;
+    }
+
+    static string Heard(string app, string site) {
+        Unsettle();
         var json = new StringBuilder("{\"ok\":true,\"blind\":true");
         Put(json, "app", app);
         Put(json, "site", site);
@@ -219,23 +257,84 @@ public static class BattleCraftMedia {
         return found;
     }
 
-    // WHY: у трека без обложки стемп обнуляется, и остров показывает аватар, а не обложку прошлого
-    // WHY: трека. Картинку сессия иногда публикует на опрос-другой позже названия, поэтому
-    // WHY: она дочитывается ещё несколько опросов
+    // WHY: на быстрой смене трека сессия публикует новое название раньше новой обложки, а Chrome
+    // WHY: ещё и присылает картинку прошлого трека после нового названия. Первая картинка после смены
+    // WHY: принималась навсегда, и трек оставался с чужой обложкой. Обложка сверяется по содержимому
+    // WHY: на каждом опросе: картинку прошлого трека несколько опросов не принимают, а любую
+    // WHY: новую картинку принимают и посреди трека
     static void Restamp(string app, GlobalSystemMediaTransportControlsSessionMediaProperties properties, string artPath) {
-        string stamp = app + "|" + (properties.Title ?? "") + "|" + (properties.Artist ?? "");
-        if (stamp != signature) {
-            signature = stamp;
-            artTries = ArtTries;
-            artStamp = 0;
+        Retitle(app + "|" + (properties.Title ?? "") + "|" + (properties.Artist ?? ""));
+        bool waiting = artWait > 0;
+        if (waiting) artWait--;
+        byte[] raw = ReadArt(properties);
+        if (raw.Length == 0) {
+            if (artOwed) DropArt();
+            if (!waiting) artOwed = false;
+            return;
         }
-        if (artTries <= 0) return;
 
-        artTries--;
-        if (!SaveArt(properties, artPath)) return;
-
+        ulong hash = Fingerprint(raw);
+        if (waiting && hash == retiredHash) return;
+        if (hash == artHash && !artOwed) return;
+        if (hash != artHash && !Publish(raw, hash, artPath)) return;
+        artHash = hash;
         artStamp = ++artCounter;
-        artTries = 0;
+        artOwed = false;
+    }
+
+    // WHY: нечитаемая картинка помечается увиденной и больше не разбирается, а сбой записи (файл
+    // WHY: держит антивирус или игра ещё читает прошлый) ничего не помечает: следующий опрос повторит
+    static bool Publish(byte[] raw, ulong hash, string artPath) {
+        byte[] png = Decode(raw);
+        if (png != null) return WriteArt(png, artPath);
+
+        if (artOwed) DropArt();
+        artHash = hash;
+        artOwed = false;
+        return false;
+    }
+
+    static void Retitle(string stamp) {
+        if (stamp == signature) return;
+
+        signature = stamp;
+        retiredHash = artHash;
+        artOwed = true;
+        artWait = ArtSettlePolls;
+        settlePolls = SettlePolls;
+    }
+
+    // WHY: у трека без обложки стемп обнуляется, и остров показывает аватар, а не обложку прошлого трека
+    static void DropArt() {
+        artStamp = 0;
+        artHash = 0UL;
+    }
+
+    // WHY: после смены трека опросы идут чаще, пока название и обложка не устоятся: иначе исправление
+    // WHY: от плеера доходило до острова только через полсекунды-секунду
+    public static bool Settling() {
+        if (artOwed && artWait > 0) return true;
+        return settlePolls-- > 0;
+    }
+
+    // WHY: FNV-1a 64: картинки сравниваются только между собой, криптостойкость не нужна, а MD5 на
+    // WHY: машине с обязательным FIPS бросает исключение
+    static ulong Fingerprint(byte[] bytes) {
+        ulong hash = 14695981039346656037UL;
+        foreach (byte value in bytes) {
+            hash ^= value;
+            hash *= 1099511628211UL;
+        }
+        return hash == 0UL ? 1UL : hash;
+    }
+
+    static byte[] ReadArt(GlobalSystemMediaTransportControlsSessionMediaProperties properties) {
+        if (properties.Thumbnail == null) return new byte[0];
+        try {
+            return ReadThumbnail(properties);
+        } catch {
+            return new byte[0];
+        }
     }
 
     static string Serialize(GlobalSystemMediaTransportControlsSession session,
@@ -264,15 +363,12 @@ public static class BattleCraftMedia {
         return json.ToString();
     }
 
-    static bool SaveArt(GlobalSystemMediaTransportControlsSessionMediaProperties properties, string artPath) {
-        if (properties.Thumbnail == null || string.IsNullOrEmpty(artPath)) return false;
+    static bool WriteArt(byte[] png, string artPath) {
+        if (string.IsNullOrEmpty(artPath)) return false;
 
+        string staging = artPath + ".part";
         try {
-            byte[] bytes = AsPng(ReadThumbnail(properties));
-            if (bytes.Length == 0) return false;
-
-            string staging = artPath + ".part";
-            File.WriteAllBytes(staging, bytes);
+            File.WriteAllBytes(staging, png);
             if (File.Exists(artPath)) File.Delete(artPath);
             File.Move(staging, artPath);
             return true;
@@ -282,15 +378,36 @@ public static class BattleCraftMedia {
     }
 
     // WHY: «Медиаплеер» и Telegram отдают обложку и в BMP, который декодер игры не берёт («Corrupt
-    // WHY: BMP»): остров держал обложку прошлого трека и перечитывал файл каждый кадр. Любая картинка
-    // WHY: перекладывается в PNG средствами Windows, нечитаемая бросает и считается отсутствующей
-    static byte[] AsPng(byte[] bytes) {
-        if (bytes.Length == 0) return bytes;
+    // WHY: BMP»): любая картинка перекладывается в PNG средствами Windows. Размер в пикселях
+    // WHY: проверяется по заголовку до разжатия: JPEG 16384x16384 весит единицы мегабайт, а разжатый
+    // WHY: занимает гигабайт и в мосте, и в игре. Метафайлы (EMF, WMF) не принимаются, обложка
+    // WHY: ужимается до ArtEdge: остров всё равно не рисует её крупнее
+    static byte[] Decode(byte[] bytes) {
+        try {
+            using (var source = new MemoryStream(bytes))
+            using (var image = System.Drawing.Image.FromStream(source, false, false)) {
+                if (!Raster(image.RawFormat) || image.Width <= 0 || image.Height <= 0) return null;
+                if ((long)image.Width * image.Height > ArtPixelLimit) return null;
+                return Shrunk(image);
+            }
+        } catch {
+            return null;
+        }
+    }
 
-        using (var source = new MemoryStream(bytes))
-        using (var image = System.Drawing.Image.FromStream(source))
+    static bool Raster(System.Drawing.Imaging.ImageFormat format) {
+        Guid kind = format.Guid;
+        return kind == System.Drawing.Imaging.ImageFormat.Png.Guid || kind == System.Drawing.Imaging.ImageFormat.Jpeg.Guid
+            || kind == System.Drawing.Imaging.ImageFormat.Bmp.Guid || kind == System.Drawing.Imaging.ImageFormat.Gif.Guid;
+    }
+
+    static byte[] Shrunk(System.Drawing.Image image) {
+        double scale = Math.Min(1.0, ArtEdge / (double)Math.Max(image.Width, image.Height));
+        int width = Math.Max(1, (int)Math.Round(image.Width * scale));
+        int height = Math.Max(1, (int)Math.Round(image.Height * scale));
+        using (var bitmap = new System.Drawing.Bitmap(image, width, height))
         using (var target = new MemoryStream()) {
-            image.Save(target, System.Drawing.Imaging.ImageFormat.Png);
+            bitmap.Save(target, System.Drawing.Imaging.ImageFormat.Png);
             return target.ToArray();
         }
     }

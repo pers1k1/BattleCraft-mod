@@ -6,6 +6,8 @@ import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +20,7 @@ public final class IslandArt {
 
     private static final long NOTHING = Long.MIN_VALUE;
     private static final long RETRY_MS = 1000L;
+    private static final long FILE_LIMIT = 8L * 1024L * 1024L;
 
     private static volatile boolean ready;
     private static volatile boolean carried;
@@ -118,13 +121,13 @@ public final class IslandArt {
         NativeImage decoded = null;
         NativeImage squared = null;
         NativeImage[] levels = null;
-        try (InputStream stream = Files.newInputStream(file)) {
+        try (InputStream stream = new ByteArrayInputStream(bounded(file))) {
             decoded = NativeImage.read(stream);
             squared = IslandImage.squared(decoded);
-            IslandTone.read(squared);
+            Runnable tone = IslandTone.read(squared);
             levels = IslandScale.chain(squared, IslandImage.CORNER_SHARE);
             NativeImage[] carriedLevels = levels;
-            Minecraft.getInstance().execute(() -> hold(stamp, carriedLevels));
+            Minecraft.getInstance().execute(() -> hold(stamp, carriedLevels, tone));
         } catch (Exception error) {
             IslandPicture.discard(levels);
             missed(stamp);
@@ -136,11 +139,18 @@ public final class IslandArt {
         }
     }
 
+    // WHY: файл читается целиком и сразу закрывается: открытый на время разбора файл мешал мосту
+    // WHY: положить следующую обложку. Файл в папке моста может подложить и другая программа, поэтому предел
+    private static byte[] bounded(Path file) throws IOException {
+        if (Files.size(file) > FILE_LIMIT) throw new IOException("cover file larger than " + FILE_LIMIT);
+        return Files.readAllBytes(file);
+    }
+
     // WHY: обложки занимают две ячейки по очереди: на перевороте уходящая ещё рисуется на лицевой
     // WHY: стороне, а запись новой по тому же адресу закрыла бы её текстуру прямо посреди хода.
     // WHY: снимок, устаревший за время подготовки, выбрасывается: фоновые загрузки могут прийти
     // WHY: не в том порядке, в каком их просили
-    private static void hold(long stamp, NativeImage[] levels) {
+    private static void hold(long stamp, NativeImage[] levels, Runnable tone) {
         if (stamp != wantedStamp) {
             IslandPicture.discard(levels);
             return;
@@ -156,6 +166,7 @@ public final class IslandArt {
             return;
         }
 
+        tone.run();
         int next = ready ? slot ^ 1 : slot;
         Minecraft.getInstance().getTextureManager().register(SLOTS[next], picture);
         carried = ready;
