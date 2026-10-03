@@ -594,20 +594,21 @@ public final class IslandHud {
     }
 
     // WHY: строка посреди смены гаснет у краёв слота так же, как бегущая: уехавшие за край буквы
-    // WHY: прокрученной строки иначе проступали на время морфа
+    // WHY: прокрученной строки иначе проступали на время морфа. Кромка у уходящей и приходящей своя, по
+    // WHY: их прокрутке: общая по новой строке гасила конец уходящей, когда новая длиннее слота, и начало
+    // WHY: приходящей, когда старая была прокручена, и эти буквы горели только до и после смены
     private static void morphing(GuiGraphics graphics, Font font, UiMorphText text, float x, float y, float slot,
                                  float scale, int color, UiSweep sweep, float span) {
         float leaving = text.leaving();
-        if (span <= slot && leaving <= 0.0f) {
+        float was = text.leavingSpan(graphics, font, scale);
+        if (span <= slot && was <= slot && leaving <= 0.0f) {
             text.draw(graphics, font, x, y, scale, color, sweep);
             return;
         }
-        UiRender.marqueeFrom(graphics, x, slot, x - leaving, Math.max(span, slot) + leaving, scale);
-        try {
-            text.draw(graphics, font, x, y, scale, color, sweep);
-        } finally {
-            UiRender.marqueeDone();
-        }
+        UiRender.marquee(graphics, x, slot, x - leaving, was, scale,
+                () -> text.drawLeaving(graphics, font, x, y, scale, color));
+        UiRender.marquee(graphics, x, slot, x, span, scale,
+                () -> text.drawArriving(graphics, font, x, y, scale, color, sweep));
     }
 
     private static void advanceText(float delta) {

@@ -18,11 +18,18 @@ public final class GlowGlyph extends BakedGlyph {
     private final float span;
 
     private static float boost;
+    private static float weigh;
 
     // WHY: перо рисует букву за буквой, и ореол одной буквы можно усилить на время её отрисовки:
     // WHY: так светится буква лирики, которая поётся сейчас, не трогая общий ореол текста
     public static void boost(float extra) {
         boost = Math.max(0.0f, extra);
+    }
+
+    // WHY: буква затянутого слова лирики густеет второй копией со сдвигом в долю единицы шрифта, как
+    // WHY: жирное начертание ванили: толщина атласа задана юниформом на весь батч и на одну букву не меняется
+    public static void weigh(float units) {
+        weigh = Math.max(0.0f, units);
     }
 
     public GlowGlyph(GlyphRenderTypes renderTypes, float u0, float u1, float v0, float v1,
@@ -50,6 +57,7 @@ public final class GlowGlyph extends BakedGlyph {
         }
 
         super.render(italic, x, y, matrix, buffer, red, green, blue, alpha, packedLight);
+        if (weigh > 0.001f) super.render(italic, x + weigh, y, matrix, buffer, red, green, blue, alpha, packedLight);
     }
 
     // WHY: диагонали ореола включаются долей, а не порогом, и по размеру покоя: порог по живому

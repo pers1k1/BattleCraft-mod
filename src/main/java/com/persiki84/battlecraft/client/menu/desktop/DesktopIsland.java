@@ -334,17 +334,20 @@ public final class DesktopIsland {
     }
 
     // WHY: строка посреди смены гаснет у краёв слота так же, как бегущая: уехавшие за край буквы
-    // WHY: прокрученной строки иначе проступали на время морфа
+    // WHY: прокрученной строки иначе проступали на время морфа. Кромка у уходящей и приходящей своя, по
+    // WHY: их прокрутке, иначе гасли конец уходящей и начало приходящей
     private void morphing(GuiGraphics graphics, Font font, UiMorphText text, float x, float y, float slot,
                           float scale, int color, UiSweep sweep, float span) {
         float leaving = text.leaving();
+        float was = text.leavingSpan(graphics, font, scale);
         float margin = UiMarquee.margin(slot, scale);
         UiRender.clip(graphics, x - margin, frame.y, slot + margin * 2.0f, frame.height);
-        UiRender.marqueeFrom(graphics, x, slot, x - leaving, Math.max(span, slot) + leaving, scale);
         try {
-            text.draw(graphics, font, x, y, scale, color, sweep);
+            UiRender.marquee(graphics, x, slot, x - leaving, was, scale,
+                    () -> text.drawLeaving(graphics, font, x, y, scale, color));
+            UiRender.marquee(graphics, x, slot, x, span, scale,
+                    () -> text.drawArriving(graphics, font, x, y, scale, color, sweep));
         } finally {
-            UiRender.marqueeDone();
             graphics.disableScissor();
         }
     }

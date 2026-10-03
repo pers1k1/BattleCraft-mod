@@ -4,6 +4,7 @@ import com.persiki84.battlecraft.client.lyrics.LyricLine;
 import com.persiki84.battlecraft.client.lyrics.LyricWord;
 import com.persiki84.shared.client.ui.UiSweep;
 
+import java.util.Arrays;
 import java.util.List;
 
 // WHY: каждой букве строки достаётся своё окно времени: по меткам слов, если они есть (слово идёт
@@ -18,15 +19,23 @@ final class LineSweep implements UiSweep {
     private static final float MARK_WEIGHT = 0.25f;
     private static final int ACCENT_COLUMN = 2;
     private static final float ACCENT_ROW = 0.85f;
+    private static final long HELD_MIN_MS = 1000L;
+    private static final int HELD_MAX_GLYPHS = 12;
+    private static final float HELD_RISE_SHARE = 0.15f;
+    private static final float HELD_SUSTAIN_SHARE = 0.6f;
+    private static final long NOT_HELD = Long.MIN_VALUE;
 
     private long[] starts = new long[0];
     private long[] ramps = new long[0];
+    private long[] heldUntil = new long[0];
     private long at;
 
     void load(LyricLine line, long finishBy) {
         int[] points = line.text().codePoints().toArray();
         starts = new long[points.length];
         ramps = new long[points.length];
+        heldUntil = new long[points.length];
+        Arrays.fill(heldUntil, NOT_HELD);
         if (line.words().isEmpty()) {
             spread(points, 0, points.length, line.startMs(), line.endMs());
         } else {
@@ -42,6 +51,18 @@ final class LineSweep implements UiSweep {
             LyricWord word = words.get(index);
             int next = index + 1 < words.size() ? words.get(index + 1).firstGlyph() : points.length;
             spread(points, word.firstGlyph(), next, word.startMs(), word.endMs());
+            markHeld(points, word, next);
+        }
+    }
+
+    // WHY: затянутое слово выделяется, как в Beautiful Lyrics: слово не короче секунды и не длиннее
+    // WHY: HELD_MAX_GLYPHS букв горит каждой буквой от её начала до конца слова
+    private void markHeld(int[] points, LyricWord word, int next) {
+        if (word.endMs() - word.startMs() < HELD_MIN_MS || word.glyphCount() > HELD_MAX_GLYPHS) return;
+
+        int last = Math.min(next, heldUntil.length);
+        for (int index = Math.max(0, word.firstGlyph()); index < last; index++) {
+            if (Character.isLetterOrDigit(points[index])) heldUntil[index] = word.endMs();
         }
     }
 
@@ -50,15 +71,22 @@ final class LineSweep implements UiSweep {
     // WHY: подъёма. Расписание строки сжимается целиком, пропорции слов и затянутые слова сохраняются
     private void fit(long lineStart, long finishBy) {
         long latest = lineStart;
-        for (int index = 0; index < starts.length; index++) latest = Math.max(latest, starts[index] + ramps[index]);
+        for (int index = 0; index < starts.length; index++) {
+            latest = Math.max(latest, Math.max(starts[index] + ramps[index], heldUntil[index]));
+        }
         if (latest <= finishBy || latest <= lineStart) return;
 
         double factor = Math.max(0.05, (finishBy - lineStart) / (double) (latest - lineStart));
         for (int index = 0; index < starts.length; index++) {
             ramps[index] = Math.max(RAMP_FLOOR_MS, Math.round(ramps[index] * factor));
-            long scaled = lineStart + Math.round((starts[index] - lineStart) * factor);
+            long scaled = scaled(starts[index], lineStart, factor);
             starts[index] = Math.max(lineStart, Math.min(scaled, finishBy - ramps[index]));
+            if (heldUntil[index] != NOT_HELD) heldUntil[index] = Math.min(finishBy, scaled(heldUntil[index], lineStart, factor));
         }
+    }
+
+    private static long scaled(long time, long lineStart, double factor) {
+        return lineStart + Math.round((time - lineStart) * factor);
     }
 
     private void spread(int[] points, int from, int to, long startMs, long endMs) {
@@ -114,5 +142,26 @@ final class LineSweep implements UiSweep {
     @Override
     public int accent(int base) {
         return IslandTone.barAt(ACCENT_COLUMN, ACCENT_ROW);
+    }
+
+    @Override
+    public float held(int index) {
+        if (index < 0 || index >= heldUntil.length || heldUntil[index] == NOT_HELD) return 0.0f;
+
+        long window = heldUntil[index] - starts[index];
+        return window <= 0L ? 0.0f : envelope((at - starts[index]) / (float) window);
+    }
+
+    // WHY: свечение затянутой буквы идёт по кривой GlowRange из Beautiful Lyrics: разгорается за первые
+    // WHY: 15% своего окна, держится до 60% и гаснет к концу слова, поэтому на смене строки его уже нет
+    private static float envelope(float progress) {
+        if (progress <= 0.0f || progress >= 1.0f) return 0.0f;
+        if (progress < HELD_RISE_SHARE) return smooth(progress / HELD_RISE_SHARE);
+        if (progress < HELD_SUSTAIN_SHARE) return 1.0f;
+        return smooth((1.0f - progress) / (1.0f - HELD_SUSTAIN_SHARE));
+    }
+
+    private static float smooth(float share) {
+        return share * share * (3.0f - 2.0f * share);
     }
 }

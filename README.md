@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.03v7` in files, `03.10.26v7 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.03v8` in files, `03.10.26v8 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1005,6 +1005,15 @@ Version 2026.10.03v6 - built but not played through, so report anything that loo
 - **Short fast lines.** Every letter takes at least 110 ms to light, so the lift and glow show on fast lines too.
 
 Version 2026.10.03v7 - built but not played through, so report anything that looks wrong.
+
+## Lyric line changes and held words, 3 October 2026 (v8)
+
+- **Edges on a line change.** During the letter morph both lyric lines faded at the slot edges under one mask built from the new line. When the new line was longer than the slot, the last letters of the finished line dropped into shadow (white, then back to blue). When the old line had been scrolled, the first letter of the new line went through its lift in shadow and then popped to white. Each line now fades by its own scroll, the same way it does at rest (`UiMorphText.drawLeaving` / `drawArriving`, `UiRender.marquee`), in the HUD island and the desktop island.
+- **Hand-off.** The leaving lyric line rises and fades as a whole during the first 45% of the change, and the arriving wave starts at 20% and ends on time, so two different lines no longer sit on top of each other.
+- **Held words.** A word at least 1 s long and at most 12 letters (the Beautiful Lyrics rule) gets an accent: each letter grows by 10% around its centre, stands higher, glows in the cover colour and thickens with a second copy offset by a fraction of a font unit (`GlowGlyph.weigh`). The accent follows the Beautiful Lyrics glow curve (up in the first 15% of the letter window, held to 60%, gone by the end of the word), so it is off by the line change. Needs word timing.
+- **Lift direction.** The letter being sung now rises, as intended; it used to dip.
+
+Version 2026.10.03v8 - built but not played through, so report anything that looks wrong.
 
 ## Releases
 

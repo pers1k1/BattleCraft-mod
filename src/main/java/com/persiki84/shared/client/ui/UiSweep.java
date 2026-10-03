@@ -12,4 +12,8 @@ public interface UiSweep {
     default int accent(int base) {
         return base;
     }
+
+    default float held(int index) {
+        return 0.0f;
+    }
 }

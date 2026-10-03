@@ -152,6 +152,8 @@ public final class UiRender {
     private static boolean floating;
     private static boolean dissolving;
     private static boolean fading;
+    private static final float GLYPH_MIDDLE = 4.0f;
+    private static final Matrix4f GROWN = new Matrix4f();
     private static float fadeFrom;
     private static float fadeTo;
     private static float fadeWidth;
@@ -1292,6 +1294,14 @@ public final class UiRender {
         default float glow(int index, int count) {
             return 0.0f;
         }
+
+        default float grow(int index, int count) {
+            return 0.0f;
+        }
+
+        default float weigh(int index, int count) {
+            return 0.0f;
+        }
     }
 
     public static void textHeroToned(GuiGraphics graphics, Font font, Component value, float centerX, float y,
@@ -1373,6 +1383,16 @@ public final class UiRender {
         fadeTo = (boxX + boxWidth - start) / scale;
         fadeWidth = FADE_UNITS / scale;
         fading = true;
+    }
+
+    public static void marquee(GuiGraphics graphics, float boxX, float boxWidth, float start, float span, float scale,
+                               Runnable paint) {
+        marqueeFrom(graphics, boxX, boxWidth, start, span, scale);
+        try {
+            paint.run();
+        } finally {
+            marqueeDone();
+        }
     }
 
     public static void marqueeDone() {
@@ -1606,12 +1626,25 @@ public final class UiRender {
             float drift = (i - (glyphs - 1) * 0.5f) * spread;
             if (!vanishing(tint)) {
                 GlowGlyph.boost(tone == null ? 0.0f : tone.glow(i, glyphs));
-                font.drawInBatch(CURSOR, pen * unit + drift, -rise, tint, false, pose, buffer,
-                        Font.DisplayMode.NORMAL, 0, FULL_BRIGHT);
+                GlowGlyph.weigh(tone == null ? 0.0f : tone.weigh(i, glyphs));
+                float left = pen * unit + drift;
+                font.drawInBatch(CURSOR, left, -rise, tint, false, grown(pose, tone, i, left + step / 2.0f, -rise),
+                        buffer, Font.DisplayMode.NORMAL, 0, FULL_BRIGHT);
             }
             pen += Math.max(0, Math.round((step + tracking) * em));
         }
         GlowGlyph.boost(0.0f);
+        GlowGlyph.weigh(0.0f);
+    }
+
+    // WHY: буква растёт вокруг своей середины: рост от угла уводил бы её вправо вниз от соседей
+    private static Matrix4f grown(Matrix4f pose, GlyphTone tone, int index, float centerX, float top) {
+        float grow = tone == null ? 0.0f : tone.grow(index, glyphs);
+        if (grow <= 0.001f) return pose;
+
+        float centerY = top + GLYPH_MIDDLE;
+        return GROWN.set(pose).translate(centerX, centerY, 0.0f).scale(1.0f + grow, 1.0f + grow, 1.0f)
+                .translate(-centerX, -centerY, 0.0f);
     }
 
     public static boolean vanishing(int color) {

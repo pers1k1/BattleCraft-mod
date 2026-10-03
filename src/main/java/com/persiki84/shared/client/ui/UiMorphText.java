@@ -33,6 +33,12 @@ public final class UiMorphText {
     private static final float FOLLOW_RATE = 7.0f;
     private static final float ACCENT_SHARE = 0.55f;
     private static final float BLOOM_SHARE = 0.07f;
+    private static final float HELD_GLOW = 0.16f;
+    private static final float HELD_LIFT_UNITS = 0.45f;
+    private static final float HELD_GROW = 0.1f;
+    private static final float HELD_WEIGHT_UNITS = 0.35f;
+    private static final float LEAVE_SHARE = 0.45f;
+    private static final float HANDOFF_SHARE = 0.2f;
 
     private float clock = IDLE;
     private float tempo = 1.0f;
@@ -116,16 +122,37 @@ public final class UiMorphText {
     // WHY: подсветка лирики относится к строке в покое и к приходящей: уходящая уже пропета и уходит
     // WHY: полным цветом
     public void draw(GuiGraphics graphics, Font font, float x, float y, float textScale, int color, UiSweep lit) {
-        scale = textScale;
-        sweep = lit;
         if (!morphing()) {
+            scale = textScale;
+            sweep = lit;
             UiRender.labelToned(graphics, font, value, x, y, textScale, color, steady);
             return;
         }
+        drawLeaving(graphics, font, x, y, textScale, color);
+        drawArriving(graphics, font, x, y, textScale, color, lit);
+    }
+
+    // WHY: на смене строки уходящая и приходящая рисуются порознь, чтобы каждая гасла у краёв слота по
+    // WHY: своей прокрутке: общая кромка гасила конец одной и начало другой
+    public void drawLeaving(GuiGraphics graphics, Font font, float x, float y, float textScale, int color) {
+        measureStops(graphics, font, textScale);
+        UiRender.labelToned(graphics, font, previous, x - leaving, y, textScale, color, leavingSide);
+    }
+
+    public void drawArriving(GuiGraphics graphics, Font font, float x, float y, float textScale, int color, UiSweep lit) {
+        sweep = lit;
+        measureStops(graphics, font, textScale);
+        UiRender.labelToned(graphics, font, value, x, y, textScale, color, arriving);
+    }
+
+    public float leavingSpan(GuiGraphics graphics, Font font, float textScale) {
+        return UiRender.measureToned(graphics, font, previous, textScale);
+    }
+
+    private void measureStops(GuiGraphics graphics, Font font, float textScale) {
+        scale = textScale;
         stops = UiRender.stopsToned(graphics, font, value, textScale);
         previousStops = UiRender.stopsToned(graphics, font, previous, textScale);
-        UiRender.labelToned(graphics, font, previous, x - leaving, y, textScale, color, this.leavingSide);
-        UiRender.labelToned(graphics, font, value, x, y, textScale, color, arriving);
     }
 
     // WHY: строка лирики длиннее слота едет за волной подсветки, а не по своим часам: пропеваемая
@@ -182,9 +209,15 @@ public final class UiMorphText {
                 && Math.abs(stops[index] - previousStops[index]) < SAME_PLACE;
     }
 
-    private float share(int index) {
+    // WHY: строка лирики сменяется передачей, а не наложением: уходящая целиком поднимается и гаснет за
+    // WHY: первые LEAVE_SHARE смены, приходящая волна начинается с HANDOFF_SHARE и укладывается в тот же
+    // WHY: срок. Иначе две разные строки на смене стояли друг на друге в одних и тех же местах
+    private float share(int index, float direction) {
+        if (whole && direction < 0.0f) return UiAnim.smoothstep(0.0f, duration() * LEAVE_SHARE, clock);
+
+        float local = whole ? (clock - duration() * HANDOFF_SHARE) / (1.0f - HANDOFF_SHARE) : clock;
         float delay = Math.min(STAGGER_LIMIT, Math.min(index - prefix, changedSpan() - 1) * STAGGER_SECONDS);
-        return UiAnim.smoothstep(0.0f, 1.0f, (clock - delay) / GLYPH_SECONDS);
+        return UiAnim.smoothstep(0.0f, 1.0f, (local - delay) / GLYPH_SECONDS);
     }
 
     private float slide() {
@@ -219,25 +252,43 @@ public final class UiMorphText {
         @Override
         public float glow(int index, int count) {
             float lit = direction < 0.0f ? frozen(index) : clamp(sweep.lit(index));
-            return BLOOM_SHARE * 4.0f * lit * (1.0f - lit) * (direction < 0.0f ? shown(index, count) : 1.0f);
+            float bloom = BLOOM_SHARE * 4.0f * lit * (1.0f - lit) + HELD_GLOW * held(index);
+            return bloom * (direction < 0.0f ? shown(index, count) : 1.0f);
+        }
+
+        // WHY: буква затянутого слова держит акцент, пока слово тянется: подрастает, стоит выше, светится
+        // WHY: цветом обложки и густеет, как жирное начертание. Всё идёт по held, акцент разгорается и
+        // WHY: гаснет плавно и к смене строки уже погас
+        @Override
+        public float grow(int index, int count) {
+            return HELD_GROW * held(index);
+        }
+
+        @Override
+        public float weigh(int index, int count) {
+            return HELD_WEIGHT_UNITS * held(index);
+        }
+
+        private float held(int index) {
+            return direction < 0.0f ? 0.0f : clamp(sweep.held(index));
         }
 
         // WHY: буква, которая поётся сейчас, отдаёт в цвет обложки и светится: колокол по её доле
         @Override
         public int tint(int index, int count, int base) {
             float shown = shown(index, count);
-            if (direction < 0.0f) return sung(base, shown, frozen(index), leavingAccent);
+            if (direction < 0.0f) return sung(base, shown, frozen(index), leavingAccent, 0.0f);
             float lit = clamp(sweep.lit(index));
             int accent = sweep.accent(base);
             remember(index, count, lit, accent);
-            return sung(base, shown, lit, accent);
+            return sung(base, shown, lit, accent, held(index));
         }
 
         // WHY: уходящая строка уносит тот вид, каким горела в последнем кадре: без этого её буквы на
         // WHY: смене разом теряли приглушение, цвет и свечение и выглядели оторванными от текста
-        private int sung(int base, float shown, float lit, int accentColor) {
+        private int sung(int base, float shown, float lit, int accentColor, float held) {
             int toned = UiTheme.alpha(base, shown * (UNSUNG + (1.0f - UNSUNG) * lit));
-            float active = 4.0f * lit * (1.0f - lit);
+            float active = Math.max(4.0f * lit * (1.0f - lit), held);
             if (active <= 0.01f) return toned;
             return UiTheme.mix(toned, (toned & 0xFF000000) | (accentColor & 0x00FFFFFF), ACCENT_SHARE * active);
         }
@@ -247,16 +298,16 @@ public final class UiMorphText {
             if (index < prefix || holds(index)) return direction > 0.0f ? 1.0f : 0.0f;
             if (index >= count - suffix) return direction > 0.0f ? slide() : 1.0f - slide();
 
-            float share = share(index);
+            float share = share(index, direction);
             return direction > 0.0f ? share : 1.0f - share;
         }
 
         @Override
         public float rise(int index, int count) {
-            float lift = direction < 0.0f ? 0.0f : lift(sweep.lit(index));
+            float lift = direction < 0.0f ? 0.0f : lift(sweep.lit(index)) + HELD_LIFT_UNITS * scale * held(index);
             if (direction == 0.0f || index < prefix || index >= count - suffix || holds(index)) return lift;
 
-            float share = share(index);
+            float share = share(index, direction);
             float travel = TRAVEL_UNITS * scale;
             return direction > 0.0f ? lift - (1.0f - share) * travel : share * travel;
         }
@@ -264,7 +315,7 @@ public final class UiMorphText {
         // WHY: буква, которая поётся сейчас, чуть приподнимается и опускается на место: колокол по её доле
         private float lift(float lit) {
             float share = clamp(lit);
-            return -LIFT_UNITS * scale * 4.0f * share * (1.0f - share);
+            return LIFT_UNITS * scale * 4.0f * share * (1.0f - share);
         }
 
         private float clamp(float value) {
