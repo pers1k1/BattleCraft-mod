@@ -11,7 +11,8 @@ import java.util.List;
 // WHY: голоса. Мягкий край тянется на SOFT_GLYPHS букв и потому идёт в темпе строки
 final class LineSweep implements UiSweep {
     private static final float SOFT_GLYPHS = 1.5f;
-    private static final long SOFT_MIN_MS = 60L;
+    private static final long SOFT_MIN_MS = 110L;
+    private static final long RAMP_FLOOR_MS = 40L;
     private static final long SOFT_MAX_MS = 700L;
     private static final float SPACE_WEIGHT = 0.3f;
     private static final float MARK_WEIGHT = 0.25f;
@@ -22,20 +23,41 @@ final class LineSweep implements UiSweep {
     private long[] ramps = new long[0];
     private long at;
 
-    void load(LyricLine line) {
+    void load(LyricLine line, long finishBy) {
         int[] points = line.text().codePoints().toArray();
         starts = new long[points.length];
         ramps = new long[points.length];
         if (line.words().isEmpty()) {
             spread(points, 0, points.length, line.startMs(), line.endMs());
-            return;
+        } else {
+            spreadWords(points, line);
         }
+        fit(line.startMs(), finishBy);
+    }
+
+    private void spreadWords(int[] points, LyricLine line) {
         List<LyricWord> words = line.words();
         spread(points, 0, words.get(0).firstGlyph(), line.startMs(), words.get(0).startMs());
         for (int index = 0; index < words.size(); index++) {
             LyricWord word = words.get(index);
             int next = index + 1 < words.size() ? words.get(index + 1).firstGlyph() : points.length;
             spread(points, word.firstGlyph(), next, word.startMs(), word.endMs());
+        }
+    }
+
+    // WHY: строка обязана догореть до своей смены: следующая выбирается с упреждением, и в yrc строки
+    // WHY: идут почти встык, поэтому последние буквы уходили недогоревшими, синими и застывшими посреди
+    // WHY: подъёма. Расписание строки сжимается целиком, пропорции слов и затянутые слова сохраняются
+    private void fit(long lineStart, long finishBy) {
+        long latest = lineStart;
+        for (int index = 0; index < starts.length; index++) latest = Math.max(latest, starts[index] + ramps[index]);
+        if (latest <= finishBy || latest <= lineStart) return;
+
+        double factor = Math.max(0.05, (finishBy - lineStart) / (double) (latest - lineStart));
+        for (int index = 0; index < starts.length; index++) {
+            ramps[index] = Math.max(RAMP_FLOOR_MS, Math.round(ramps[index] * factor));
+            long scaled = lineStart + Math.round((starts[index] - lineStart) * factor);
+            starts[index] = Math.max(lineStart, Math.min(scaled, finishBy - ramps[index]));
         }
     }
 

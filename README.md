@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.03v6` in files, `03.10.26v6 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.03v7` in files, `03.10.26v7 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -997,6 +997,14 @@ Version 2026.10.03v5 - built but not played through, so report anything that loo
 - **Whole-line change.** A lyric line changes as one wave: a shared ending of two different lines (a period, one letter) no longer slides to its new place.
 
 Version 2026.10.03v6 - built but not played through, so report anything that looks wrong.
+
+## The last letters finish lighting, 3 October 2026 (v7)
+
+- **A line finishes before it leaves.** The next line is picked 300 ms before it starts, and word-timed (yrc) lines follow each other with 30-60 ms gaps, so the last 1-3 letters left half lit, blue and stuck mid-lift: a frame-by-frame check of a word-timed song found it on 56 of 59 line changes. The line schedule is now compressed as a whole so the last letter is lit 40 ms before the change; word proportions and held words keep their shape. The check now finds none.
+- **First letter in place.** The 300 ms lead covers the letter morph, so the first letter has arrived before it lights.
+- **Short fast lines.** Every letter takes at least 110 ms to light, so the lift and glow show on fast lines too.
+
+Version 2026.10.03v7 - built but not played through, so report anything that looks wrong.
 
 ## Releases
 

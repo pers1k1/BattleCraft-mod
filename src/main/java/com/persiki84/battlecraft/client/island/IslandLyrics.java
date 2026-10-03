@@ -18,7 +18,8 @@ import java.util.Arrays;
 // WHY: остров рабочего стола держат каждый свою строку, а текст песни у них общий (LyricsService)
 public final class IslandLyrics {
     private static final long LINGER_MS = 1500L;
-    private static final long LEAD_MS = 200L;
+    private static final long LEAD_MS = 300L;
+    private static final long FINISH_MARGIN_MS = 40L;
     private static final float WIDEN_RATE = 6.0f;
     private static final long REST_MS = 4000L;
     private static final float MORPH_SHARE = 0.3f;
@@ -60,7 +61,7 @@ public final class IslandLyrics {
         LyricLine line = lyrics.lines().get(index);
         if (line != shown) {
             shown = line;
-            sweep.load(line);
+            sweep.load(line, finishBy(index));
         }
         sweep.time(at);
         return line;
@@ -68,6 +69,11 @@ public final class IslandLyrics {
 
     // WHY: строка выбирается на LEAD_MS раньше своего начала, а подсветка идёт по настоящему времени:
     // WHY: смена строки длится доли секунды, и без упреждения первые слова пелись над ещё приходящей строкой
+    private long finishBy(int index) {
+        if (index + 1 >= lyrics.lines().size()) return Long.MAX_VALUE;
+        return lyrics.lines().get(index + 1).startMs() - LEAD_MS - FINISH_MARGIN_MS;
+    }
+
     private boolean resting(int index, long at) {
         LyricLine line = lyrics.lines().get(index);
         long quietFrom = line.endMs() + LINGER_MS;
