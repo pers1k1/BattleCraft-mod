@@ -35,7 +35,6 @@ final class DesktopIslandFrame {
     float centerX;
 
     float pillLeft;
-    float pillWidth;
     float pillCoverX;
     float pillCoverY;
     float pillTextX;
@@ -88,7 +87,6 @@ final class DesktopIslandFrame {
     }
 
     private void layPill(float middle, float top, float pill, boolean bars) {
-        pillWidth = pill;
         pillLeft = middle - pill / 2.0f;
         pillCoverX = pillLeft + PILL_PAD + FACE / 2.0f;
         pillCoverY = top + PILL_HEIGHT / 2.0f;

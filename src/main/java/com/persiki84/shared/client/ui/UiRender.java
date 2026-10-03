@@ -1212,6 +1212,48 @@ public final class UiRender {
         labelRight(graphics, font, Component.literal(value), rightX, y, scale, color);
     }
 
+    public static void labelToned(GuiGraphics graphics, Font font, Component value, float x, float y, float scale,
+                                  int color, GlyphTone tone) {
+        if (value.getString().isEmpty()) return;
+
+        float pixels = textPixels(graphics);
+        float snapped = crisp(REGULAR_BAKE, pixels, scale);
+        layout(value, BOLD, BOLD, REGULAR_BAKE, pixels * snapped);
+        drawGlyphs(graphics, font, x, y, snapped, 0.0f, color, false, tone);
+    }
+
+    // WHY: ширина и места букв считаются тем же пером, что рисует строку с тоном: другой замер давал
+    // WHY: бы другую ширину, и подписи после таймера ехали бы на каждой секунде
+    public static float measureToned(GuiGraphics graphics, Font font, Component value, float scale) {
+        float[] stops = stopsToned(graphics, font, value, scale);
+        return stops[stops.length - 1];
+    }
+
+    public static float[] stopsToned(GuiGraphics graphics, Font font, Component value, float scale) {
+        float pixels = textPixels(graphics);
+        if (pixels <= 0.01f || value.getString().isEmpty()) return new float[]{0.0f};
+
+        float snapped = crisp(REGULAR_BAKE, pixels, scale);
+        layout(value, BOLD, BOLD, REGULAR_BAKE, pixels * snapped);
+        UiFont.push(screenFace());
+        try {
+            return tonedStops(font, pixels * snapped, pixels);
+        } finally {
+            UiFont.pop();
+        }
+    }
+
+    private static float[] tonedStops(Font font, float em, float pixels) {
+        float[] marks = new float[glyphs + 1];
+        int pen = 0;
+        for (int index = 0; index < glyphs; index++) {
+            marks[index] = pen / pixels;
+            pen += Math.max(0, Math.round(advance(font, index) * em));
+        }
+        marks[glyphs] = pen / pixels;
+        return marks;
+    }
+
     public static void emphasisCentered(GuiGraphics graphics, Font font, Component value, float centerX, float y, float scale, int color) {
         aligned(graphics, font, value, SEMIBOLD, centerX, y, scale, color, false, ALIGN_CENTER);
     }

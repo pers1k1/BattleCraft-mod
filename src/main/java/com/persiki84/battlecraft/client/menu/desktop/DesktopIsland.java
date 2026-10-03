@@ -17,6 +17,7 @@ import com.persiki84.shared.client.ui.UiCrisp;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiIcon;
 import com.persiki84.shared.client.ui.UiMarquee;
+import com.persiki84.shared.client.ui.UiMorphText;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
@@ -24,7 +25,6 @@ import com.persiki84.shared.client.ui.UiTheme;
 import com.persiki84.shared.client.ui.UiVeil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
 // WHY: остров рабочего стола повторяет остров HUD, но залит чёрным, как вырез экрана: стекло
@@ -44,6 +44,7 @@ public final class DesktopIsland {
     private static final float HOVER_SPEED = 12.0f;
     private static final float NOTE_SHARE = 0.5f;
     private static final float STILL = 0.001f;
+    private static final float FLIGHT_EDGE = 0.002f;
     private static final int BODY = 0xFF000000;
     private static final int TITLE_INK = 0xFFFFFFFF;
     private static final int DIM_INK = 0xFF8E8E93;
@@ -148,28 +149,31 @@ public final class DesktopIsland {
         return live;
     }
 
-    // WHY: на ходу капсула, ободок и содержимое ложатся в один офскрин и размываются вместе, кромка
-    // WHY: расплывается наружу на радиус размытия: размывается всё окно, как у iOS
+    // WHY: окно не размывается никогда: капсула и ободок рисуются резко прямо в кадр, а на ходу в
+    // WHY: офскрин уходит только содержимое и ложится обратно размытым, обрезанным по форме окна
     private void paint(GuiGraphics graphics, Font font, float alpha) {
+        paintBody(graphics, alpha);
         boolean veiled = morph.veiling() && UiVeil.begin(graphics);
         try {
-            paintBody(graphics, alpha);
             paintContent(graphics, font, alpha);
         } finally {
             if (veiled) {
-                float blur = morph.blur() * IslandMorph.BLUR;
-                UiVeil.end(graphics, frame.x, frame.y, frame.width, frame.height, frame.radius, blur, 1.0f,
-                        blur + RIM);
+                UiVeil.end(graphics, frame.x, frame.y, frame.width, frame.height, frame.radius,
+                        morph.blur() * IslandMorph.BLUR, 1.0f);
             }
         }
         if (!morph.veiling()) UiVeil.tidy();
     }
 
+    // WHY: общие части (обложка, название, полоски) стоят в раскладке, только когда форма дошла до её
+    // WHY: края, между краями их ведёт полёт; исполнитель и кнопки идут долей карточки под размытием
     private void paintContent(GuiGraphics graphics, Font font, float alpha) {
+        float shape = morph.shape();
         UiRender.clip(graphics, frame.x, frame.y, frame.width, frame.height);
         try {
-            paintPill(graphics, font, alpha * morph.pill());
-            paintCard(graphics, font, alpha * morph.card());
+            if (shape <= FLIGHT_EDGE) paintPill(graphics, font, alpha);
+            paintCard(graphics, font, alpha * morph.card(), shape >= 1.0f - FLIGHT_EDGE ? alpha : 0.0f);
+            if (shape > FLIGHT_EDGE && shape < 1.0f - FLIGHT_EDGE) paintFlight(graphics, font, shape, alpha);
         } finally {
             graphics.disableScissor();
         }
@@ -197,32 +201,21 @@ public final class DesktopIsland {
     private void paintPill(GuiGraphics graphics, Font font, float alpha) {
         if (alpha <= 0.01f) return;
 
-        IslandMorph.fit(graphics, frame.centerX, frame.pillCoverY, frame.y + frame.height / 2.0f,
-                frame.width / frame.pillWidth);
-        try {
-            paintCover(graphics, frame.pillCoverX, frame.pillCoverY, frame.faceSize(), alpha);
-            pillTitle(graphics, font, text.leaving(), alpha * text.fading(), text.leaveShift());
-            pillTitle(graphics, font, text.shown(), alpha * text.entering(), text.enterShift());
-            if (bars) IslandGlyph.pillBars(graphics, frame.pillWaveX, frame.pillCoverY, alpha);
-        } finally {
-            UiRestFrame.pop(graphics);
-        }
+        paintCover(graphics, frame.pillCoverX, frame.pillCoverY, frame.faceSize(), alpha);
+        pillTitle(graphics, font, text.shown(), alpha);
+        if (bars) IslandGlyph.pillBars(graphics, frame.pillWaveX, frame.pillCoverY, alpha);
     }
 
-    private void paintCard(GuiGraphics graphics, Font font, float alpha) {
-        if (alpha <= 0.01f) return;
+    private void paintCard(GuiGraphics graphics, Font font, float solo, float shared) {
+        if (solo <= 0.01f && shared <= 0.01f) return;
 
-        IslandMorph.fit(graphics, frame.centerX, frame.y + DesktopIslandFrame.CARD_HEIGHT / 2.0f,
-                frame.y + frame.height / 2.0f, frame.width / frame.cardWidth);
-        try {
-            paintCover(graphics, frame.coverX, frame.coverY, frame.coverSize(), alpha);
-            cardFace(graphics, font, text.leaving(), alpha * text.fading(), text.leaveShift());
-            cardFace(graphics, font, text.shown(), alpha * text.entering(), text.enterShift());
-            if (bars) IslandGlyph.cardBars(graphics, frame.waveX, frame.coverY, alpha);
-            paintControls(graphics, font, alpha);
-        } finally {
-            UiRestFrame.pop(graphics);
+        if (shared > 0.01f) {
+            paintCover(graphics, frame.coverX, frame.coverY, frame.coverSize(), shared);
+            cardTitle(graphics, font, text.shown(), shared);
+            if (bars) IslandGlyph.cardBars(graphics, frame.waveX, frame.coverY, shared);
         }
+        cardArtist(graphics, font, text.shown(), solo * morph.card());
+        paintControls(graphics, font, solo);
     }
 
     // WHY: пока обложка ждёт моста, место держит пустая площадка, а нота встаёт только у трека,
@@ -240,31 +233,58 @@ public final class DesktopIsland {
         }
     }
 
-    private void pillTitle(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float alpha, float lift) {
+    private void pillTitle(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float alpha) {
         if (alpha <= 0.01f) return;
 
-        UiRestFrame.shift(graphics, 0.0f, lift);
+        line(graphics, font, face.title(), face.pillTitleWidth(), frame.pillTextX,
+                frame.pillTitleY, frame.pillTitleSlot, DesktopIslandText.PILL_TITLE_SCALE,
+                UiTheme.alpha(TITLE_INK, alpha));
+    }
+
+    private void cardTitle(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float alpha) {
+        if (alpha <= 0.01f) return;
+
+        line(graphics, font, face.title(), face.cardTitleWidth(), frame.textX, frame.titleY,
+                frame.titleSlot, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha));
+    }
+
+    private void cardArtist(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float alpha) {
+        if (alpha <= 0.01f) return;
+
+        line(graphics, font, face.artist(), face.artistWidth(), frame.textX,
+                frame.titleY + (frame.artistY - frame.titleY) * morph.card(),
+                frame.titleSlot, DesktopIslandText.ARTIST_SCALE, UiTheme.alpha(DIM_INK, alpha));
+    }
+
+    private void paintFlight(GuiGraphics graphics, Font font, float k, float alpha) {
+        paintCover(graphics, lerp(frame.pillCoverX, frame.coverX, k), lerp(frame.pillCoverY, frame.coverY, k),
+                lerp(frame.faceSize(), frame.coverSize(), k), alpha);
+        flyTitle(graphics, font, text.shown(), k, alpha);
+        if (!bars) return;
+
+        IslandGlyph.visualizer(graphics, lerp(frame.pillWaveX, frame.waveX, k),
+                lerp(frame.pillCoverY, frame.coverY, k), lerp(IslandGlyph.PILL_WIDTH, IslandGlyph.CARD_WIDTH, k),
+                lerp(IslandGlyph.PILL_HEIGHT, IslandGlyph.CARD_HEIGHT, k), alpha);
+    }
+
+    private void flyTitle(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float k, float alpha) {
+        if (alpha <= 0.01f) return;
+
+        float scale = lerp(DesktopIslandText.PILL_TITLE_SCALE / DesktopIslandText.CARD_TITLE_SCALE, 1.0f, k);
+        float left = lerp(frame.pillTextX, frame.textX, k);
+        float slot = lerp(frame.pillTitleSlot, frame.titleSlot, k);
+        UiRestFrame.push(graphics, frame.textX, frame.titleY, scale, scale, left - frame.textX,
+                (frame.pillTitleY - frame.titleY) * (1.0f - k));
         try {
-            line(graphics, font, face.title(), face.titleRaw(), face.pillTitleWidth(), frame.pillTextX,
-                    frame.pillTitleY, frame.pillTitleSlot, DesktopIslandText.PILL_TITLE_SCALE,
-                    UiTheme.alpha(TITLE_INK, alpha));
+            line(graphics, font, face.title(), face.cardTitleWidth(), frame.textX, frame.titleY,
+                    slot / scale, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha));
         } finally {
             UiRestFrame.pop(graphics);
         }
     }
 
-    private void cardFace(GuiGraphics graphics, Font font, DesktopIslandText.Face face, float alpha, float lift) {
-        if (alpha <= 0.01f) return;
-
-        UiRestFrame.shift(graphics, 0.0f, lift);
-        try {
-            line(graphics, font, face.title(), face.titleRaw(), face.cardTitleWidth(), frame.textX, frame.titleY,
-                    frame.titleSlot, DesktopIslandText.CARD_TITLE_SCALE, UiTheme.alpha(TITLE_INK, alpha));
-            line(graphics, font, face.artist(), face.artistRaw(), face.artistWidth(), frame.textX, frame.artistY,
-                    frame.titleSlot, DesktopIslandText.ARTIST_SCALE, UiTheme.alpha(DIM_INK, alpha));
-        } finally {
-            UiRestFrame.pop(graphics);
-        }
+    private static float lerp(float from, float to, float weight) {
+        return from + (to - from) * weight;
     }
 
     private void paintControls(GuiGraphics graphics, Font font, float alpha) {
@@ -274,20 +294,22 @@ public final class DesktopIsland {
         keys.paint(graphics, frame, TITLE_INK, alpha);
     }
 
-    private void line(GuiGraphics graphics, Font font, Component value, String raw, float span, float x, float y,
+    // WHY: пока строка меняется по буквам, она рисуется на месте без бегущей строки: смена длится
+    // WHY: доли секунды, а ход бегущей строки начинается после паузы
+    private void line(GuiGraphics graphics, Font font, UiMorphText text, float span, float x, float y,
                       float slot, float scale, int color) {
         if (slot <= 4.0f || (color >>> 24) < 3) return;
 
-        if (span <= slot) {
-            UiRender.labelScaled(graphics, font, value, x, y, scale, color);
+        if (span <= slot || text.morphing()) {
+            text.draw(graphics, font, x, y, scale, color);
             return;
         }
         float margin = UiMarquee.margin(slot, scale);
-        float start = x - UiRender.marqueeShift(graphics, raw, span - slot);
+        float start = x - UiRender.marqueeShift(graphics, text.raw(), span - slot);
         UiRender.clip(graphics, x - margin, frame.y, slot + margin * 2.0f, frame.height);
         UiRender.marqueeFrom(graphics, x, slot, start, span, scale);
         try {
-            UiRender.labelScaled(graphics, font, value, start, y, scale, color);
+            text.draw(graphics, font, start, y, scale, color);
         } finally {
             UiRender.marqueeDone();
             graphics.disableScissor();

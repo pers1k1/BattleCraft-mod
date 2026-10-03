@@ -79,10 +79,8 @@ final class DesktopIslandBar {
 
         int tone = UiTheme.alpha(dim, alpha);
         float textY = UiRender.centerY(frame.barY - thick, thick * 2.0f, DesktopIslandText.TIME_SCALE);
-        UiRender.labelScaled(graphics, font, text.elapsed(), frame.timeLeft(), textY,
-                DesktopIslandText.TIME_SCALE, tone);
-        UiRender.labelRight(graphics, font, text.remaining(), frame.timeRight(), textY,
-                DesktopIslandText.TIME_SCALE, tone);
+        text.elapsed().draw(graphics, font, frame.timeLeft(), textY, DesktopIslandText.TIME_SCALE, tone);
+        text.remaining().drawRight(graphics, font, frame.timeRight(), textY, DesktopIslandText.TIME_SCALE, tone);
     }
 
     private static void panel(GuiGraphics graphics, float x, float y, float width, float height, int color) {

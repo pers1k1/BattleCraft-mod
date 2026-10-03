@@ -1,7 +1,7 @@
 package com.persiki84.battlecraft.client.menu.desktop;
 
 import com.persiki84.battlecraft.client.media.MediaTrack;
-import com.persiki84.shared.client.ui.UiAnim;
+import com.persiki84.shared.client.ui.UiMorphText;
 import com.persiki84.shared.client.ui.UiRender;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -10,51 +10,44 @@ import net.minecraft.network.chat.Component;
 
 // WHY: строки острова и их ширины пересобираются только на смене трека, секунды или плотности
 // WHY: пикселей: замер текста раскладывает глифы, и делать его в каждом кадре было бы накладно.
-// WHY: На смене трека строки уходящего держатся отдельным снимком и гаснут, пока новые
-// WHY: проявляются: название не подменяется кадром, а переходит наплывом
+// WHY: На смене трека и секунды строка меняется по буквам (UiMorphText), не подменяясь кадром
 final class DesktopIslandText {
     static final float PILL_TITLE_SCALE = 0.75f;
     static final float CARD_TITLE_SCALE = 0.86f;
     static final float ARTIST_SCALE = 0.72f;
     static final float TIME_SCALE = 0.56f;
 
-    private static final float SWAP_SECONDS = 0.3f;
-    private static final float LEAVE_UNTIL = 0.6f;
-    private static final float ENTER_FROM = 0.3f;
-    private static final float SWAP_LIFT = 4.0f;
     private static final Component NO_CONTROL = Component.translatable("battlecraft.desktop.island.no_control");
     private static final Component TIME_SAMPLE = Component.literal("-00:00");
 
     private final Face shown = new Face();
-    private final Face leaving = new Face();
+    private final UiMorphText elapsed = new UiMorphText();
+    private final UiMorphText remaining = new UiMorphText();
     private MediaTrack described = MediaTrack.NONE;
-    private Component elapsed = Component.literal("0:00");
-    private Component remaining = Component.literal("-0:00");
     private long elapsedSeconds = -1L;
     private long remainingSeconds = -1L;
     private float measuredPixels = -1.0f;
     private Language measuredLanguage;
     private float timeSlot;
-    private float swap = 1.0f;
 
-    // WHY: наплыв нужен только на глазах у игрока: остров, вернувшийся после тишины, не должен
-    // WHY: сначала показать давно ушедший трек, чтобы тут же его погасить
+    // WHY: смена по буквам нужна только на глазах у игрока: остров, вернувшийся после тишины, не
+    // WHY: должен сначала показать давно ушедший трек, чтобы тут же его переписать
     boolean describe(MediaTrack track, float delta, boolean visible) {
-        swap = Math.min(1.0f, swap + delta / SWAP_SECONDS);
+        shown.advance(delta);
+        elapsed.advance(delta);
+        remaining.advance(delta);
         if (track.sameTrack(described)) return false;
 
         boolean swapping = visible && described.present() && track.present();
-        leaving.copy(shown);
         described = track;
-        shown.write(track.title().isEmpty() ? track.origin() : track.title(), artistOf(track));
+        shown.write(track.title().isEmpty() ? track.origin() : track.title(), artistOf(track), swapping);
         measuredPixels = -1.0f;
-        swap = swapping ? 0.0f : 1.0f;
         return swapping;
     }
 
-    private static Component artistOf(MediaTrack track) {
-        if (track.blind()) return NO_CONTROL;
-        return Component.literal(track.artist().isEmpty() ? track.origin() : track.artist());
+    private static String artistOf(MediaTrack track) {
+        if (track.blind()) return NO_CONTROL.getString();
+        return track.artist().isEmpty() ? track.origin() : track.artist();
     }
 
     void time(long elapsedMs, long durationMs) {
@@ -62,11 +55,11 @@ final class DesktopIslandText {
         long left = Math.max(0L, (durationMs - elapsedMs + 999L) / 1000L);
         if (played != elapsedSeconds) {
             elapsedSeconds = played;
-            elapsed = Component.literal(clock(played));
+            elapsed.set(clock(played));
         }
         if (left != remainingSeconds) {
             remainingSeconds = left;
-            remaining = Component.literal("-" + clock(left));
+            remaining.set("-" + clock(left));
         }
     }
 
@@ -75,10 +68,11 @@ final class DesktopIslandText {
         Language language = Language.getInstance();
         if (pixels == measuredPixels && language == measuredLanguage) return;
 
+        if (language != measuredLanguage && described.blind()) shown.artist.snap(NO_CONTROL.getString());
         measuredPixels = pixels;
         measuredLanguage = language;
         shown.measure(graphics, font);
-        timeSlot = UiRender.measure(graphics, font, TIME_SAMPLE, TIME_SCALE);
+        timeSlot = UiRender.measureToned(graphics, font, TIME_SAMPLE, TIME_SCALE);
     }
 
     private static String clock(long seconds) {
@@ -89,31 +83,11 @@ final class DesktopIslandText {
         return shown;
     }
 
-    Face leaving() {
-        return leaving;
-    }
-
-    float entering() {
-        return UiAnim.smoothstep(ENTER_FROM, 1.0f, swap);
-    }
-
-    float fading() {
-        return 1.0f - UiAnim.smoothstep(0.0f, LEAVE_UNTIL, swap);
-    }
-
-    float leaveShift() {
-        return -SWAP_LIFT * UiAnim.smoothstep(0.0f, LEAVE_UNTIL, swap);
-    }
-
-    float enterShift() {
-        return SWAP_LIFT * (1.0f - entering());
-    }
-
-    Component elapsed() {
+    UiMorphText elapsed() {
         return elapsed;
     }
 
-    Component remaining() {
+    UiMorphText remaining() {
         return remaining;
     }
 
@@ -122,52 +96,39 @@ final class DesktopIslandText {
     }
 
     static final class Face {
-        private Component title = Component.empty();
-        private Component artist = Component.empty();
-        private String titleRaw = "";
-        private String artistRaw = "";
+        private final UiMorphText title = new UiMorphText();
+        private final UiMorphText artist = new UiMorphText();
         private float pillTitleWidth;
         private float cardTitleWidth;
         private float artistWidth;
 
-        private void write(String titleText, Component artistLine) {
-            titleRaw = titleText;
-            title = Component.literal(titleText);
-            artist = artistLine;
-            artistRaw = artistLine.getString();
+        private void write(String titleText, String artistText, boolean morphing) {
+            if (morphing) {
+                title.set(titleText);
+                artist.set(artistText);
+                return;
+            }
+            title.snap(titleText);
+            artist.snap(artistText);
+        }
+
+        private void advance(float delta) {
+            title.advance(delta);
+            artist.advance(delta);
         }
 
         private void measure(GuiGraphics graphics, Font font) {
-            artistRaw = artist.getString();
-            pillTitleWidth = UiRender.measure(graphics, font, title, PILL_TITLE_SCALE);
-            cardTitleWidth = UiRender.measure(graphics, font, title, CARD_TITLE_SCALE);
-            artistWidth = UiRender.measure(graphics, font, artist, ARTIST_SCALE);
+            pillTitleWidth = title.measure(graphics, font, PILL_TITLE_SCALE);
+            cardTitleWidth = title.measure(graphics, font, CARD_TITLE_SCALE);
+            artistWidth = artist.measure(graphics, font, ARTIST_SCALE);
         }
 
-        private void copy(Face other) {
-            title = other.title;
-            artist = other.artist;
-            titleRaw = other.titleRaw;
-            artistRaw = other.artistRaw;
-            pillTitleWidth = other.pillTitleWidth;
-            cardTitleWidth = other.cardTitleWidth;
-            artistWidth = other.artistWidth;
-        }
-
-        Component title() {
+        UiMorphText title() {
             return title;
         }
 
-        Component artist() {
+        UiMorphText artist() {
             return artist;
-        }
-
-        String titleRaw() {
-            return titleRaw;
-        }
-
-        String artistRaw() {
-            return artistRaw;
         }
 
         float pillTitleWidth() {

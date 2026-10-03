@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.03` in files, `03.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.03hotfix` in files, `03.10.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -910,7 +910,7 @@ The timing comes from a 60 fps screen recording of the Dynamic Island on an iPho
 
 - **Opening.** The pill first draws in to 0.815 of its width and 0.94 of its height over 0.2 s. Then it springs into the card (response 0.51 s, damping 0.815), overshooting its size by about one percent and settling back.
 - **Closing.** The card springs straight back into the pill (response 0.47 s, damping 0.86), with no draw-in.
-- **Each state keeps its own layout.** The pill and the card draw their contents in their final layout and scale them with the live outline around its middle, as on the phone. The parts no longer fly from one layout to the other.
+- **Each state keeps its own layout.** The pill and the card each draw their contents in their own layout; since 3 October the parts they share fly between the two again (see the hotfix below).
 - **Corners.** The corner radius follows the height continuously: half the height on the pill, growing by 0.166 of every extra unit of height on the card.
 - **Track change.** A new track now gives the island a short swell, peaking at about 6 % wider and 5 % taller after 0.15 s and settling with a small bounce. The contents still pass through the blur.
 - **Press on the desktop.** Pressing the desktop island swells it by 9 % in width and 6 % in height. It opens or closes only when you let go, and the swell springs back with a light bounce.
@@ -924,6 +924,23 @@ Version 2026.09.29v1 - built but not played through, so report anything that loo
 - **Springs unchanged.** The draw-in, the overshoot on opening, the closing spring and the swell on a track change are the same as in v1. A click in the middle of a move picks the blur up from where it is rather than dropping it to zero.
 
 Version 2026.09.29v2 - built but not played through, so report anything that looks wrong.
+
+## Sharp glass, flying contents, 3 October 2026 (hotfix)
+
+The v2 blur took the whole window with it and read as the island melting rather than its contents changing, and the cross-fade still let parts vanish and reappear. This pass puts the glass back in charge of the shape and lets only what is inside move.
+
+- **The window stays sharp.** The glass, its rim and the black capsule of the desktop island are drawn straight to the frame on every frame of a move and never leave their outline. Only the contents go into the off-screen layer, and the blurred layer is cut to the window shape, so nothing spreads past the rim and there is no glow around it.
+- **Shared parts fly.** The artwork, the title, the time with its bar and the visualiser travel from their place in the pill to their place in the card and back, changing size and type size on the way. How far they have travelled is the share of the outline between the two shapes, read off the same spring that carries the outline, so they arrive together with the overshoot. During the flight they are blurred by the curve of the move.
+- **Parts of one layout fade under the blur.** The artist line and the card controls, and the name on the resting pill, come and go with their own layout's share, under the same blur, so nothing pops.
+- **Letters morph.** The title, the artist and the timer change letter by letter, the way numbers and labels change on iOS. The start the old and new lines share stays put, the shared tail flows to its new place, and the letters that differ change in a wave from left to right, 0.02 s apart and 0.3 s each: the old letter rises 3.5 units and fades, the new one rises in from below, and the pair always adds up to one, so the line is never empty. The timer therefore turns over a single digit each second. The pen draws whole glyphs, so a single letter fades and travels instead of blurring. The island no longer veils all of its contents on a track change, since that blur hid the wave.
+- **Morph details.** Digits keep their natural widths: the cells as wide as the widest digit left uneven gaps around a narrow 1, so they are gone. The pen still advances in whole physical pixels, and when a digit of another width comes in, the rest of the line slides to its new place over the morph instead of jumping. A letter that stands in the same place in the old and the new line (a space, the slash, the colon) does not morph at all. Letters travel 2 units instead of 3.5, so they never leave their line and get cut by its edge. Extra letters of a longer old line leave together with the last new letter instead of trailing behind. The line is drawn by the same pen at rest and while it changes, so it does not twitch when a change starts or ends. On opening, the artist slides down from under the title and comes in by the square of the card share.
+- **The pill bar holds still.** On the pill the progress hairline starts after the timer, and it used to start right after the current line, so every new digit of another width jerked the bar and the total time along with it. The bar now starts after the widest timer the island is already holding for its own width, and follows it with a smooth exponential catch-up (12 per second) when that width changes, while the total time slides with the letter morph.
+- **The swell no longer shifts the contents.** The island's HUD box is placed by its width without the swell, and the glass swells around a fixed centre: an island pinned to a screen edge used to push its contents sideways on every new track.
+- **Long titles measure where they are drawn.** The island measured its text before the scale of its HUD slot was applied and drew it inside that scale, so at any slot size other than 1.0 the pen snapped to a different size and a long title scrolled by the wrong width and pushed the other parts. The text is now measured under the same scale it is drawn in.
+- **The cover melts instead of turning.** The 3D turn stood the cover on its edge halfway through, where it read as a sliver that had vanished. The old cover now fades into the new one in place by the same single share over 0.6 s (scaled by the cover change speed in Customization), both blurred by a peak in the middle. The island still swells on a new track.
+- **Springs unchanged.** The draw-in, the overshoot on opening, the closing spring and the swell are the same as before.
+
+Version 2026.10.03hotfix - built but not played through, so report anything that looks wrong.
 
 ## Releases
 
