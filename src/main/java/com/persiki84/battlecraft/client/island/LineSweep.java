@@ -6,8 +6,8 @@ import com.persiki84.shared.client.ui.UiSweep;
 
 import java.util.List;
 
-// WHY: каждой букве строки достаётся своё окно времени: по меткам слов, если они есть, иначе по
-// WHY: весу символа. Пробел и знак препинания не поются, и равная доля для них уводила волну вперёд
+// WHY: каждой букве строки достаётся своё окно времени: по меткам слов, если они есть (слово идёт
+// WHY: ровно свою длительность, и на затянутом слове волна ждёт), иначе по весу символа. Пробел и знак препинания не поются, и равная доля для них уводила волну вперёд
 // WHY: голоса. Мягкий край тянется на SOFT_GLYPHS букв и потому идёт в темпе строки
 final class LineSweep implements UiSweep {
     private static final float SOFT_GLYPHS = 1.5f;
@@ -35,8 +35,7 @@ final class LineSweep implements UiSweep {
         for (int index = 0; index < words.size(); index++) {
             LyricWord word = words.get(index);
             int next = index + 1 < words.size() ? words.get(index + 1).firstGlyph() : points.length;
-            long end = index + 1 < words.size() ? words.get(index + 1).startMs() : line.endMs();
-            spread(points, word.firstGlyph(), next, word.startMs(), end);
+            spread(points, word.firstGlyph(), next, word.startMs(), word.endMs());
         }
     }
 

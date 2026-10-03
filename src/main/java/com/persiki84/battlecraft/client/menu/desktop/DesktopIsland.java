@@ -309,6 +309,10 @@ public final class DesktopIsland {
         if (slot <= 4.0f || (color >>> 24) < 3) return;
 
         float actual = sweep == UiSweep.NONE ? span : text.measure(graphics, font, scale);
+        if (text.morphing() && (actual > slot || text.leaving() > 0.0f)) {
+            morphing(graphics, font, text, x, y, slot, scale, color, sweep, actual);
+            return;
+        }
         if (actual <= slot || text.morphing()) {
             if (!text.morphing()) text.scrolled(0.0f);
             text.draw(graphics, font, x, y, scale, color, sweep);
@@ -323,6 +327,22 @@ public final class DesktopIsland {
         UiRender.marqueeFrom(graphics, x, slot, start, actual, scale);
         try {
             text.draw(graphics, font, start, y, scale, color, sweep);
+        } finally {
+            UiRender.marqueeDone();
+            graphics.disableScissor();
+        }
+    }
+
+    // WHY: строка посреди смены гаснет у краёв слота так же, как бегущая: уехавшие за край буквы
+    // WHY: прокрученной строки иначе проступали на время морфа
+    private void morphing(GuiGraphics graphics, Font font, UiMorphText text, float x, float y, float slot,
+                          float scale, int color, UiSweep sweep, float span) {
+        float leaving = text.leaving();
+        float margin = UiMarquee.margin(slot, scale);
+        UiRender.clip(graphics, x - margin, frame.y, slot + margin * 2.0f, frame.height);
+        UiRender.marqueeFrom(graphics, x, slot, x - leaving, Math.max(span, slot) + leaving, scale);
+        try {
+            text.draw(graphics, font, x, y, scale, color, sweep);
         } finally {
             UiRender.marqueeDone();
             graphics.disableScissor();

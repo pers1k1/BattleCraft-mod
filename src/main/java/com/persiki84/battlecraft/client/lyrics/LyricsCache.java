@@ -29,18 +29,19 @@ final class LyricsCache {
         this.folder = folder;
     }
 
-    LrclibClient.Outcome read(String key, long durationMs, long now) {
+    LyricsOutcome read(String key, long durationMs, long now) {
         Path file = fileOf(key);
         try {
             if (!Files.isRegularFile(file) || Files.size(file) > READ_LIMIT) return null;
             String[] parts = Files.readString(file, StandardCharsets.UTF_8).split("\n", 3);
             if (parts.length < 2 || !parts[0].equals(key)) return null;
-            String[] status = parts[1].split(" ", 2);
+            String[] status = parts[1].split(" ");
             if (status[0].equals(MISSING)) {
-                return now - Long.parseLong(status[1].trim()) < MISSING_TTL_MS ? LrclibClient.Outcome.MISSING : null;
+                return now - Long.parseLong(status[1].trim()) < MISSING_TTL_MS ? LyricsOutcome.MISSING : null;
             }
-            Lyrics lyrics = parts.length == 3 ? LrcParser.parse(parts[2], durationMs) : Lyrics.NONE;
-            if (status[0].equals(FOUND) && lyrics.present()) return new LrclibClient.Outcome(LrclibClient.Kind.FOUND, lyrics, parts[2]);
+            LyricsOutcome.Format format = LyricsOutcome.Format.byId(status.length > 2 ? status[2].trim() : "");
+            LyricsOutcome stored = parts.length == 3 ? LyricsOutcome.found(parts[2], format, durationMs) : LyricsOutcome.MISSING;
+            if (status[0].equals(FOUND) && stored.found()) return stored;
         } catch (IOException | RuntimeException error) {
             BattleCraftMod.LOGGER.debug("lyrics cache entry dropped: {}", error.toString());
         }
@@ -48,11 +49,11 @@ final class LyricsCache {
         return null;
     }
 
-    void write(String key, LrclibClient.Outcome outcome, long now) {
-        if (outcome.kind() == LrclibClient.Kind.FAILED) return;
+    void write(String key, LyricsOutcome outcome, long now) {
+        if (outcome.kind() == LyricsOutcome.Kind.FAILED) return;
 
-        String status = outcome.kind() == LrclibClient.Kind.FOUND ? FOUND : MISSING;
-        String body = key + "\n" + status + " " + now + "\n" + outcome.source();
+        String status = outcome.found() ? FOUND + " " + now + " " + outcome.format().id() : MISSING + " " + now;
+        String body = key + "\n" + status + "\n" + outcome.source();
         try {
             Files.createDirectories(folder);
             Path file = fileOf(key);

@@ -572,8 +572,12 @@ public final class IslandHud {
         if ((color >>> 24) < 3) return;
 
         float span = text.measure(graphics, font, scale);
-        if (span <= slot || text.morphing()) {
-            if (!text.morphing()) text.scrolled(0.0f);
+        if (text.morphing()) {
+            morphing(graphics, font, text, x, y, slot, scale, color, sweep, span);
+            return;
+        }
+        if (span <= slot) {
+            text.scrolled(0.0f);
             text.draw(graphics, font, x, y, scale, color, sweep);
             return;
         }
@@ -584,6 +588,23 @@ public final class IslandHud {
         UiRender.marqueeFrom(graphics, x, slot, start, span, scale);
         try {
             text.draw(graphics, font, start, y, scale, color, sweep);
+        } finally {
+            UiRender.marqueeDone();
+        }
+    }
+
+    // WHY: строка посреди смены гаснет у краёв слота так же, как бегущая: уехавшие за край буквы
+    // WHY: прокрученной строки иначе проступали на время морфа
+    private static void morphing(GuiGraphics graphics, Font font, UiMorphText text, float x, float y, float slot,
+                                 float scale, int color, UiSweep sweep, float span) {
+        float leaving = text.leaving();
+        if (span <= slot && leaving <= 0.0f) {
+            text.draw(graphics, font, x, y, scale, color, sweep);
+            return;
+        }
+        UiRender.marqueeFrom(graphics, x, slot, x - leaving, Math.max(span, slot) + leaving, scale);
+        try {
+            text.draw(graphics, font, x, y, scale, color, sweep);
         } finally {
             UiRender.marqueeDone();
         }

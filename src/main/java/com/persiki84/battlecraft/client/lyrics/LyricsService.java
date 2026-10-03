@@ -44,7 +44,7 @@ public final class LyricsService {
     private static long quietUntil;
     private static int failures;
     private static ExecutorService worker;
-    private static LrclibClient client;
+    private static LyricsSources sources;
     private static LyricsCache cache;
 
     private LyricsService() {}
@@ -113,7 +113,7 @@ public final class LyricsService {
     }
 
     private static void fromDisk(TrackQuery target, String key) {
-        LrclibClient.Outcome stored = cache().read(key, target.durationMs(), System.currentTimeMillis());
+        LyricsOutcome stored = cache().read(key, target.durationMs(), System.currentTimeMillis());
         synchronized (lock) {
             if (stored != null) memory.put(key, stored.lyrics());
             if (key.equals(wanted)) diskChecked = true;
@@ -121,21 +121,21 @@ public final class LyricsService {
     }
 
     private static void fromNetwork(TrackQuery target, String key) {
-        LrclibClient.Outcome outcome;
+        LyricsOutcome outcome;
         try {
-            outcome = client().find(target);
+            outcome = sources().find(target);
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
             return;
         }
-        if (outcome.kind() != LrclibClient.Kind.FAILED) cache().write(key, outcome, System.currentTimeMillis());
+        if (outcome.kind() != LyricsOutcome.Kind.FAILED) cache().write(key, outcome, System.currentTimeMillis());
         synchronized (lock) {
             settle(key, outcome, System.nanoTime() / 1_000_000L);
         }
     }
 
-    private static void settle(String key, LrclibClient.Outcome outcome, long now) {
-        if (outcome.kind() == LrclibClient.Kind.FAILED) {
+    private static void settle(String key, LyricsOutcome outcome, long now) {
+        if (outcome.kind() == LyricsOutcome.Kind.FAILED) {
             failures = Math.min(failures + 1, 10);
             quietUntil = now + Math.min(RETRY_MAX_MS, RETRY_BASE_MS << (failures - 1));
             return;
@@ -144,9 +144,9 @@ public final class LyricsService {
         memory.put(key, outcome.lyrics());
     }
 
-    private static LrclibClient client() {
-        if (client == null) client = new LrclibClient(agent());
-        return client;
+    private static LyricsSources sources() {
+        if (sources == null) sources = new LyricsSources(agent());
+        return sources;
     }
 
     private static LyricsCache cache() {

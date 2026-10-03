@@ -107,60 +107,27 @@ public final class LrcParser {
         return durationMs > start ? Math.min(natural, durationMs) : natural;
     }
 
-    private static boolean sane(List<LyricLine> lines, long durationMs) {
+    static boolean sane(List<LyricLine> lines, long durationMs) {
         if (lines.size() < MIN_LINES) return false;
         long last = lines.get(lines.size() - 1).startMs();
         return durationMs <= 0L || last <= durationMs + END_SLACK_MS;
     }
 
-    // WHY: в расширенном LRC метка <mm:ss.xx> стоит перед своим словом. Куски чистятся по отдельности,
-    // WHY: а пробел между ними ставится, только если он был в исходнике, чтобы слово не склеилось
+    // WHY: в расширенном LRC метка <mm:ss.xx> стоит перед своим словом; конец слова это начало следующего
     private static LyricLine line(long start, long end, String body, long offset) {
         Matcher word = WORD.matcher(body);
-        List<long[]> marks = new ArrayList<>();
-        StringBuilder text = new StringBuilder();
+        LyricLineBuilder builder = new LyricLineBuilder();
         int cursor = 0;
         long wordStart = start;
-        boolean spaced = false;
+        boolean worded = false;
         while (word.find()) {
-            spaced = append(text, marks, body.substring(cursor, word.start()), wordStart, spaced);
+            builder.append(body.substring(cursor, word.start()), wordStart, 0L);
             long stamp = millis(word);
             wordStart = stamp >= 0L ? Math.max(0L, stamp - offset) : wordStart;
             cursor = word.end();
+            worded = true;
         }
-        append(text, marks, body.substring(cursor), wordStart, spaced);
-        String finished = text.toString();
-        return new LyricLine(start, end, finished, words(marks, finished, start, end));
-    }
-
-    private static boolean append(StringBuilder text, List<long[]> marks, String piece, long startMs,
-                                  boolean spaced) {
-        String clean = LyricText.clean(piece, TEXT_LIMIT);
-        int used = text.codePointCount(0, text.length());
-        boolean trailing = !piece.isEmpty() && Character.isWhitespace(piece.codePointBefore(piece.length()));
-        if (clean.isEmpty()) return spaced || piece.codePoints().anyMatch(Character::isWhitespace);
-        if (used >= TEXT_LIMIT) return trailing;
-
-        boolean gap = used > 0 && (spaced || Character.isWhitespace(piece.codePointAt(0)));
-        if (gap) {
-            text.append(' ');
-            used++;
-        }
-        String fitted = clean.substring(0, clean.offsetByCodePoints(0,
-                Math.min(clean.codePointCount(0, clean.length()), TEXT_LIMIT - used)));
-        marks.add(new long[] {startMs, used, fitted.codePointCount(0, fitted.length())});
-        text.append(fitted);
-        return trailing;
-    }
-
-    private static List<LyricWord> words(List<long[]> marks, String text, long start, long end) {
-        if (marks.size() < 2) return List.of();
-
-        List<LyricWord> words = new ArrayList<>(marks.size());
-        for (long[] mark : marks) {
-            long clamped = Math.max(start, Math.min(end, mark[0]));
-            words.add(new LyricWord(clamped, (int) mark[1], (int) mark[2]));
-        }
-        return words;
+        builder.append(body.substring(cursor), wordStart, 0L);
+        return builder.build(start, end, worded);
     }
 }

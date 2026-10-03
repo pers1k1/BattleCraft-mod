@@ -41,6 +41,11 @@ public final class UiMorphText {
     private float lastDelta;
     private float followed;
     private boolean followFresh = true;
+    private boolean whole;
+    private float[] litShown = new float[0];
+    private int accentShown = -1;
+    private float[] leavingLit = new float[0];
+    private int leavingAccent = -1;
     private float scale = 1.0f;
     private UiSweep sweep = UiSweep.NONE;
     private int prefix;
@@ -61,8 +66,12 @@ public final class UiMorphText {
         raw = next;
         value = Component.literal(next);
         codes = next.codePoints().toArray();
-        prefix = commonPrefix(previousCodes, codes);
-        suffix = commonSuffix(previousCodes, codes, prefix);
+        whole = seconds > 0.0f;
+        prefix = whole ? 0 : commonPrefix(previousCodes, codes);
+        suffix = whole ? 0 : commonSuffix(previousCodes, codes, prefix);
+        leavingLit = litShown;
+        leavingAccent = accentShown;
+        litShown = new float[0];
         clock = previousCodes.length == 0 ? IDLE : 0.0f;
         leaving = shown;
         shown = 0.0f;
@@ -127,6 +136,20 @@ public final class UiMorphText {
         shown = shift;
     }
 
+    public float leaving() {
+        return morphing() ? leaving : 0.0f;
+    }
+
+    private void remember(int index, int count, float lit, int accent) {
+        if (litShown.length != count) litShown = new float[count];
+        if (index < count) litShown[index] = lit;
+        accentShown = accent;
+    }
+
+    private float frozen(int index) {
+        return index >= 0 && index < leavingLit.length ? leavingLit[index] : 1.0f;
+    }
+
     public float follow(GuiGraphics graphics, Font font, float textScale, float slot, UiSweep lit) {
         float target = followTarget(UiRender.stopsToned(graphics, font, value, textScale), slot, lit.head());
         if (followFresh) {
@@ -154,7 +177,7 @@ public final class UiMorphText {
     }
 
     private boolean holds(int index) {
-        return leaving == 0.0f && index < codes.length && index < previousCodes.length && codes[index] == previousCodes[index]
+        return !whole && leaving == 0.0f && index < codes.length && index < previousCodes.length && codes[index] == previousCodes[index]
                 && index < stops.length && index < previousStops.length
                 && Math.abs(stops[index] - previousStops[index]) < SAME_PLACE;
     }
@@ -195,22 +218,28 @@ public final class UiMorphText {
 
         @Override
         public float glow(int index, int count) {
-            if (direction < 0.0f) return 0.0f;
-            float lit = clamp(sweep.lit(index));
-            return BLOOM_SHARE * 4.0f * lit * (1.0f - lit);
+            float lit = direction < 0.0f ? frozen(index) : clamp(sweep.lit(index));
+            return BLOOM_SHARE * 4.0f * lit * (1.0f - lit) * (direction < 0.0f ? shown(index, count) : 1.0f);
         }
 
         // WHY: буква, которая поётся сейчас, отдаёт в цвет обложки и светится: колокол по её доле
         @Override
         public int tint(int index, int count, int base) {
             float shown = shown(index, count);
-            if (direction < 0.0f) return UiTheme.alpha(base, shown);
+            if (direction < 0.0f) return sung(base, shown, frozen(index), leavingAccent);
             float lit = clamp(sweep.lit(index));
+            int accent = sweep.accent(base);
+            remember(index, count, lit, accent);
+            return sung(base, shown, lit, accent);
+        }
+
+        // WHY: уходящая строка уносит тот вид, каким горела в последнем кадре: без этого её буквы на
+        // WHY: смене разом теряли приглушение, цвет и свечение и выглядели оторванными от текста
+        private int sung(int base, float shown, float lit, int accentColor) {
             int toned = UiTheme.alpha(base, shown * (UNSUNG + (1.0f - UNSUNG) * lit));
             float active = 4.0f * lit * (1.0f - lit);
             if (active <= 0.01f) return toned;
-            int accent = (toned & 0xFF000000) | (sweep.accent(base) & 0x00FFFFFF);
-            return UiTheme.mix(toned, accent, ACCENT_SHARE * active);
+            return UiTheme.mix(toned, (toned & 0xFF000000) | (accentColor & 0x00FFFFFF), ACCENT_SHARE * active);
         }
 
         private float shown(int index, int count) {

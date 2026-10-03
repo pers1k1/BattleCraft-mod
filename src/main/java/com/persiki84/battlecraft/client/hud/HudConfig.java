@@ -195,7 +195,7 @@ public final class HudConfig {
         ISLAND_BAR = defineIslandPart("islandBar", "Полоса прогресса трека");
         ISLAND_TITLE = defineIslandPart("islandTitle", "Название играющего трека");
         ISLAND_ARTIST = defineIslandPart("islandArtist", "Исполнитель играющего трека");
-        ISLAND_LYRICS = defineIslandPart("islandLyrics", "Лирика на месте названия; текст ищется на lrclib.net, туда уходят название и исполнитель трека");
+        ISLAND_LYRICS = defineIslandPart("islandLyrics", "Лирика на месте названия; текст ищется на lrclib.net и в NetEase Cloud Music, туда уходят название и исполнитель трека");
         ISLAND_LYRICS_OFFSET = BUILDER.comment("Сдвиг лирики в секундах: плюс позже, минус раньше").defineInRange("islandLyricsOffset", 0.0, -3.0, 3.0);
         ISLAND_TIME = defineIslandPart("islandTime", "Таймер трека");
         ISLAND_VISUALIZER = defineIslandPart("islandVisualizer", "Визуализатор звука в острове");

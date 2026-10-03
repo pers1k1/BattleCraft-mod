@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.03v5` in files, `03.10.26v5 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.03v6` in files, `03.10.26v6 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -988,6 +988,15 @@ The type of the Glass MediaPlayer Island is now a typeface of its own here, **Si
 - **Lyrics glow.** The letter being sung now glows with the cover colour here too: the pen draws glyph by glyph, so the halo of one glyph is raised while it is drawn (`GlyphTone.glow`, `GlowGlyph.boost`) without touching the halo of other text.
 
 Version 2026.10.03v5 - built but not played through, so report anything that looks wrong.
+
+## Held words and the line change, 3 October 2026 (v6)
+
+- **Held words.** An LRC line only has a start, so a held word sent the sweep ahead of the voice. A second source now gives word timings: NetEase Cloud Music (music.163.com, yrc), where every word has its own start and length (in Never Gonna Give You Up the word "love" is held for 2.34 s). The sweep crosses each word in exactly its length and waits on a held one. Sources in order: LRCLIB with word timings, NetEase yrc, LRCLIB line timings, NetEase line timings; a song must match the title, the artist and the length within 3 s. Word timings exist mostly for popular western songs; Russian and niche songs keep the line timing with the estimated pace. Spicetify sources that need a Musixmatch or Spotify token are not used: such a token is obtained around their terms. The core is shared with the Glass MediaPlayer Island.
+- **Leaving line.** The leaving line keeps the look it had in its last frame (dimmed letters, cover color, glow) instead of snapping to plain ink.
+- **Hidden letters.** A scrolled line fades at the slot edges during the change too (`UiRender.marqueeFrom` around the morph), so letters already past the edge stay hidden.
+- **Whole-line change.** A lyric line changes as one wave: a shared ending of two different lines (a period, one letter) no longer slides to its new place.
+
+Version 2026.10.03v6 - built but not played through, so report anything that looks wrong.
 
 ## Releases
 
