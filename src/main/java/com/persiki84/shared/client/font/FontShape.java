@@ -3,6 +3,7 @@ package com.persiki84.shared.client.font;
 import net.minecraft.resources.ResourceLocation;
 
 public enum FontShape {
+    SILK("silk", "silk_text", Source.RASTER, 0.0f),
     CRISP("crisp", "msdf_text", Source.FIELD, 0.0f),
     SMOOTH("smooth", "soft_text", Source.FIELD, 0.0f),
     RASTER("raster", "raster_text", Source.RASTER, 0.0f),
@@ -14,7 +15,7 @@ public enum FontShape {
         RASTER
     }
 
-    public static final FontShape FALLBACK = SHARP;
+    public static final FontShape FALLBACK = SILK;
 
     private static final String FIELD_FOLDER = "msdf";
 

@@ -32,6 +32,7 @@ public final class UiMorphText {
     private static final float FOLLOW_SHARE = 0.45f;
     private static final float FOLLOW_RATE = 7.0f;
     private static final float ACCENT_SHARE = 0.55f;
+    private static final float BLOOM_SHARE = 0.07f;
 
     private float clock = IDLE;
     private float tempo = 1.0f;
@@ -193,7 +194,14 @@ public final class UiMorphText {
         }
 
         @Override
-        // WHY: буква, которая поётся сейчас, отдаёт в цвет обложки: колокол по её доле
+        public float glow(int index, int count) {
+            if (direction < 0.0f) return 0.0f;
+            float lit = clamp(sweep.lit(index));
+            return BLOOM_SHARE * 4.0f * lit * (1.0f - lit);
+        }
+
+        // WHY: буква, которая поётся сейчас, отдаёт в цвет обложки и светится: колокол по её доле
+        @Override
         public int tint(int index, int count, int base) {
             float shown = shown(index, count);
             if (direction < 0.0f) return UiTheme.alpha(base, shown);

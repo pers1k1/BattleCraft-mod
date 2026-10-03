@@ -1,5 +1,6 @@
 package com.persiki84.shared.client.ui;
 
+import com.persiki84.shared.client.font.GlowGlyph;
 import com.persiki84.shared.client.font.MsdfFontSets;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -1287,6 +1288,10 @@ public final class UiRender {
         default float spread() {
             return 0.0f;
         }
+
+        default float glow(int index, int count) {
+            return 0.0f;
+        }
     }
 
     public static void textHeroToned(GuiGraphics graphics, Font font, Component value, float centerX, float y,
@@ -1600,11 +1605,13 @@ public final class UiRender {
             float rise = tone == null ? 0.0f : tone.rise(i, glyphs) * lift;
             float drift = (i - (glyphs - 1) * 0.5f) * spread;
             if (!vanishing(tint)) {
+                GlowGlyph.boost(tone == null ? 0.0f : tone.glow(i, glyphs));
                 font.drawInBatch(CURSOR, pen * unit + drift, -rise, tint, false, pose, buffer,
                         Font.DisplayMode.NORMAL, 0, FULL_BRIGHT);
             }
             pen += Math.max(0, Math.round((step + tracking) * em));
         }
+        GlowGlyph.boost(0.0f);
     }
 
     public static boolean vanishing(int color) {

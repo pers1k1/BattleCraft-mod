@@ -17,6 +17,14 @@ public final class GlowGlyph extends BakedGlyph {
 
     private final float span;
 
+    private static float boost;
+
+    // WHY: перо рисует букву за буквой, и ореол одной буквы можно усилить на время её отрисовки:
+    // WHY: так светится буква лирики, которая поётся сейчас, не трогая общий ореол текста
+    public static void boost(float extra) {
+        boost = Math.max(0.0f, extra);
+    }
+
     public GlowGlyph(GlyphRenderTypes renderTypes, float u0, float u1, float v0, float v1,
                      float left, float right, float up, float down) {
         super(renderTypes, u0, u1, v0, v1, left, right, up, down);
@@ -26,7 +34,7 @@ public final class GlowGlyph extends BakedGlyph {
     @Override
     public void render(boolean italic, float x, float y, Matrix4f matrix, VertexConsumer buffer,
                        float red, float green, float blue, float alpha, int packedLight) {
-        float halo = alpha * UiGlassStyle.glowAlpha();
+        float halo = alpha * (UiGlassStyle.glowAlpha() + boost);
         if (halo > MIN_ALPHA) {
             spread(UiGlassStyle.glowSpread());
             float haloRed = lift(red);

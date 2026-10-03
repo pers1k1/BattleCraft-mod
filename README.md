@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.03v4` in files, `03.10.26v4 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.03v5` in files, `03.10.26v5 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -977,6 +977,17 @@ Version 2026.10.03v3 - built but not played through, so report anything that loo
 - **Width.** The island stays at the title width on a track change, grows to the longest line smoothly (about 0.5 s) when the first line starts, keeps it through breaks and shrinks after the last line. The desktop island keeps both widths and blends them each frame.
 
 Version 2026.10.03v4 - built but not played through, so report anything that looks wrong.
+
+## Silk typeface, 3 October 2026 (v5)
+
+The type of the Glass MediaPlayer Island is now a typeface of its own here, **Silk**, and the default for new players.
+
+- **Why it looks different.** The other raster faces bake the glyph six times over and squeeze it in the shader through nine taps with gain and `smoothstep` thresholds: a crisp edge, but the soft rim turns dark and thin strokes break. Silk keeps the glyph colour constant and sends coverage only to opacity, with no thresholds, so the anti-aliased edge never darkens into a rim.
+- **Same density as the island.** The island keeps a copy of the font for every pixel density (1 to 6 in steps of 0.25) so that a texel lands on a screen pixel. Here the atlas is baked with headroom instead, and each screen pixel gets the true average coverage over its area (a 4 x 4 grid inside the pixel footprint): the same share a one-to-one raster gives. Coverage goes through a power of 0.85, as on the island, to give thin strokes back the density that anti-aliasing takes from them at small sizes.
+- **Glow.** Picking Silk on the setup screen or in Customization sets the glyph glow to the island's soft halo (3 % per copy at 0.7 units, no colour lift); the sliders can bring your own back. Sharp still turns the glow off.
+- **Lyrics glow.** The letter being sung now glows with the cover colour here too: the pen draws glyph by glyph, so the halo of one glyph is raised while it is drawn (`GlyphTone.glow`, `GlowGlyph.boost`) without touching the halo of other text.
+
+Version 2026.10.03v5 - built but not played through, so report anything that looks wrong.
 
 ## Releases
 

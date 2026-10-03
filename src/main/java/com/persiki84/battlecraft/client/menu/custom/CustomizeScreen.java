@@ -2,6 +2,7 @@ package com.persiki84.battlecraft.client.menu.custom;
 
 import com.persiki84.battlecraft.client.custom.ConfigSection;
 import com.persiki84.battlecraft.client.custom.CustomPreset;
+import com.persiki84.battlecraft.client.custom.FontLook;
 import com.persiki84.battlecraft.client.custom.Customization;
 import com.persiki84.battlecraft.client.custom.GlassKey;
 import com.persiki84.battlecraft.client.custom.HudLayout;
@@ -523,7 +524,7 @@ public final class CustomizeScreen extends ManagerScreen {
                 Component.translatable("battlecraft.custom.font"), options,
                 () -> Customization.font().ordinal(),
                 picked -> {
-                    Customization.font(FontShape.values()[picked]);
+                    FontLook.choose(FontShape.values()[picked]);
                     Customization.save();
                 });
         row.hint("battlecraft.custom.font" + HINT_SUFFIX);

@@ -3,6 +3,7 @@ package com.persiki84.battlecraft.client.setup;
 import com.persiki84.battlecraft.client.DiscordRpcManager;
 import com.persiki84.battlecraft.client.custom.CustomPreset;
 import com.persiki84.battlecraft.client.custom.Customization;
+import com.persiki84.battlecraft.client.custom.FontLook;
 import com.persiki84.battlecraft.client.custom.GlassKey;
 import com.persiki84.battlecraft.client.hud.HudConfig;
 import com.persiki84.battlecraft.client.voice.VoiceOptions;
@@ -112,18 +113,11 @@ public final class SetupPages {
                     Component.translatable(shape.noteKey()),
                     (graphics, typeface, centerX, top, width) -> FontSample.paint(graphics, typeface, shape, centerX, top, width),
                     () -> {
-                        Customization.font(shape);
-                        settleGlow(shape);
+                        FontLook.choose(shape);
                         screen.answer(SetupStep.FONT);
                     }, null));
         }
         return new CardPage(SetupStep.FONT, cards, FONT_CARD_HEIGHT).onRelease(SetupPages::dropSamples);
-    }
-
-    // WHY: резкий образец задуман без ореола, поэтому выбравшему его свечение гасится сразу,
-    // WHY: а не остаётся заводским: следующий шаг показывает ползунок уже на нуле и даёт вернуть
-    private static void settleGlow(FontShape shape) {
-        if (shape == FontShape.SHARP) Customization.glass(GlassKey.GLOW_ALPHA, 0.0f);
     }
 
     private static void dropSamples() {
