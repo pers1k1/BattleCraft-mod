@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.03v3` in files, `03.10.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.03v4` in files, `03.10.26v4 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -967,6 +967,16 @@ The line being sung takes the place of the title in the HUD island and in the de
 - **Game side.** Bridge lines are published under the monitor that retires the bridge, the restart count resets on the first good line, NaN bands are dropped, the cover file is read whole and capped at 8 MB, and the bar colors land together with their own cover. The pill row of an untimed track no longer widens the pill past the title limit.
 
 Version 2026.10.03v3 - built but not played through, so report anything that looks wrong.
+
+## Lyrics in step with the voice, 3 October 2026 (v4)
+
+- **Pace from the gap.** An LRC line only has a start, so how long it is sung has to be estimated. The sweep now takes 92 % of the gap to the next line, within 6 to 25 letters a second, instead of a fixed 110 ms per letter, and its time is split by letter weight (letter 1, space 0.3, punctuation 0.25), so it no longer runs ahead in slow songs or lags in fast verses. The track clock itself was measured: Spotify's position plus the snapshot age stays within 50 +- 1 ms of real time over 30 s.
+- **Line lead.** A new line is picked 200 ms before it starts, so its letter morph is done by the first word.
+- **Smooth scrolling.** A long line follows a continuous position inside the line (a fractional letter index between window starts) and catches up with it exponentially; before, it jumped to the next letter each time one finished lighting.
+- **Cover color.** The letter being sung takes on the cover color (the visualizer tone, or the accent when cover colors are off) on top of the lift.
+- **Width.** The island stays at the title width on a track change, grows to the longest line smoothly (about 0.5 s) when the first line starts, keeps it through breaks and shrinks after the last line. The desktop island keeps both widths and blends them each frame.
+
+Version 2026.10.03v4 - built but not played through, so report anything that looks wrong.
 
 ## Releases
 

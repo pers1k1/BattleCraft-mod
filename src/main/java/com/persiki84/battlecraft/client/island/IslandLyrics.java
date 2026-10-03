@@ -18,6 +18,8 @@ import java.util.Arrays;
 // WHY: остров рабочего стола держат каждый свою строку, а текст песни у них общий (LyricsService)
 public final class IslandLyrics {
     private static final long LINGER_MS = 1500L;
+    private static final long LEAD_MS = 200L;
+    private static final float WIDEN_RATE = 6.0f;
     private static final long REST_MS = 4000L;
     private static final float MORPH_SHARE = 0.3f;
     private static final float MORPH_MIN_SECONDS = 0.14f;
@@ -28,6 +30,8 @@ public final class IslandLyrics {
     private final float[] widths = new float[3];
     private Lyrics lyrics = Lyrics.NONE;
     private LyricLine shown;
+    private boolean inSong;
+    private float widened;
     private LyricLine sung;
     private Lyrics measured;
     private float measuredPixels;
@@ -44,10 +48,14 @@ public final class IslandLyrics {
     }
 
     private LyricLine current(MediaTrack track, long now) {
-        if (!lyrics.present()) return null;
+        if (!lyrics.present()) {
+            inSong = false;
+            return null;
+        }
 
         long at = track.elapsedMs(now) - Math.round(HudConfig.islandLyricsOffset() * 1000.0f);
-        int index = lyrics.lineAt(at);
+        int index = lyrics.lineAt(at + LEAD_MS);
+        inSong = index >= 0 && !(index + 1 >= lyrics.lines().size() && resting(index, at));
         if (index < 0 || resting(index, at)) return null;
         LyricLine line = lyrics.lines().get(index);
         if (line != shown) {
@@ -58,11 +66,22 @@ public final class IslandLyrics {
         return line;
     }
 
+    // WHY: строка выбирается на LEAD_MS раньше своего начала, а подсветка идёт по настоящему времени:
+    // WHY: смена строки длится доли секунды, и без упреждения первые слова пелись над ещё приходящей строкой
     private boolean resting(int index, long at) {
         LyricLine line = lyrics.lines().get(index);
         long quietFrom = line.endMs() + LINGER_MS;
         if (at <= quietFrom) return false;
         return index + 1 >= lyrics.lines().size() || lyrics.lines().get(index + 1).startMs() - quietFrom > REST_MS;
+    }
+
+    // WHY: остров расширяется под строки не на смене песни, а когда начинается первая строка, держит
+    // WHY: ширину через проигрыши и сужается после последней. Переход идёт плавно, а не скачком
+    public float widen(float delta) {
+        float target = inSong ? 1.0f : 0.0f;
+        widened += (target - widened) * (1.0f - (float) Math.exp(-WIDEN_RATE * delta));
+        if (Math.abs(target - widened) < 0.001f) widened = target;
+        return widened;
     }
 
     public boolean engaged() {

@@ -12,6 +12,9 @@ public final class LrcParser {
     private static final int MIN_LINES = 4;
     private static final long END_SLACK_MS = 5000L;
     private static final long GLYPH_MS = 110L;
+    private static final long FASTEST_GLYPH_MS = 40L;
+    private static final long SLOWEST_GLYPH_MS = 165L;
+    private static final double GAP_SHARE = 0.92;
     private static final long LINE_MIN_MS = 1200L;
     private static final long LINE_MAX_MS = 9000L;
     private static final long OFFSET_LIMIT_MS = 600_000L;
@@ -86,14 +89,21 @@ public final class LrcParser {
         return sane(lines, durationMs) ? new Lyrics(lines) : Lyrics.NONE;
     }
 
+    // WHY: в LRC есть только начало строки, а сколько она поётся, приходится оценивать. Певец почти
+    // WHY: всегда заполняет промежуток до следующей строки, поэтому длительность берётся из него, но в
+    // WHY: пределах человеческого темпа (от 6 до 25 букв в секунду): длинная пауза после строки иначе
+    // WHY: растянула бы волну, а постоянная скорость обгоняла медленные песни и отставала в речитативе
     private static long endOf(List<Stamped> sorted, int index, long durationMs) {
         long start = sorted.get(index).startMs();
-        String spoken = WORD.matcher(sorted.get(index).body()).replaceAll("");
-        long natural = start + Math.max(LINE_MIN_MS, Math.min(LINE_MAX_MS,
-                spoken.codePointCount(0, spoken.length()) * GLYPH_MS));
+        long letters = Math.max(1L, WORD.matcher(sorted.get(index).body()).replaceAll("").codePoints()
+                .filter(Character::isLetterOrDigit).count());
         for (int next = index + 1; next < sorted.size(); next++) {
-            if (sorted.get(next).startMs() > start) return Math.min(natural, sorted.get(next).startMs());
+            long gap = sorted.get(next).startMs() - start;
+            if (gap <= 0L) continue;
+            long sung = Math.max(letters * FASTEST_GLYPH_MS, Math.min(letters * SLOWEST_GLYPH_MS, Math.round(gap * GAP_SHARE)));
+            return start + Math.min(gap, sung);
         }
+        long natural = start + Math.max(LINE_MIN_MS, Math.min(LINE_MAX_MS, letters * GLYPH_MS));
         return durationMs > start ? Math.min(natural, durationMs) : natural;
     }
 

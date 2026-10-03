@@ -30,11 +30,16 @@ public final class UiMorphText {
     private static final float UNSUNG = 0.42f;
     private static final float LIFT_UNITS = 0.55f;
     private static final float FOLLOW_SHARE = 0.45f;
+    private static final float FOLLOW_RATE = 7.0f;
+    private static final float ACCENT_SHARE = 0.55f;
 
     private float clock = IDLE;
     private float tempo = 1.0f;
     private float shown;
     private float leaving;
+    private float lastDelta;
+    private float followed;
+    private boolean followFresh = true;
     private float scale = 1.0f;
     private UiSweep sweep = UiSweep.NONE;
     private int prefix;
@@ -60,6 +65,7 @@ public final class UiMorphText {
         clock = previousCodes.length == 0 ? IDLE : 0.0f;
         leaving = shown;
         shown = 0.0f;
+        followFresh = true;
         tempo = seconds > 0.0f ? Math.max(0.05f, seconds / duration()) : 1.0f;
     }
 
@@ -69,6 +75,7 @@ public final class UiMorphText {
     }
 
     public void advance(float delta) {
+        lastDelta = delta;
         if (clock != IDLE) clock += delta / tempo;
     }
 
@@ -120,15 +127,25 @@ public final class UiMorphText {
     }
 
     public float follow(GuiGraphics graphics, Font font, float textScale, float slot, UiSweep lit) {
-        float[] marks = UiRender.stopsToned(graphics, font, value, textScale);
-        float span = marks[marks.length - 1];
-        for (int index = 0; index + 1 < marks.length; index++) {
-            float share = lit.lit(index);
-            if (share >= 1.0f) continue;
-            float edge = marks[index] + (marks[index + 1] - marks[index]) * share;
-            return Math.max(0.0f, Math.min(span - slot, edge - slot * FOLLOW_SHARE));
+        float target = followTarget(UiRender.stopsToned(graphics, font, value, textScale), slot, lit.head());
+        if (followFresh) {
+            followFresh = false;
+            followed = target;
+            return target;
         }
-        return Math.max(0.0f, span - slot);
+        followed += (target - followed) * (1.0f - (float) Math.exp(-FOLLOW_RATE * lastDelta));
+        return followed;
+    }
+
+    // WHY: место голоса это дробный индекс буквы, а не первая недогоревшая буква: та прыгала на
+    // WHY: соседнюю, как только догорала. Цель догоняется экспоненциально: метки слов дают ступени
+    private static float followTarget(float[] marks, float slot, float head) {
+        float span = marks[marks.length - 1];
+        if (span <= slot || head < 0.0f || marks.length < 2) return 0.0f;
+
+        int index = Math.min(marks.length - 2, (int) head);
+        float place = marks[index] + (marks[index + 1] - marks[index]) * Math.min(1.0f, head - index);
+        return Math.max(0.0f, Math.min(span - slot, place - slot * FOLLOW_SHARE));
     }
 
     public void drawRight(GuiGraphics graphics, Font font, float rightX, float y, float textScale, int color) {
@@ -176,10 +193,16 @@ public final class UiMorphText {
         }
 
         @Override
+        // WHY: буква, которая поётся сейчас, отдаёт в цвет обложки: колокол по её доле
         public int tint(int index, int count, int base) {
             float shown = shown(index, count);
             if (direction < 0.0f) return UiTheme.alpha(base, shown);
-            return UiTheme.alpha(base, shown * (UNSUNG + (1.0f - UNSUNG) * clamp(sweep.lit(index))));
+            float lit = clamp(sweep.lit(index));
+            int toned = UiTheme.alpha(base, shown * (UNSUNG + (1.0f - UNSUNG) * lit));
+            float active = 4.0f * lit * (1.0f - lit);
+            if (active <= 0.01f) return toned;
+            int accent = (toned & 0xFF000000) | (sweep.accent(base) & 0x00FFFFFF);
+            return UiTheme.mix(toned, accent, ACCENT_SHARE * active);
         }
 
         private float shown(int index, int count) {

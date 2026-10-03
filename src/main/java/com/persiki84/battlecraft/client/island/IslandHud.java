@@ -101,6 +101,7 @@ public final class IslandHud {
     private static String artistText = "";
     private static String pairedArtist = "";
     private static Component titleValue = Component.empty();
+    private static float widened;
     private static long shownPlayed = -1L;
     private static long shownWhole = -1L;
     private static long morphedFrame = -1L;
@@ -217,8 +218,9 @@ public final class IslandHud {
     // WHY: пока у песни есть лирика, ширина держится по самой длинной её строке и по названию:
     // WHY: строки сменяются каждые две-три секунды, и стекло не должно ходить за каждой
     private static float titleWidth(GuiGraphics graphics, Font font, float scale) {
-        if (!lyrics.engaged()) return title.measure(graphics, font, scale);
-        return Math.max(lyrics.widest(graphics, font, scale), UiRender.measureToned(graphics, font, titleValue, scale));
+        float titleWidth = UiRender.measureToned(graphics, font, titleValue, scale);
+        if (!lyrics.engaged() || widened <= 0.0f) return titleWidth;
+        return titleWidth + (Math.max(lyrics.widest(graphics, font, scale), titleWidth) - titleWidth) * widened;
     }
 
     private static float held(float peak, float measured) {
@@ -724,6 +726,7 @@ public final class IslandHud {
 
         long now = System.currentTimeMillis();
         sing(lyrics.line(track, now));
+        widened = lyrics.widen(UiFrame.delta());
         stampTiming(Math.max(0L, IslandClock.elapsedMs(track, now) / 1000L),
                 Math.max(0L, track.durationMs() / 1000L));
     }

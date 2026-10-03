@@ -51,6 +51,7 @@ final class DesktopIslandText {
             measuredPixels = -1.0f;
         }
         shown.sing(lyrics.line(track, System.currentTimeMillis()), visible);
+        shown.widened = lyrics.widen(delta);
         if (lyrics.engaged() != measuredEngaged) measuredPixels = -1.0f;
         return swapping;
     }
@@ -123,6 +124,9 @@ final class DesktopIslandText {
         private final UiMorphText artist = new UiMorphText();
         private float pillTitleWidth;
         private float cardTitleWidth;
+        private float pillLyricWidth;
+        private float cardLyricWidth;
+        private float widened;
         private float artistWidth;
         private String titleText = "";
         private String artistText = "";
@@ -166,17 +170,19 @@ final class DesktopIslandText {
         }
 
         private void measure(GuiGraphics graphics, Font font, IslandLyrics lyrics) {
-            pillTitleWidth = titleWidth(graphics, font, PILL_TITLE_SCALE, lyrics);
-            cardTitleWidth = titleWidth(graphics, font, CARD_TITLE_SCALE, lyrics);
+            pillTitleWidth = UiRender.measureToned(graphics, font, Component.literal(titleText), PILL_TITLE_SCALE);
+            cardTitleWidth = UiRender.measureToned(graphics, font, Component.literal(titleText), CARD_TITLE_SCALE);
+            pillLyricWidth = lyricWidth(graphics, font, PILL_TITLE_SCALE, lyrics, pillTitleWidth);
+            cardLyricWidth = lyricWidth(graphics, font, CARD_TITLE_SCALE, lyrics, cardTitleWidth);
             artistWidth = artist.measure(graphics, font, ARTIST_SCALE);
         }
 
-        // WHY: у песни с лирикой ширина держится по самой длинной её строке и по названию, а не по
-        // WHY: строке, что стояла в момент замера: замер идёт только на смене трека и плотности пикселей
-        private float titleWidth(GuiGraphics graphics, Font font, float scale, IslandLyrics lyrics) {
-            if (!lyrics.engaged()) return title.measure(graphics, font, scale);
-            return Math.max(lyrics.widest(graphics, font, scale),
-                    UiRender.measureToned(graphics, font, Component.literal(titleText), scale));
+        // WHY: замер идёт только на смене трека и плотности пикселей, поэтому хранятся обе ширины: по
+        // WHY: названию и по самой длинной строке песни. Между ними остров переходит плавно, когда
+        // WHY: начинается первая строка и после последней
+        private static float lyricWidth(GuiGraphics graphics, Font font, float scale, IslandLyrics lyrics, float titleWidth) {
+            if (!lyrics.engaged()) return titleWidth;
+            return Math.max(lyrics.widest(graphics, font, scale), titleWidth);
         }
 
         UiMorphText title() {
@@ -188,11 +194,11 @@ final class DesktopIslandText {
         }
 
         float pillTitleWidth() {
-            return pillTitleWidth;
+            return pillTitleWidth + (pillLyricWidth - pillTitleWidth) * widened;
         }
 
         float cardTitleWidth() {
-            return cardTitleWidth;
+            return cardTitleWidth + (cardLyricWidth - cardTitleWidth) * widened;
         }
 
         float artistWidth() {
