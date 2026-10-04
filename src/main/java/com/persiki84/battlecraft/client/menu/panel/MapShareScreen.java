@@ -8,7 +8,9 @@ import com.persiki84.shared.client.menu.ActionRow;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.HeadingRow;
 import com.persiki84.shared.client.menu.MenuFeedback;
+import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.shared.client.menu.PanelScreen;
+import com.persiki84.shared.client.menu.studio.StudioStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -21,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MapShareScreen extends PanelScreen {
+    private final ModuleSwitch module = new ModuleSwitch(ModuleId.MINIMAP);
     private static final String TEAMS_KEY = "teams";
     private static final String SHARED_KEY = "shared";
     private static final String SCAN_LEFT_KEY = "scanLeft";
@@ -134,5 +137,16 @@ public class MapShareScreen extends PanelScreen {
             names.add(entry.getString("name"));
         }
         return names;
+    }
+
+    @Override
+    protected void buildSide(StudioStack stack, int x, int width) {
+        module.place(stack, x, width);
+    }
+
+    @Override
+    public void tick() {
+        module.request(ticks);
+        super.tick();
     }
 }

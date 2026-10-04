@@ -14,13 +14,13 @@ public final class PanelScreens {
     public static void register() {
         MenuScreens.register(ModuleMenuStates.AIRDROP, () -> new AirDropStudioScreen(null, null));
         MenuScreens.register(ModuleMenuStates.LOOT, () -> new AirDropStudioScreen(LootTables.AIRDROP, null));
-        MenuScreens.register(ModuleMenuStates.QUARRY, QuarryScreen::new);
+        MenuScreens.register(ModuleMenuStates.QUARRY, QuarryStudioScreen::new);
         MenuScreens.register(ModuleMenuStates.KILL_REWARD, KillRewardStudioScreen::new);
         MenuScreens.register(ModuleMenuStates.IMMORTALITY, ImmortalityStudioScreen::new);
         MenuScreens.register(ModuleMenuStates.KNOCKDOWN, KnockdownScreen::new);
         MenuScreens.register(ModuleMenuStates.COMBAT, CombatScreen::new);
         MenuScreens.register(ModuleMenuStates.SELL, SellStudioScreen::new);
-        MenuScreens.register(ModuleMenuStates.MODIFIERS, ModifierScreen::new);
+        MenuScreens.register(ModuleMenuStates.MODIFIERS, ModifierStudioScreen::new);
         MenuScreens.register(ModuleMenuStates.GAME_RULES, GameRulesScreen::new);
         MenuScreens.register(ModuleMenuStates.TEAMS, TeamsStudioScreen::new);
         MenuScreens.register(ModuleMenuStates.MAP, MapShareScreen::new);

@@ -2,13 +2,16 @@ package com.persiki84.battlecraft.client.menu.panel;
 
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.shared.client.menu.MenuData;
+import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.shared.client.menu.PanelScreen;
+import com.persiki84.shared.client.menu.studio.StudioStack;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
 
 public class KnockdownScreen extends PanelScreen {
+    private final ModuleSwitch module = new ModuleSwitch(ModuleId.KNOCKDOWN);
     private static final String COMMAND = "knockdown config";
     private static final int MAX_SECONDS = 3600;
 
@@ -37,5 +40,16 @@ public class KnockdownScreen extends PanelScreen {
     private AbstractWidget seconds(String label, String key, String argument, int minimum) {
         return number(label, () -> MenuData.state(menuId()).getInt(key),
                 value -> send(COMMAND + " " + argument + " " + value), minimum, MAX_SECONDS, 5);
+    }
+
+    @Override
+    protected void buildSide(StudioStack stack, int x, int width) {
+        module.place(stack, x, width);
+    }
+
+    @Override
+    public void tick() {
+        module.request(ticks);
+        super.tick();
     }
 }

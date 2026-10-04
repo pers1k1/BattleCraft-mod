@@ -2,13 +2,16 @@ package com.persiki84.battlecraft.client.menu.panel;
 
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.shared.client.menu.MenuData;
+import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.shared.client.menu.PanelScreen;
+import com.persiki84.shared.client.menu.studio.StudioStack;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
 
 public class CombatScreen extends PanelScreen {
+    private final ModuleSwitch module = new ModuleSwitch(ModuleId.COMBAT_TIMER);
     private static final String COMMAND = "kt";
     private static final int MIN_SECONDS = 5;
     private static final int MAX_SECONDS = 300;
@@ -33,5 +36,16 @@ public class CombatScreen extends PanelScreen {
                         value -> send(COMMAND + " settime " + value), MIN_SECONDS, MAX_SECONDS, 5),
                 toggle("combattimer.menu.kill_logout", () -> MenuData.state(menuId()).getBoolean("killOnLogout"),
                         value -> send(COMMAND + " killlogout " + value)));
+    }
+
+    @Override
+    protected void buildSide(StudioStack stack, int x, int width) {
+        module.place(stack, x, width);
+    }
+
+    @Override
+    public void tick() {
+        module.request(ticks);
+        super.tick();
     }
 }

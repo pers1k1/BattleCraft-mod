@@ -5,7 +5,6 @@ import com.persiki84.shared.client.menu.studio.StudioScreen;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiMetrics;
-import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -25,6 +24,7 @@ public abstract class MapStudioScreen extends StudioScreen {
     private static final float GHOST_PULSE_MS = 1400.0f;
 
     protected final MapCanvas map = new MapCanvas();
+    private final MapMotion motion = new MapMotion();
     private final Map<String, Moved> moved = new HashMap<>();
     private MapThing pressed;
     private boolean carrying;
@@ -38,6 +38,7 @@ public abstract class MapStudioScreen extends StudioScreen {
     private int carryZ;
     private String hovered;
     private String focusedKey;
+    private boolean mapWasShown;
 
     private record Moved(int x, int z, long at) {}
 
@@ -72,26 +73,31 @@ public abstract class MapStudioScreen extends StudioScreen {
         return Component.translatable("studio.map.hint");
     }
 
+    protected boolean showsMap() {
+        return true;
+    }
+
+    protected boolean movable(MapThing thing) {
+        return true;
+    }
+
+    protected boolean labelsAlways() {
+        return true;
+    }
+
     @Override
-    protected final boolean gridCanvas() {
-        return false;
+    protected boolean gridCanvas() {
+        if (!showsMap()) mapWasShown = false;
+        return !showsMap();
     }
 
     @Override
     protected final boolean paintsCanvas() {
-        return true;
+        return showsMap();
     }
 
     protected void centerOnPlayer() {
         map.centerOnPlayer();
-    }
-
-    protected MapThing thing(String key) {
-        if (key == null) return null;
-        for (MapThing thing : shownThings()) {
-            if (thing.key().equals(key)) return thing;
-        }
-        return null;
     }
 
     private List<MapThing> shownThings() {
@@ -113,10 +119,17 @@ public abstract class MapStudioScreen extends StudioScreen {
                                  int mouseX, int mouseY) {
         float pad = UiMetrics.PAD;
         map.place(left + pad, top + pad, width - pad * 2.0f, height - pad * 3.0f - HINT_HEIGHT);
+        if (!mapWasShown) {
+            mapWasShown = true;
+            map.reveal();
+            motion.reset();
+        }
         List<MapThing> shown = shownThings();
         followChoice(shown);
         hovered = carrying || panning ? hovered : keyOf(pick(shown, mouseX, mouseY));
-        map.render(graphics, canvas -> paintShapes(canvas, shown), canvas -> paintLabels(canvas, shown));
+        String held = carrying && pressed != null ? pressed.key() : null;
+        List<MapMotion.Drawn> drawn = motion.advance(shown, held, carryX, carryZ);
+        map.render(graphics, canvas -> paintShapes(canvas, drawn), canvas -> paintLabels(canvas, drawn));
         line(graphics, mapHint(), left + pad, width - pad * 2.0f, top + height - pad - HINT_HEIGHT + 1.0f);
     }
 
@@ -149,18 +162,19 @@ public abstract class MapStudioScreen extends StudioScreen {
         return thing == null ? null : thing.key();
     }
 
-    private void paintShapes(GuiGraphics graphics, List<MapThing> shown) {
-        String chosen = chosenThing();
-        for (MapThing thing : shown) {
-            if (!thing.here()) continue;
-            MapThing drawn = carrying && pressed != null && thing.key().equals(pressed.key())
-                    ? thing.at(carryX, carryZ) : thing;
-            float glow = Math.max(map.lit(thing.key(), thing.key().equals(chosen)),
-                    thing.key().equals(hovered) ? 0.45f : 0.0f);
-            if (drawn.size() > MapThing.PIN_ONLY) {
-                map.area(graphics, drawn.shape(), drawn.centerX(), drawn.centerZ(), drawn.size(), drawn.color(), glow);
+    private float glowOf(String key) {
+        float chosen = map.lit(key, key.equals(chosenThing()));
+        return Math.max(chosen, key.equals(hovered) ? 0.45f : 0.0f);
+    }
+
+    private void paintShapes(GuiGraphics graphics, List<MapMotion.Drawn> drawn) {
+        for (MapMotion.Drawn item : drawn) {
+            MapThing thing = item.thing();
+            float glow = glowOf(thing.key());
+            if (thing.size() > MapThing.PIN_ONLY) {
+                map.area(graphics, thing.shape(), item.x(), item.z(), thing.size(), thing.color(), glow, item.presence());
             }
-            map.pin(graphics, drawn.centerX(), drawn.centerZ(), drawn.color(), glow);
+            map.pin(graphics, item.x(), item.z(), thing.color(), glow, item.presence());
         }
         paintGhost(graphics);
     }
@@ -169,24 +183,26 @@ public abstract class MapStudioScreen extends StudioScreen {
         MapThing ghost = ghost();
         if (ghost == null) return;
         float pulse = UiAnim.pulse(GHOST_PULSE_MS, 0.55f, 1.0f);
-        int color = UiTheme.alpha(UiAccent.color(), pulse);
         if (ghost.size() > MapThing.PIN_ONLY) {
-            map.area(graphics, ghost.shape(), ghost.centerX(), ghost.centerZ(), ghost.size(), color, 1.0f);
+            map.area(graphics, ghost.shape(), ghost.centerX(), ghost.centerZ(), ghost.size(), UiAccent.color(), 1.0f,
+                    pulse);
         }
-        map.pin(graphics, ghost.centerX(), ghost.centerZ(), color, 1.0f);
+        map.pin(graphics, ghost.centerX(), ghost.centerZ(), UiAccent.color(), 1.0f, pulse);
     }
 
-    private void paintLabels(GuiGraphics graphics, List<MapThing> shown) {
+    // WHY: подпись у сотен блоков карьера слилась бы в кашу, поэтому экран может показывать её
+    // WHY: только у выбранной и наведённой вещи; переход подписи идёт той же подсветкой
+    private void paintLabels(GuiGraphics graphics, List<MapMotion.Drawn> drawn) {
         String chosen = chosenThing();
-        for (MapThing thing : shown) {
-            if (!thing.here()) continue;
-            MapThing drawn = carrying && pressed != null && thing.key().equals(pressed.key())
-                    ? thing.at(carryX, carryZ) : thing;
-            float glow = map.lit("label:" + thing.key(), thing.key().equals(chosen) || thing.key().equals(hovered));
-            map.label(graphics, this.font, drawn.name(), drawn.centerX(), drawn.centerZ(), glow);
+        for (MapMotion.Drawn item : drawn) {
+            String key = item.thing().key();
+            boolean lit = key.equals(chosen) || key.equals(hovered);
+            float glow = map.lit("label:" + key, lit);
+            float presence = labelsAlways() ? item.presence() : item.presence() * glow;
+            map.label(graphics, this.font, item.thing().name(), item.x(), item.z(), glow, presence);
         }
         MapThing ghost = ghost();
-        if (ghost != null) map.label(graphics, this.font, ghost.name(), ghost.centerX(), ghost.centerZ(), 1.0f);
+        if (ghost != null) map.label(graphics, this.font, ghost.name(), ghost.centerX(), ghost.centerZ(), 1.0f, 1.0f);
     }
 
     // WHY: булавка важнее области: мелкая точка внутри большой зоны иначе не бралась бы мышью вовсе,
@@ -255,7 +271,7 @@ public abstract class MapStudioScreen extends StudioScreen {
             map.pan(dragX, dragY);
             return;
         }
-        if (pressed == null) return;
+        if (pressed == null || !movable(pressed)) return;
         carrying = carrying || Math.abs(mouseX - pressX) > DRAG_START || Math.abs(mouseY - pressY) > DRAG_START;
         if (!carrying) return;
         carryX = (int) Math.floor(map.worldX(mouseX) - grabX);

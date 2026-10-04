@@ -58,10 +58,6 @@ public final class ItemShelf {
         height = pickerHeight;
     }
 
-    public void mark(ItemStack stack) {
-        marked = stack == null ? ItemStack.EMPTY : stack;
-    }
-
     public boolean showsInventory() {
         return inventory;
     }

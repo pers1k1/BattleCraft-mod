@@ -491,8 +491,4 @@ public final class PointStudioScreen extends MapStudioScreen {
     boolean confirmed(String key) {
         return confirm(key);
     }
-
-    void relayout() {
-        layout();
-    }
 }

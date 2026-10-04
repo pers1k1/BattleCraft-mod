@@ -38,6 +38,7 @@ public final class MapCanvas {
     private static final float PIN = 3.2f;
     private static final float LABEL_SCALE = 0.62f;
     private static final float PLAYER_ARROW = 4.2f;
+    private static final float REVEAL_ZOOM = 0.82f;
 
     private final Map<String, Smooth> lit = new HashMap<>();
     private double centerX;
@@ -100,6 +101,13 @@ public final class MapCanvas {
         }
     }
 
+    // WHY: карта, показанная заново, наезжает к своему масштабу, а не встаёт кадром, тем же ходом,
+    // WHY: что и зум колесом
+    public void reveal() {
+        zoom = targetZoom * REVEAL_ZOOM;
+        anchorX = Double.NaN;
+    }
+
     public void pan(double dragX, double dragY) {
         centerX -= dragX / zoom;
         centerZ -= dragY / zoom;
@@ -118,10 +126,6 @@ public final class MapCanvas {
 
     private static float clampZoom(float value) {
         return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
-    }
-
-    public float zoom() {
-        return zoom;
     }
 
     public float screenX(double worldX) {
@@ -238,12 +242,12 @@ public final class MapCanvas {
     }
 
     public void area(GuiGraphics graphics, ZoneShape shape, double worldX, double worldZ, double size, int color,
-                     float glow) {
+                     float glow, float presence) {
         float x = screenX(worldX);
         float y = screenY(worldZ);
-        float reach = (float) Math.max(1.5, size * zoom);
-        int fill = UiTheme.alpha(color, 0.16f + 0.14f * glow);
-        int rim = UiTheme.alpha(color, 0.55f + 0.45f * glow);
+        float reach = (float) Math.max(1.5, size * zoom) * UiAnim.easeOut(presence);
+        int fill = UiTheme.alpha(color, (0.16f + 0.14f * glow) * presence);
+        int rim = UiTheme.alpha(color, (0.55f + 0.45f * glow) * presence);
         float thickness = 1.0f + glow;
         if (shape == ZoneShape.SQUARE) {
             UiRender.rect(graphics, x - reach, y - reach, reach * 2.0f, reach * 2.0f, fill);
@@ -254,19 +258,24 @@ public final class MapCanvas {
         UiRender.ring(graphics, x, y, reach, thickness, 1.0f, rim);
     }
 
-    public void pin(GuiGraphics graphics, double worldX, double worldZ, int color, float glow) {
+    public void pin(GuiGraphics graphics, double worldX, double worldZ, int color, float glow, float presence) {
         float x = screenX(worldX);
         float y = screenY(worldZ);
-        float size = PIN * (1.0f + 0.35f * glow);
-        UiRender.dot(graphics, x, y, size + 0.8f, UiPalette.panelDeep());
-        UiRender.dot(graphics, x, y, size, color);
-        if (glow > 0.01f) UiRender.ring(graphics, x, y, size + 2.6f, 1.0f, 1.0f, UiTheme.alpha(color, 0.7f * glow));
+        float size = PIN * (1.0f + 0.35f * glow) * UiAnim.easeOut(presence);
+        if (size <= 0.05f) return;
+        UiRender.dot(graphics, x, y, size + 0.8f, UiTheme.alpha(UiPalette.panelDeep(), presence));
+        UiRender.dot(graphics, x, y, size, UiTheme.alpha(color, presence));
+        if (glow > 0.01f) {
+            UiRender.ring(graphics, x, y, size + 2.6f, 1.0f, 1.0f, UiTheme.alpha(color, 0.7f * glow * presence));
+        }
     }
 
-    public void label(GuiGraphics graphics, Font font, Component text, double worldX, double worldZ, float glow) {
+    public void label(GuiGraphics graphics, Font font, Component text, double worldX, double worldZ, float glow,
+                      float presence) {
+        if (presence <= 0.02f) return;
         float x = screenX(worldX);
-        float y = screenY(worldZ) - PIN * 2.0f - 9.0f;
-        int color = UiTheme.alpha(UiAccent.text(), 0.7f + 0.3f * glow);
+        float y = screenY(worldZ) - PIN * 2.0f - 9.0f + (1.0f - presence) * 4.0f;
+        int color = UiTheme.alpha(UiAccent.text(), (0.7f + 0.3f * glow) * presence);
         UiRender.textCentered(graphics, font, text, x, y, LABEL_SCALE + 0.12f * glow, color, false);
     }
 

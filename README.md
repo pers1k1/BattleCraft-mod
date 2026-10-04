@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.05` in files, `05.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.05hotfix` in files, `05.10.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1040,6 +1040,16 @@ The capture points, zones, marks, kill reward, teams, immortality and the `/bc` 
 - **Not changed.** Customisation already edits with a live preview and keeps its own layout. Game rules, knockdown, combat timer, map sharing, announcements and the config guard have no visible thing to put in the middle and stay panels of rows. The quarry and item modifiers do have one (blocks and items) and move to the editor in a later pass.
 
 Version 2026.10.05 - built and started on a dedicated server; not played through, so report anything that looks wrong.
+
+## The rest of /bc in the same editor, 5 October 2026 (hotfix)
+
+- **Quarry.** Every quarry block is a dot on the map: green when ready, grey while it grows back, the name shows on the chosen and the hovered one. Pick a block to set its own regrowth, return it to the default, teleport or take it out of the quarry, with no need to look at it. Block kinds are tiles of the block with their regrowth and yield multiplier. Common holds the common regrowth, the module switch and the old at-cursor actions. New command `quarry at <pos> remove|cooldown set <seconds>|cooldown reset`.
+- **Item modifiers.** Items are tiles, the first is whatever you hold. The right column lists what is already on the chosen item, a click on a line removes it, and below are the new effect and new attribute forms with the result spelled out; the held item also gets its lore. Add item opens the shelf: double-click a kind to start giving it modifiers.
+- **Panels.** Game rules, knockdown, combat timer, map sharing, announcements and the config guard use the same editor frame: pages on the left, rows in the middle, and on the right what the page does. Knockdown, combat timer, map and quarry have the module switch on the right, the same one as the module tile in the hub.
+- **Motion on the map.** A new point, zone, mark or quarry block grows in, a removed one fades and shrinks, one moved by Move to me or by another operator glides to its new place, and the map eases in to its zoom when it is shown again.
+- **Gone.** The item picker window: every place that assigns an item now uses the shelf of its editor.
+
+Version 2026.10.05hotfix - built and started on a dedicated server; not played through, so report anything that looks wrong.
 
 ## Releases
 

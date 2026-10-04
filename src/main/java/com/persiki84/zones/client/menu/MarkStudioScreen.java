@@ -390,10 +390,6 @@ public final class MarkStudioScreen extends MapStudioScreen {
         return confirm(key);
     }
 
-    void relayout() {
-        layout();
-    }
-
     void openPalette(String owner, Component title, int color, IntConsumer apply, Runnable clear) {
         palette(owner, PaletteWindow.Kind.SERVER, title, color, apply, clear);
     }

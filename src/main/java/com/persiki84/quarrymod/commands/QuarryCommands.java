@@ -50,6 +50,7 @@ public class QuarryCommands {
                         .then(Commands.literal("reset")
                                 .executes(QuarryCommands::resetBlockCooldown)))
                 .then(typeBranch())
+                .then(QuarryPositionCommands.branch())
         );
     }
 
@@ -173,63 +174,26 @@ public class QuarryCommands {
     }
 
     private static int setBlockCooldown(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
-
-        if (source.getEntity() instanceof ServerPlayer player) {
-            BlockHitResult result = getPlayerLookingAt(player);
-
-            if (result.getType() == HitResult.Type.BLOCK) {
-                BlockPos pos = result.getBlockPos();
-                String dimension = player.level().dimension().location().toString();
-                QuarryBlockManager manager = QuarryMod.getInstance().getDataManager().getBlockManager();
-
-                if (manager.isQuarryBlock(pos, dimension)) {
-                    int seconds = IntegerArgumentType.getInteger(context, "seconds");
-
-                    if (manager.setCustomCooldown(pos, dimension, seconds)) {
-                        source.sendSuccess(() -> Component.translatable("quarrymod.command.cooldown.block_set",
-                                Component.literal(pos.toShortString()).withStyle(ChatFormatting.WHITE),
-                                Component.literal(String.valueOf(seconds)).withStyle(ChatFormatting.WHITE)
-                        ).withStyle(ChatFormatting.GREEN), false);
-                    } else {
-                        source.sendFailure(Component.translatable("quarrymod.command.cooldown.error_set").withStyle(ChatFormatting.RED));
-                    }
-                } else {
-                    source.sendFailure(Component.translatable("quarrymod.command.block.not_quarry").withStyle(ChatFormatting.RED));
-                }
-            } else {
-                source.sendFailure(Component.translatable("quarrymod.command.block.must_look").withStyle(ChatFormatting.RED));
-            }
-        }
-
+        BlockPos pos = aimedBlock(context);
+        if (pos == null) return 1;
+        QuarryPositionCommands.setCooldownAt(context.getSource(), pos, IntegerArgumentType.getInteger(context, "seconds"));
         return 1;
     }
 
     private static int resetBlockCooldown(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
-
-        if (source.getEntity() instanceof ServerPlayer player) {
-            BlockHitResult result = getPlayerLookingAt(player);
-
-            if (result.getType() == HitResult.Type.BLOCK) {
-                BlockPos pos = result.getBlockPos();
-                String dimension = player.level().dimension().location().toString();
-                QuarryBlockManager manager = QuarryMod.getInstance().getDataManager().getBlockManager();
-
-                if (manager.isQuarryBlock(pos, dimension)) {
-                    manager.removeCustomCooldown(pos, dimension);
-                    source.sendSuccess(() -> Component.translatable("quarrymod.command.cooldown.reset",
-                            Component.literal(pos.toShortString()).withStyle(ChatFormatting.WHITE)
-                    ).withStyle(ChatFormatting.GREEN), false);
-                } else {
-                    source.sendFailure(Component.translatable("quarrymod.command.block.not_quarry").withStyle(ChatFormatting.RED));
-                }
-            } else {
-                source.sendFailure(Component.translatable("quarrymod.command.block.must_look").withStyle(ChatFormatting.RED));
-            }
-        }
-
+        BlockPos pos = aimedBlock(context);
+        if (pos == null) return 1;
+        QuarryPositionCommands.resetCooldownAt(context.getSource(), pos);
         return 1;
+    }
+
+    private static BlockPos aimedBlock(CommandContext<CommandSourceStack> context) {
+        if (!(context.getSource().getEntity() instanceof ServerPlayer player)) return null;
+        BlockHitResult result = getPlayerLookingAt(player);
+        if (result.getType() == HitResult.Type.BLOCK) return result.getBlockPos();
+        context.getSource().sendFailure(Component.translatable("quarrymod.command.block.must_look")
+                .withStyle(ChatFormatting.RED));
+        return null;
     }
 
     private static int addQuarryBlock(CommandContext<CommandSourceStack> context) {
@@ -265,128 +229,92 @@ public class QuarryCommands {
     }
 
     private static int removeQuarryBlock(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
-
-        if (source.getEntity() instanceof ServerPlayer player) {
-            BlockHitResult result = getPlayerLookingAt(player);
-
-            if (result.getType() == HitResult.Type.BLOCK) {
-                BlockPos pos = result.getBlockPos();
-                String dimension = player.level().dimension().location().toString();
-                QuarryBlockManager manager = QuarryMod.getInstance().getDataManager().getBlockManager();
-
-                if (manager.isQuarryBlock(pos, dimension)) {
-                    manager.removeQuarryBlock(pos, dimension);
-                    source.sendSuccess(() -> Component.translatable("quarrymod.command.block.removed",
-                            Component.literal(pos.toShortString()).withStyle(ChatFormatting.WHITE)
-                    ).withStyle(ChatFormatting.GREEN), false);
-                } else {
-                    source.sendFailure(Component.translatable("quarrymod.command.block.not_quarry").withStyle(ChatFormatting.RED));
-                }
-            }
-        }
-
+        if (!(context.getSource().getEntity() instanceof ServerPlayer player)) return 1;
+        BlockHitResult result = getPlayerLookingAt(player);
+        if (result.getType() == HitResult.Type.BLOCK) QuarryPositionCommands.removeAt(context.getSource(), result.getBlockPos());
         return 1;
     }
 
     private static int getBlockInfo(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
+        if (!(source.getEntity() instanceof ServerPlayer player)) return 1;
+        BlockHitResult result = getPlayerLookingAt(player);
+        if (result.getType() != HitResult.Type.BLOCK) return 1;
 
-        if (source.getEntity() instanceof ServerPlayer player) {
-            BlockHitResult result = getPlayerLookingAt(player);
-
-            if (result.getType() == HitResult.Type.BLOCK) {
-                BlockPos pos = result.getBlockPos();
-                BlockState state = player.level().getBlockState(pos);
-                String dimension = player.level().dimension().location().toString();
-                QuarryBlockManager manager = QuarryMod.getInstance().getDataManager().getBlockManager();
-
-                source.sendSuccess(() -> Component.translatable("quarrymod.command.info.header").withStyle(ChatFormatting.YELLOW), false);
-                source.sendSuccess(() -> Component.translatable("quarrymod.command.info.position",
-                        Component.literal(pos.toShortString()).withStyle(ChatFormatting.WHITE)
-                ).withStyle(ChatFormatting.GRAY), false);
-                source.sendSuccess(() -> Component.translatable("quarrymod.command.info.block_name",
-                        Component.literal(state.getBlock().getName().getString()).withStyle(ChatFormatting.WHITE)
-                ).withStyle(ChatFormatting.GRAY), false);
-
-                if (manager.isQuarryBlock(pos, dimension)) {
-                    source.sendSuccess(() -> Component.translatable("quarrymod.command.info.status_quarry").withStyle(ChatFormatting.GRAY), false);
-
-                    long custom = manager.getCustomCooldown(pos, dimension);
-                    if (custom != -1) {
-                        source.sendSuccess(() -> Component.translatable("quarrymod.command.info.cooldown_custom",
-                                Component.literal(String.valueOf(custom)).withStyle(ChatFormatting.YELLOW)
-                        ).withStyle(ChatFormatting.GRAY), false);
-                    } else {
-                        source.sendSuccess(() -> Component.translatable("quarrymod.command.info.cooldown_global",
-                                Component.literal(String.valueOf(manager.getGlobalCooldown())).withStyle(ChatFormatting.WHITE)
-                        ).withStyle(ChatFormatting.GRAY), false);
-                    }
-
-                    if (manager.isOnCooldown(pos, dimension)) {
-                        long cooldown = manager.getRemainingCooldown(pos, dimension);
-                        source.sendSuccess(() -> Component.translatable("quarrymod.command.info.cooldown_remaining",
-                                Component.literal(String.valueOf(cooldown)).withStyle(ChatFormatting.YELLOW)
-                        ).withStyle(ChatFormatting.GRAY), false);
-                    } else {
-                        source.sendSuccess(() -> Component.translatable("quarrymod.command.info.cooldown_ready").withStyle(ChatFormatting.GRAY), false);
-                    }
-                } else {
-                    source.sendSuccess(() -> Component.translatable("quarrymod.command.info.status_normal").withStyle(ChatFormatting.GRAY), false);
-                }
-            }
-        }
-
+        BlockPos pos = result.getBlockPos();
+        BlockState state = player.level().getBlockState(pos);
+        String dimension = player.level().dimension().location().toString();
+        source.sendSuccess(() -> Component.translatable("quarrymod.command.info.header").withStyle(ChatFormatting.YELLOW), false);
+        source.sendSuccess(() -> Component.translatable("quarrymod.command.info.position",
+                Component.literal(pos.toShortString()).withStyle(ChatFormatting.WHITE)).withStyle(ChatFormatting.GRAY), false);
+        source.sendSuccess(() -> Component.translatable("quarrymod.command.info.block_name",
+                Component.literal(state.getBlock().getName().getString()).withStyle(ChatFormatting.WHITE)
+        ).withStyle(ChatFormatting.GRAY), false);
+        reportQuarryState(source, pos, dimension);
         return 1;
+    }
+
+    private static void reportQuarryState(CommandSourceStack source, BlockPos pos, String dimension) {
+        QuarryBlockManager manager = blockManager();
+        if (!manager.isQuarryBlock(pos, dimension)) {
+            source.sendSuccess(() -> Component.translatable("quarrymod.command.info.status_normal").withStyle(ChatFormatting.GRAY), false);
+            return;
+        }
+        source.sendSuccess(() -> Component.translatable("quarrymod.command.info.status_quarry").withStyle(ChatFormatting.GRAY), false);
+        long custom = manager.getCustomCooldown(pos, dimension);
+        source.sendSuccess(() -> custom != -1
+                ? Component.translatable("quarrymod.command.info.cooldown_custom",
+                        Component.literal(String.valueOf(custom)).withStyle(ChatFormatting.YELLOW)).withStyle(ChatFormatting.GRAY)
+                : Component.translatable("quarrymod.command.info.cooldown_global",
+                        Component.literal(String.valueOf(manager.getGlobalCooldown())).withStyle(ChatFormatting.WHITE))
+                        .withStyle(ChatFormatting.GRAY), false);
+        long remaining = manager.isOnCooldown(pos, dimension) ? manager.getRemainingCooldown(pos, dimension) : -1;
+        source.sendSuccess(() -> remaining >= 0
+                ? Component.translatable("quarrymod.command.info.cooldown_remaining",
+                        Component.literal(String.valueOf(remaining)).withStyle(ChatFormatting.YELLOW)).withStyle(ChatFormatting.GRAY)
+                : Component.translatable("quarrymod.command.info.cooldown_ready").withStyle(ChatFormatting.GRAY), false);
     }
 
     private static int listQuarryBlocks(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
-        QuarryBlockManager manager = QuarryMod.getInstance().getDataManager().getBlockManager();
+        QuarryBlockManager manager = blockManager();
         Map<QuarryBlockKey, QuarryBlock> blocks = manager.getAllQuarryBlocks();
-
         if (blocks.isEmpty()) {
             source.sendSuccess(() -> Component.translatable("quarrymod.command.list.empty").withStyle(ChatFormatting.RED), false);
-        } else {
-            source.sendSuccess(() -> Component.translatable("quarrymod.command.list.header",
-                    Component.literal(String.valueOf(blocks.size())).withStyle(ChatFormatting.WHITE)
-            ).withStyle(ChatFormatting.YELLOW), false);
-
-            Map<String, Integer> blockCounts = new HashMap<>();
-
-            for (Map.Entry<QuarryBlockKey, QuarryBlock> entry : blocks.entrySet()) {
-                QuarryBlockKey key = entry.getKey();
-                QuarryBlock block = entry.getValue();
-                String blockName = block.getOriginalState().getBlock().getName().getString();
-                blockCounts.put(blockName, blockCounts.getOrDefault(blockName, 0) + 1);
-
-                long custom = manager.getCustomCooldown(key.pos(), key.dimension());
-                Component cooldownComp = custom != -1
-                        ? Component.literal(" [" + custom + "s]").withStyle(ChatFormatting.YELLOW)
-                        : Component.empty();
-
-                source.sendSuccess(() -> Component.translatable("quarrymod.command.list.entry",
-                        Component.literal(blockName),
-                        Component.literal(key.pos().toShortString()).withStyle(ChatFormatting.WHITE),
-                        Component.literal(key.dimension()).withStyle(ChatFormatting.DARK_GRAY),
-                        cooldownComp
-                ).withStyle(ChatFormatting.GRAY), false);
-            }
-
-            source.sendSuccess(() -> Component.translatable("quarrymod.command.list.stats_header").withStyle(ChatFormatting.YELLOW), false);
-            for (Map.Entry<String, Integer> entry : blockCounts.entrySet()) {
-                source.sendSuccess(() -> Component.translatable("quarrymod.command.list.stat_entry",
-                        Component.literal(entry.getKey()),
-                        Component.literal(String.valueOf(entry.getValue())).withStyle(ChatFormatting.WHITE)
-                ).withStyle(ChatFormatting.GRAY), false);
-            }
-
-            source.sendSuccess(() -> Component.translatable("quarrymod.command.list.global_cooldown",
-                    Component.literal(String.valueOf(manager.getGlobalCooldown())).withStyle(ChatFormatting.WHITE)
+            return 1;
+        }
+        source.sendSuccess(() -> Component.translatable("quarrymod.command.list.header",
+                Component.literal(String.valueOf(blocks.size())).withStyle(ChatFormatting.WHITE)).withStyle(ChatFormatting.YELLOW), false);
+        Map<String, Integer> blockCounts = listEntries(source, manager, blocks);
+        source.sendSuccess(() -> Component.translatable("quarrymod.command.list.stats_header").withStyle(ChatFormatting.YELLOW), false);
+        for (Map.Entry<String, Integer> entry : blockCounts.entrySet()) {
+            source.sendSuccess(() -> Component.translatable("quarrymod.command.list.stat_entry",
+                    Component.literal(entry.getKey()),
+                    Component.literal(String.valueOf(entry.getValue())).withStyle(ChatFormatting.WHITE)
             ).withStyle(ChatFormatting.GRAY), false);
         }
-
+        source.sendSuccess(() -> Component.translatable("quarrymod.command.list.global_cooldown",
+                Component.literal(String.valueOf(manager.getGlobalCooldown())).withStyle(ChatFormatting.WHITE)
+        ).withStyle(ChatFormatting.GRAY), false);
         return 1;
+    }
+
+    private static Map<String, Integer> listEntries(CommandSourceStack source, QuarryBlockManager manager,
+                                                    Map<QuarryBlockKey, QuarryBlock> blocks) {
+        Map<String, Integer> blockCounts = new HashMap<>();
+        for (Map.Entry<QuarryBlockKey, QuarryBlock> entry : blocks.entrySet()) {
+            QuarryBlockKey key = entry.getKey();
+            String blockName = entry.getValue().getOriginalState().getBlock().getName().getString();
+            blockCounts.merge(blockName, 1, Integer::sum);
+            long custom = manager.getCustomCooldown(key.pos(), key.dimension());
+            Component cooldown = custom != -1
+                    ? Component.literal(" [" + custom + "s]").withStyle(ChatFormatting.YELLOW) : Component.empty();
+            source.sendSuccess(() -> Component.translatable("quarrymod.command.list.entry", Component.literal(blockName),
+                    Component.literal(key.pos().toShortString()).withStyle(ChatFormatting.WHITE),
+                    Component.literal(key.dimension()).withStyle(ChatFormatting.DARK_GRAY), cooldown
+            ).withStyle(ChatFormatting.GRAY), false);
+        }
+        return blockCounts;
     }
 
     private static BlockHitResult getPlayerLookingAt(ServerPlayer player) {

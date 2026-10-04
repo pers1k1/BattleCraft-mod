@@ -144,6 +144,7 @@ public final class ImmortalityStudioScreen extends StudioScreen {
     protected void selectNode(StudioNav.Node node) {
         nodeKey = node.key();
         chosen = null;
+        grid.reset();
     }
 
     @Override
