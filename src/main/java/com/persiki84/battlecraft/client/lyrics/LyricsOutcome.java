@@ -39,6 +39,6 @@ record LyricsOutcome(Kind kind, Lyrics lyrics, String source, Format format) {
     }
 
     boolean worded() {
-        return found() && lyrics.lines().stream().anyMatch(line -> !line.words().isEmpty());
+        return found() && lyrics.worded();
     }
 }

@@ -28,7 +28,7 @@ import com.persiki84.battlecraft.client.hud.PointsView;
 import com.persiki84.battlecraft.client.voice.RadioTalk;
 import com.persiki84.battlecraft.client.hud.RadioHud;
 import com.persiki84.battlecraft.client.hud.VoiceHud;
-import com.persiki84.battlecraft.client.menu.BattleCraftMenuScreen;
+import com.persiki84.battlecraft.client.menu.hub.HubStudioScreen;
 import com.persiki84.battlecraft.client.menu.panel.PanelScreens;
 import com.persiki84.battlecraft.menu.BattleCraftMenuState;
 import com.persiki84.battlecraft.menu.AnnounceMenuState;
@@ -143,7 +143,7 @@ public class BattleCraftMod {
             MinecraftForge.EVENT_BUS.register(new KeyInputHandler());
             ParkourRules.listen();
             CrawlPenalty.listen();
-            MenuScreens.register(BattleCraftMenuState.MENU_ID, BattleCraftMenuScreen::new);
+            MenuScreens.register(BattleCraftMenuState.MENU_ID, HubStudioScreen::new);
             PanelScreens.register();
             ScreenDim.painter((graphics, width, height) ->
                     MenuBackground.shared().render(graphics, width, height));

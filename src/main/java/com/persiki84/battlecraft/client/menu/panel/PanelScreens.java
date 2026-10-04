@@ -15,14 +15,14 @@ public final class PanelScreens {
         MenuScreens.register(ModuleMenuStates.AIRDROP, () -> new AirDropStudioScreen(null, null));
         MenuScreens.register(ModuleMenuStates.LOOT, () -> new AirDropStudioScreen(LootTables.AIRDROP, null));
         MenuScreens.register(ModuleMenuStates.QUARRY, QuarryScreen::new);
-        MenuScreens.register(ModuleMenuStates.KILL_REWARD, KillRewardScreen::new);
-        MenuScreens.register(ModuleMenuStates.IMMORTALITY, ImmortalityScreen::new);
+        MenuScreens.register(ModuleMenuStates.KILL_REWARD, KillRewardStudioScreen::new);
+        MenuScreens.register(ModuleMenuStates.IMMORTALITY, ImmortalityStudioScreen::new);
         MenuScreens.register(ModuleMenuStates.KNOCKDOWN, KnockdownScreen::new);
         MenuScreens.register(ModuleMenuStates.COMBAT, CombatScreen::new);
         MenuScreens.register(ModuleMenuStates.SELL, SellStudioScreen::new);
         MenuScreens.register(ModuleMenuStates.MODIFIERS, ModifierScreen::new);
         MenuScreens.register(ModuleMenuStates.GAME_RULES, GameRulesScreen::new);
-        MenuScreens.register(ModuleMenuStates.TEAMS, TeamsScreen::new);
+        MenuScreens.register(ModuleMenuStates.TEAMS, TeamsStudioScreen::new);
         MenuScreens.register(ModuleMenuStates.MAP, MapShareScreen::new);
         MenuScreens.register(AnnounceMenuState.MENU_ID, AnnounceScreen::new);
         MenuScreens.register(ConfigMenuState.MENU_ID, ConfigGuardScreen::new);

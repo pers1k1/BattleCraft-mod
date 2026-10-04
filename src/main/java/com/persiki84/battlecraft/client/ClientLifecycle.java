@@ -4,6 +4,7 @@ import com.persiki84.battlecraft.BattleCraftMod;
 import com.persiki84.battlecraft.client.hud.AnnounceHud;
 import com.persiki84.battlecraft.client.hud.RadioHud;
 import com.persiki84.battlecraft.client.island.IslandModel;
+import com.persiki84.battlecraft.client.lyrics.SpotifyBridge;
 import com.persiki84.battlecraft.client.media.MediaWatch;
 import com.persiki84.battlecraft.client.voice.RadioChirp;
 import com.persiki84.battlecraft.client.voice.RadioTalk;
@@ -41,5 +42,6 @@ public final class ClientLifecycle {
     public static void onGameShuttingDown(GameShuttingDownEvent event) {
         DiscordRpcManager.getInstance().shutdown();
         MediaWatch.want(false);
+        SpotifyBridge.stop();
     }
 }

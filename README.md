@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.03v8` in files, `03.10.26v8 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.05` in files, `05.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -991,7 +991,7 @@ Version 2026.10.03v5 - built but not played through, so report anything that loo
 
 ## Held words and the line change, 3 October 2026 (v6)
 
-- **Held words.** An LRC line only has a start, so a held word sent the sweep ahead of the voice. A second source now gives word timings: NetEase Cloud Music (music.163.com, yrc), where every word has its own start and length (in Never Gonna Give You Up the word "love" is held for 2.34 s). The sweep crosses each word in exactly its length and waits on a held one. Sources in order: LRCLIB with word timings, NetEase yrc, LRCLIB line timings, NetEase line timings; a song must match the title, the artist and the length within 3 s. Word timings exist mostly for popular western songs; Russian and niche songs keep the line timing with the estimated pace. Spicetify sources that need a Musixmatch or Spotify token are not used: such a token is obtained around their terms. The core is shared with the Glass MediaPlayer Island.
+- **Held words.** An LRC line only has a start, so a held word sent the sweep ahead of the voice. A second source now gives word timings: NetEase Cloud Music (music.163.com, yrc), where every word has its own start and length (in Never Gonna Give You Up the word "love" is held for 2.34 s). The sweep crosses each word in exactly its length and waits on a held one. Sources in order: LRCLIB with word timings, NetEase yrc, LRCLIB line timings, NetEase line timings; a song must match the title, the artist and the length within 3 s. Word timings exist mostly for popular western songs; Russian and niche songs keep the line timing with the estimated pace. Spicetify sources that need a Musixmatch or Spotify token are not used: such a token is obtained around their terms. (Since 5 October the Spotify and Spicy Lyrics texts come through the Spotify bridge, under the Spotify app's own session.) The core is shared with the Glass MediaPlayer Island.
 - **Leaving line.** The leaving line keeps the look it had in its last frame (dimmed letters, cover color, glow) instead of snapping to plain ink.
 - **Hidden letters.** A scrolled line fades at the slot edges during the change too (`UiRender.marqueeFrom` around the morph), so letters already past the edge stay hidden.
 - **Whole-line change.** A lyric line changes as one wave: a shared ending of two different lines (a period, one letter) no longer slides to its new place.
@@ -1014,6 +1014,32 @@ Version 2026.10.03v7 - built but not played through, so report anything that loo
 - **Lift direction.** The letter being sung now rises, as intended; it used to dip.
 
 Version 2026.10.03v8 - built but not played through, so report anything that looks wrong.
+
+## Lyrics from the Spotify app, 5 October 2026
+
+- **Spotify bridge.** When music plays in the Spotify desktop app with [Spicetify](https://spicetify.app), the extension [`glass-lyrics-bridge.js`](https://github.com/pers1k1/Mediaplayer/tree/main/spicetify) hands the island the lyrics Spotify itself shows: first the line-synced Spotify lyrics (Musixmatch), then, if Spicy Lyrics is installed, its word-timed lyrics. The bridge reads the cache Spicy Lyrics fills on every track change and sends no requests to the Spicy Lyrics server. No token or cookie reaches the mod: the extension posts a parcel to `http://127.0.0.1:47823/lyrics`.
+- **What the game accepts.** It listens on 127.0.0.1 only and takes a parcel only from origin `https://*.spotify.com`, which a browser page cannot fake. The body is capped at 600 KB, the text goes through the same parsers and checks as the server replies, and the track must match the title, the artist and the length within 3 s (`SpotifyBridge`, `BridgeExchange`, `BridgeParcel`).
+- **Source order.** Word-timed lyrics from the bridge, word-timed LRCLIB, NetEase yrc, line-synced lyrics from the bridge, line-synced LRCLIB, line-synced NetEase. Word-timed lyrics that arrive after line-synced ones replace them on the fly. If the game starts mid-song, the extension repeats the parcel every 10 s until the port answers. A busy port or a Java build without `jdk.httpserver` only turns the bridge off, with a line in the log.
+- **Setting.** **Spotify bridge** in the island group of the customisation screen, on by default (`islandLyricsBridge` in `battlecraft-hud.toml`). The core is shared with the Glass MediaPlayer Island.
+- **Install.** Put `glass-lyrics-bridge.js` into `%APPDATA%\spicetify\Extensions`, then run `spicetify config extensions glass-lyrics-bridge.js` and `spicetify apply`.
+
+## Every /bc screen is an editor, 5 October 2026
+
+The capture points, zones, marks, kill reward, teams, immortality and the `/bc` hub itself now open as the same editor the shop, the airdrop and the buyback use: what you edit on the left, what it looks like in the middle, every property of the chosen thing on the right, a right-click menu on anything, numbers typed or stepped and sent after a short pause, Delete twice to remove.
+
+- **A map in the middle.** Points, zones and marks sit on a map of the terrain you have explored, with the grid, your own arrow and each area drawn in its shape and colour. Wheel zooms around the cursor, dragging empty ground pans, picking a thing in the list on the left glides the map to it. **Drag a point, a zone or a mark to move it**; it stays where you dropped it until the server answers. Right-click a thing for teleport, move to me, colour, owner, reward and delete; right-click empty ground for "New ... here". **To Me** brings the map back to you.
+- **Creating on the map.** New point, New zone and New mark open a form on the right with the name field already focused and a pulsing outline on the map at your position; click or drag on the map to place it, the height is taken from the ground there when the chunk is loaded. Zones and marks get a free `zone_N` / `mark_N` id you can overwrite.
+- **Capture points.** Area, capture, owner and display, reward, income, owner effect, commands and actions sit in one column instead of four tabs; the common protection and marker rules have their own node. **Reward and income are shown as the item itself**: click it to open the shelf (inventory and every item with search) and double-click to assign. An item from the inventory keeps its tags, so a TACZ gun keeps its gun. The effect is sent as soon as the typed id is an existing effect.
+- **Zones.** Kind, owner, colour, area, marker, spawn and all eleven rules in one column. Moving a zone carries its spawn anchor with it.
+- **Marks.** Label and extra lines, kind, colour, size, range, who sees it and the hide zone in one column; a hide zone is drawn on the map around the mark.
+- **Kill reward.** The reward is a tile of the item with its count, a turntable preview and a shelf to change it. The item id is now quoted in the command, so ids with a namespace are accepted.
+- **Teams.** Teams are banners in their colour with the player count; the colour is picked on the right (vanilla `team modify ... color`), the members are listed, New team keeps the quick red, blue, green and yellow.
+- **Immortality.** Online players are heads: an immortal one is lit and shows the seconds left. Double-click grants or removes, Ctrl and a drag box select several for a group grant.
+- **The `/bc` hub.** Match shows your actions and the operator levers, and in the lobby the start checklist as tiles: a met condition fades, double-click fixes what can be fixed. Sections are tiles with item icons, double-click opens one. Modules are tiles that fade when off; double-click toggles, a group can be switched at once. The match numbers stay rows, one group per node (lobby, teams, surrender, stamina, place), and so do the start, stop and surrender command lists. Start match / Stop match sits in the header; stop asks for a second press.
+- **New commands.** `capturepoint|finalpoint setposition <name> <pos>`, `battlecraft zone edit <id> at <pos>` and `battlecraft mark edit <id> at <pos>`. The position must be inside the world; no chunk is loaded for it. The capture point menu snapshot now carries the position, the world and the reward and income items with their tags.
+- **Not changed.** Customisation already edits with a live preview and keeps its own layout. Game rules, knockdown, combat timer, map sharing, announcements and the config guard have no visible thing to put in the middle and stay panels of rows. The quarry and item modifiers do have one (blocks and items) and move to the editor in a later pass.
+
+Version 2026.10.05 - built and started on a dedicated server; not played through, so report anything that looks wrong.
 
 ## Releases
 

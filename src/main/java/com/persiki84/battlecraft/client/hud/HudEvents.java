@@ -4,6 +4,7 @@ import com.persiki84.battlecraft.client.custom.Customization;
 import com.persiki84.shared.client.ui.UiGlassStyle;
 import com.persiki84.battlecraft.client.custom.HudLayout;
 import com.persiki84.battlecraft.client.island.IslandModel;
+import com.persiki84.battlecraft.client.lyrics.SpotifyBridge;
 import com.persiki84.battlecraft.client.media.MediaWatch;
 import com.persiki84.battlecraft.client.voice.RadioChirp;
 import com.persiki84.battlecraft.client.voice.RadioTalk;
@@ -94,6 +95,8 @@ public final class HudEvents {
     private static void islandTick() {
         MediaWatch.want(HudConfig.island() && HudConfig.islandMedia());
         MediaWatch.tick();
+        SpotifyBridge.want(HudConfig.island() && HudConfig.islandMedia() && HudConfig.islandLyrics()
+                && HudConfig.islandLyricsBridge());
         if (++statsTicks < STATS_INTERVAL) return;
 
         statsTicks = 0;

@@ -112,6 +112,7 @@ public class CapturePoint {
     public String getOwnerTeam() { return ownerTeam; }
     public ItemStack getReward() { return reward; }
     public int getRewardAmount() { return rewardAmount; }
+    public void setPosition(BlockPos center) { this.area = area.withCenter(center); }
     public void setSize(double size) { this.area = area.withSize(size); }
     public void setShape(ZoneShape shape) { this.area = area.withShape(shape); }
     public void setCaptureTime(int captureTime) { this.captureTime = captureTime; }

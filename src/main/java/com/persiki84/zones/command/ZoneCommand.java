@@ -22,6 +22,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.ClickEvent;
@@ -114,6 +115,7 @@ public final class ZoneCommand {
                         .then(markerRangeEdits())
                         .then(hideInsideEdit())
                         .then(placementEdits())
+                        .then(moveToEdits())
                         .then(spawnEdits())
                         .then(ruleEdits()));
     }
@@ -181,6 +183,12 @@ public final class ZoneCommand {
 
     private static LiteralArgumentBuilder<CommandSourceStack> placementEdits() {
         return Commands.literal("here").executes(ZoneCommand::moveHere);
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> moveToEdits() {
+        return Commands.literal("at")
+                .then(Commands.argument("pos", BlockPosArgument.blockPos())
+                        .executes(ZoneCommand::moveTo));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> spawnEdits() {
@@ -380,13 +388,29 @@ public final class ZoneCommand {
         return applyEdit(context, zone);
     }
 
+    private static int moveTo(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        Zone zone = requireZone(context);
+        if (zone == null) return 0;
+
+        relocate(zone, BlockPosArgument.getSpawnablePos(context, "pos"), context.getSource().getLevel());
+        return applyEdit(context, zone);
+    }
+
+    // WHY: точка спавна едет вместе с зоной: иначе после переноса она осталась бы снаружи,
+    // WHY: и игроки появлялись бы на старом месте
+    private static void relocate(Zone zone, BlockPos center, ServerLevel level) {
+        BlockPos anchor = zone.spawnAnchor();
+        if (anchor != null) zone.setSpawnAnchor(anchor.offset(center.subtract(zone.area().center())));
+        zone.setArea(zone.area().withCenter(center));
+        zone.setDimension(level.dimension().location());
+    }
+
     private static int moveHere(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         Zone zone = requireZone(context);
         if (zone == null) return 0;
 
         ServerPlayer player = context.getSource().getPlayerOrException();
-        zone.setArea(zone.area().withCenter(player.blockPosition()));
-        zone.setDimension(player.level().dimension().location());
+        relocate(zone, player.blockPosition(), player.serverLevel());
         return applyEdit(context, zone);
     }
 

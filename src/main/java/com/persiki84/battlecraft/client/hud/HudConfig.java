@@ -57,6 +57,7 @@ public final class HudConfig {
     private static ForgeConfigSpec.BooleanValue ISLAND_TITLE;
     private static ForgeConfigSpec.BooleanValue ISLAND_ARTIST;
     private static ForgeConfigSpec.BooleanValue ISLAND_LYRICS;
+    private static ForgeConfigSpec.BooleanValue ISLAND_LYRICS_BRIDGE;
     private static ForgeConfigSpec.DoubleValue ISLAND_LYRICS_OFFSET;
     private static ForgeConfigSpec.BooleanValue ISLAND_TIME;
     private static ForgeConfigSpec.BooleanValue ISLAND_VISUALIZER;
@@ -196,6 +197,7 @@ public final class HudConfig {
         ISLAND_TITLE = defineIslandPart("islandTitle", "Название играющего трека");
         ISLAND_ARTIST = defineIslandPart("islandArtist", "Исполнитель играющего трека");
         ISLAND_LYRICS = defineIslandPart("islandLyrics", "Лирика на месте названия; текст ищется на lrclib.net и в NetEase Cloud Music, туда уходят название и исполнитель трека");
+        ISLAND_LYRICS_BRIDGE = defineIslandPart("islandLyricsBridge", "Мост Spotify: тексты из Spotify и Spicy Lyrics через расширение Spicetify, игра слушает только 127.0.0.1:47823");
         ISLAND_LYRICS_OFFSET = BUILDER.comment("Сдвиг лирики в секундах: плюс позже, минус раньше").defineInRange("islandLyricsOffset", 0.0, -3.0, 3.0);
         ISLAND_TIME = defineIslandPart("islandTime", "Таймер трека");
         ISLAND_VISUALIZER = defineIslandPart("islandVisualizer", "Визуализатор звука в острове");
@@ -544,6 +546,14 @@ public final class HudConfig {
 
     public static void islandLyrics(boolean value) {
         if (SPEC.isLoaded()) ISLAND_LYRICS.set(value);
+    }
+
+    public static boolean islandLyricsBridge() {
+        return read(ISLAND_LYRICS_BRIDGE, true);
+    }
+
+    public static void islandLyricsBridge(boolean value) {
+        if (SPEC.isLoaded()) ISLAND_LYRICS_BRIDGE.set(value);
     }
 
     public static float islandLyricsOffset() {

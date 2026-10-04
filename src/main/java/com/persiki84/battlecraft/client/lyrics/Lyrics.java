@@ -13,6 +13,10 @@ public record Lyrics(List<LyricLine> lines) {
         return !lines.isEmpty();
     }
 
+    public boolean worded() {
+        return lines.stream().anyMatch(line -> !line.words().isEmpty());
+    }
+
     public int lineAt(long positionMs) {
         int low = 0;
         int high = lines.size() - 1;

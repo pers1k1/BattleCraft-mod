@@ -11,7 +11,7 @@ import com.persiki84.capturepoints.capture.CaptureSessions;
 import com.persiki84.capturepoints.capture.FinalCapturePoint;
 import com.persiki84.capturepoints.client.CaptureHudOverlay;
 import com.persiki84.capturepoints.client.KeyBindings;
-import com.persiki84.capturepoints.client.menu.CapturePointManagerScreen;
+import com.persiki84.capturepoints.client.menu.PointStudioScreen;
 import com.persiki84.capturepoints.menu.CapturePointMenuState;
 import com.persiki84.capturepoints.commands.CapturePointCommand;
 import com.persiki84.capturepoints.commands.FinalPointCommand;
@@ -67,7 +67,7 @@ public class CapturePointsMod {
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
-        MenuScreens.register(CapturePointMenuState.MENU_ID, CapturePointManagerScreen::new);
+        MenuScreens.register(CapturePointMenuState.MENU_ID, PointStudioScreen::new);
         LOGGER.info("Client setup complete");
     }
 

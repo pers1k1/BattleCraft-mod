@@ -54,6 +54,10 @@ public final class CapturePointMenuState {
         CompoundTag tag = new CompoundTag();
         tag.putString("name", point.getName());
         tag.putBoolean(FINAL_FLAG, last);
+        tag.putInt("x", point.getPosition().getX());
+        tag.putInt("y", point.getPosition().getY());
+        tag.putInt("z", point.getPosition().getZ());
+        tag.putString("dimension", point.getDimension().location().toString());
         tag.putString("shape", point.getShape().id());
         tag.putInt("size", (int) Math.round(point.getSize()));
         tag.putInt("heightUp", (int) Math.round(point.getHeightUp()));
@@ -85,6 +89,8 @@ public final class CapturePointMenuState {
         tag.putString("rewardItem", itemId(point.getReward()));
         tag.putInt("rewardAmount", point.getRewardAmount());
         tag.putString("incomeItem", itemId(point.getIncomeItem()));
+        putStack(tag, "rewardStack", point.getReward());
+        putStack(tag, "incomeStack", point.getIncomeItem());
         tag.putInt("incomeAmount", point.getPassiveIncomeAmount());
         tag.putInt("incomeInterval", point.getIncomeIntervalSeconds());
         tag.putString("buff", point.getBuffEffect() == null ? "" : point.getBuffEffect());
@@ -94,6 +100,11 @@ public final class CapturePointMenuState {
             commands.add(StringTag.valueOf(command));
         }
         tag.put("commands", commands);
+    }
+
+    // WHY: студия рисует награду самим предметом, а ствол TACZ без тега это безымянная заглушка
+    private static void putStack(CompoundTag tag, String key, net.minecraft.world.item.ItemStack stack) {
+        if (stack != null && !stack.isEmpty()) tag.put(key, stack.save(new CompoundTag()));
     }
 
     private static String itemId(net.minecraft.world.item.ItemStack stack) {

@@ -112,6 +112,8 @@ public final class MarkCommand {
                         .then(lineEdit())
                         .then(colorEdit())
                         .then(Commands.literal("here").executes(MarkCommand::moveHere))
+                        .then(Commands.literal("at").then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                .executes(MarkCommand::moveTo)))
                         .then(worldEdit())
                         .then(Commands.literal("everyone").executes(MarkCommand::showEveryone))
                         .then(teamEdit("show", true))
@@ -364,6 +366,15 @@ public final class MarkCommand {
         if (mark == null) return 0;
 
         mark.setInWorld(BoolArgumentType.getBool(context, "shown"));
+        return apply(context, mark);
+    }
+
+    private static int moveTo(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        MapMark mark = require(context);
+        if (mark == null) return 0;
+
+        mark.setPosition(position(context));
+        mark.setDimension(context.getSource().getLevel().dimension().location());
         return apply(context, mark);
     }
 

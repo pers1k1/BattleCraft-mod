@@ -463,6 +463,7 @@ public final class CustomizeScreen extends ManagerScreen {
         built.add(toggle("battlecraft.custom.island.title", HudConfig::islandTitle, HudConfig::islandTitle));
         built.add(toggle("battlecraft.custom.island.artist", HudConfig::islandArtist, HudConfig::islandArtist));
         built.add(toggle("battlecraft.custom.island.lyrics", HudConfig::islandLyrics, HudConfig::islandLyrics));
+        built.add(toggle("battlecraft.custom.island.lyrics_bridge", HudConfig::islandLyricsBridge, HudConfig::islandLyricsBridge));
         built.add(toggle("battlecraft.custom.island.bar", HudConfig::islandBar, HudConfig::islandBar));
         built.add(toggle("battlecraft.custom.island.time", HudConfig::islandTime, HudConfig::islandTime));
         built.add(toggle("battlecraft.custom.island.visualizer", HudConfig::islandVisualizer, HudConfig::islandVisualizer));

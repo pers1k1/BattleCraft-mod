@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.persiki84.battlecraft.rules.MarkerRange;
 import com.persiki84.capturepoints.capture.CaptureMode;
@@ -16,6 +17,8 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -54,7 +57,29 @@ public final class CaptureTuningCommands {
                 .then(numberBranch("setmarkerrange", points, lookup, CapturePoint.KIND_RANGE,
                         MarkerRange.MAX_BLOCKS, CapturePoint::setMarkerRange))
                 .then(flagBranch("sethud", points, lookup, CapturePoint::setShownInHud))
-                .then(flagBranch("sethideinside", points, lookup, CapturePoint::setHiddenInside));
+                .then(flagBranch("sethideinside", points, lookup, CapturePoint::setHiddenInside))
+                .then(positionBranch(points, lookup));
+    }
+
+    // WHY: перенос точки мышью на карте студии: координата приходит от клиента, поэтому берётся
+    // WHY: только в пределах мира, и чанк под ней не грузится - центр просто записывается
+    private static LiteralArgumentBuilder<CommandSourceStack> positionBranch(
+            SuggestionProvider<CommandSourceStack> points, Function<String, CapturePoint> lookup) {
+        return Commands.literal("setposition")
+                .then(Commands.argument("name", StringArgumentType.string())
+                        .suggests(points)
+                        .then(Commands.argument("position", BlockPosArgument.blockPos())
+                                .executes(context -> applyPosition(context, lookup))));
+    }
+
+    private static int applyPosition(CommandContext<CommandSourceStack> context,
+                                     Function<String, CapturePoint> lookup) throws CommandSyntaxException {
+        CapturePoint point = resolve(context, lookup);
+        if (point == null) return 0;
+
+        BlockPos center = BlockPosArgument.getSpawnablePos(context, "position");
+        CapturePointManager.relocate(point, context.getSource().getLevel().dimension(), center);
+        return confirm(context, point);
     }
 
     // WHY: обязательность и показ в HUD живут в общей ветке обоих корней, как бонусы точки:

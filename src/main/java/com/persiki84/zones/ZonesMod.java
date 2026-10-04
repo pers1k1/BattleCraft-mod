@@ -19,9 +19,9 @@ import com.persiki84.zones.network.ZoneSyncAllPacket;
 import com.persiki84.zones.network.ZoneUpsertPacket;
 import com.persiki84.shared.client.menu.MenuScreens;
 import com.persiki84.shared.menu.MenuStates;
-import com.persiki84.zones.client.menu.MarkManagerScreen;
+import com.persiki84.zones.client.menu.MarkStudioScreen;
 import com.persiki84.zones.client.menu.studio.ShopStudioScreen;
-import com.persiki84.zones.client.menu.ZoneManagerScreen;
+import com.persiki84.zones.client.menu.ZoneStudioScreen;
 import com.persiki84.zones.shop.ShopCatalog;
 import com.persiki84.zones.shop.ShopViewer;
 import com.persiki84.zones.shop.StockScope;
@@ -69,9 +69,9 @@ public class ZonesMod {
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
-        MenuScreens.register(ZONES_MENU_ID, ZoneManagerScreen::new);
+        MenuScreens.register(ZONES_MENU_ID, ZoneStudioScreen::new);
         MenuScreens.register(ShopStudioScreen.MENU_ID, ShopStudioScreen::new);
-        MenuScreens.register(MarkMenuState.MENU_ID, MarkManagerScreen::new);
+        MenuScreens.register(MarkMenuState.MENU_ID, MarkStudioScreen::new);
     }
 
     @SubscribeEvent

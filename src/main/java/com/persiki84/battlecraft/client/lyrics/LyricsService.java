@@ -46,6 +46,8 @@ public final class LyricsService {
     private static ExecutorService worker;
     private static LyricsSources sources;
     private static LyricsCache cache;
+    private static BridgeDrop checkedDrop;
+    private static String checkedKey = "";
 
     private LyricsService() {}
 
@@ -61,7 +63,7 @@ public final class LyricsService {
 
         synchronized (lock) {
             Lyrics known = memory.get(query.key());
-            if (known != null) return known;
+            if (known != null) return bridged(query, known);
             schedule(query, now);
         }
         return Lyrics.NONE;
@@ -90,10 +92,38 @@ public final class LyricsService {
         return recent.size() < MINUTE_LIMIT && (last == null || now - last >= GAP_MS);
     }
 
+    // WHY: посылка моста приходит, когда ей удобно: после поиска по сети или поверх прошлой записи на
+    // WHY: диске. Она заменяет найденное, только если лучше: пословный текст поверх строчного, любой
+    // WHY: поверх пустоты. Одна посылка сверяется с ключом один раз, а не на каждом кадре
+    private static Lyrics bridged(TrackQuery target, Lyrics known) {
+        BridgeDrop drop = SpotifyBridge.latest();
+        if (drop == null || drop == checkedDrop && target.key().equals(checkedKey)) return known;
+
+        checkedDrop = drop;
+        checkedKey = target.key();
+        LyricsOutcome offered = LyricsSources.bridged(target);
+        if (!upgrades(offered.lyrics(), known)) return known;
+        memory.put(checkedKey, offered.lyrics());
+        persist(checkedKey, offered);
+        return offered.lyrics();
+    }
+
+    private static boolean upgrades(Lyrics offered, Lyrics known) {
+        return offered.present() && (!known.present() || offered.worded() && !known.worded());
+    }
+
+    private static void persist(String key, LyricsOutcome outcome) {
+        worker().execute(() -> cache().write(key, outcome, System.currentTimeMillis()));
+    }
+
+    private static ExecutorService worker() {
+        if (worker == null) worker = Executors.newSingleThreadExecutor(LyricsService::thread);
+        return worker;
+    }
+
     private static void launch(Runnable task) {
         flying = true;
-        if (worker == null) worker = Executors.newSingleThreadExecutor(LyricsService::thread);
-        worker.execute(() -> {
+        worker().execute(() -> {
             try {
                 task.run();
             } catch (RuntimeException error) {

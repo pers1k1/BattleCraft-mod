@@ -4,6 +4,8 @@ import com.persiki84.shared.client.menu.GlassScreen;
 import com.persiki84.shared.client.menu.MenuCommands;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.MenuRow;
+import com.persiki84.shared.client.menu.PaletteStack;
+import com.persiki84.shared.client.menu.PaletteWindow;
 import com.persiki84.shared.client.menu.pick.ItemShelf;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAccent;
@@ -33,6 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.IntConsumer;
 
 // WHY: одна раскладка на все редакторы разделов: слева что правим, в центре как это выглядит, справа
 // WHY: все свойства выбранного разом. Виджеты создаются один раз и переставляются: состояние анимаций
@@ -64,6 +67,7 @@ public abstract class StudioScreen extends GlassScreen {
     private static final float CARRIED_SCALE = 1.5f;
     private static final int SHELF_HINT = 14;
     private static final int BULK_ART = 32;
+    private static final long DOUBLE_CLICK_MS = 400L;
 
     protected final StudioNav nav = new StudioNav();
     protected final StudioGrid grid = new StudioGrid();
@@ -72,6 +76,7 @@ public abstract class StudioScreen extends GlassScreen {
     protected final StudioShelf shelf = new StudioShelf(this::layout);
     protected final StudioMenu contextMenu = new StudioMenu();
     protected final StudioMarks marks = new StudioMarks();
+    private final PaletteStack palettes = new PaletteStack();
     private final Map<String, UiButton> bulkButtons = new HashMap<>();
     private final Map<UiButton, StudioMenu.Action> bulkActionsByButton = new IdentityHashMap<>();
     private final Map<String, String> due = new LinkedHashMap<>();
@@ -97,6 +102,9 @@ public abstract class StudioScreen extends GlassScreen {
     private boolean banding;
     private boolean bandMoved;
     private boolean pressedMarked;
+    private boolean pressedPainted;
+    private int lastTilePress = -1;
+    private long lastTilePressAt;
 
     protected StudioScreen(Component title, Screen parent) {
         super(title);
@@ -229,6 +237,44 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     protected void renderCanvasOverlay(GuiGraphics graphics, int mouseX, int mouseY) {
+    }
+
+    protected boolean paintsCanvas() {
+        return false;
+    }
+
+    protected void renderPainted(GuiGraphics graphics, float left, float top, float width, float height,
+                                 int mouseX, int mouseY) {
+    }
+
+    protected boolean pressPainted(double mouseX, double mouseY) {
+        return false;
+    }
+
+    protected void dragPainted(double mouseX, double mouseY, double dragX, double dragY) {
+    }
+
+    protected void releasePainted(double mouseX, double mouseY) {
+    }
+
+    protected void scrollPainted(double mouseX, double mouseY, double amount) {
+    }
+
+    protected List<StudioMenu.Action> paintedActions(double mouseX, double mouseY) {
+        return List.of();
+    }
+
+    protected boolean overCanvas(double mouseX, double mouseY) {
+        return mouseX >= canvasLeft() && mouseX < canvasLeft() + CANVAS_WIDTH
+                && mouseY >= contentTop() && mouseY < panelBottom();
+    }
+
+    protected void palette(String owner, PaletteWindow.Kind kind, Component title, int color,
+                           IntConsumer apply, Runnable clear) {
+        palettes.toggle(this.width, this.height, owner, kind, title, color, apply, clear);
+    }
+
+    protected void activateTile(int index) {
     }
 
     protected List<StudioMenu.Action> tileActions(int index) {
@@ -448,7 +494,7 @@ public abstract class StudioScreen extends GlassScreen {
         clearWidgets();
         placeHeader();
         placeInspector();
-        if (!gridCanvas()) placeCanvas();
+        if (!gridCanvas() && !paintsCanvas()) placeCanvas();
         if (typing && children().contains(focus)) setFocused(focus);
     }
 
@@ -528,7 +574,7 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     private boolean busy() {
-        return isDragging() || carryingNode || carryingTile || carryingPick || typingRow() || shelf.typing();
+        return isDragging() || pressedPainted || carryingNode || carryingTile || carryingPick || typingRow() || shelf.typing();
     }
 
     protected boolean typingRow() {
@@ -576,6 +622,10 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     private void renderCanvasArea(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (paintsCanvas()) {
+            renderPainted(graphics, canvasLeft(), contentTop(), CANVAS_WIDTH, panelHeight(), mouseX, mouseY);
+            return;
+        }
         if (!gridCanvas()) {
             canvas.renderHints(graphics, canvasLeft() + CANVAS_WIDTH / 2.0f);
             return;
@@ -688,6 +738,8 @@ public abstract class StudioScreen extends GlassScreen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (leaving()) return true;
+        if (palettes.mouseClicked(mouseX, mouseY)) return true;
+        if (palettes.any()) setFocused(null);
 
         double x = localX(mouseX);
         double y = localY(mouseY);
@@ -706,6 +758,11 @@ public abstract class StudioScreen extends GlassScreen {
         if (nav.over(x, y)) return dropFocus() && pressNav(x, y);
         if (gridCanvas() && grid.over(x, y)) return dropFocus() && pressGrid(x, y);
         if (shelfOpen() && shelf.over(x, y)) return dropFocus() && pressShelf(x, y);
+        if (paintsCanvas() && overCanvas(x, y)) {
+            dropFocus();
+            pressedPainted = pressPainted(x, y);
+            return true;
+        }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -731,6 +788,7 @@ public abstract class StudioScreen extends GlassScreen {
             }
             return nodeActions(node);
         }
+        if (paintsCanvas() && overCanvas(x, y)) return paintedActions(x, y);
         if (!gridCanvas() || !grid.over(x, y)) return null;
         int index = grid.pick(x, y, tiles().size());
         if (index < 0) return canvasActions();
@@ -777,7 +835,16 @@ public abstract class StudioScreen extends GlassScreen {
         if (pressedMarked) return true;
         if (marks.size() > 0) clearMarks();
         if (index != selectedTile()) chooseTile(index);
+        if (doubled(index)) activateTile(index);
         return true;
+    }
+
+    private boolean doubled(int index) {
+        long now = System.currentTimeMillis();
+        boolean doubled = index == lastTilePress && now - lastTilePressAt < DOUBLE_CLICK_MS;
+        lastTilePress = doubled ? -1 : index;
+        lastTilePressAt = now;
+        return doubled;
     }
 
     private boolean chooseNothing() {
@@ -864,10 +931,16 @@ public abstract class StudioScreen extends GlassScreen {
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (leaving()) return true;
+        if (palettes.mouseDragged(mouseX, mouseY)) return true;
 
         double x = localX(mouseX);
         double y = localY(mouseY);
         if (dragArt(dragX, dragY)) return true;
+        if (pressedPainted) {
+            float scale = contentScale();
+            dragPainted(x, y, dragX / scale, dragY / scale);
+            return true;
+        }
         if (banding) return dragBand(x, y);
         if (pressNode != null) return dragNode(x, y);
         if (pressTile >= 0) return dragTile(x, y);
@@ -910,9 +983,14 @@ public abstract class StudioScreen extends GlassScreen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (palettes.mouseReleased()) return true;
         releaseArt();
         double x = localX(mouseX);
         double y = localY(mouseY);
+        if (pressedPainted) {
+            pressedPainted = false;
+            releasePainted(x, y);
+        }
         if (carryingNode) releaseNode();
         if (carryingTile) releaseTile();
         if (banding) releaseBand();
@@ -995,7 +1073,7 @@ public abstract class StudioScreen extends GlassScreen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
-        if (leaving() || modalOpen()) return true;
+        if (leaving() || modalOpen() || inputCaptured()) return true;
         contextMenu.close();
 
         double x = localX(mouseX);
@@ -1003,6 +1081,8 @@ public abstract class StudioScreen extends GlassScreen {
         int step = amount > 0 ? -1 : 1;
         if (nav.over(x, y)) {
             nav.scrollBy(step);
+        } else if (paintsCanvas() && overCanvas(x, y)) {
+            scrollPainted(x, y, amount);
         } else if (gridCanvas() && grid.over(x, y)) {
             grid.scrollBy(step, tiles().size());
         } else if (!gridCanvas() && canvas.covers(x, y, canvasLeft(), CANVAS_WIDTH)) {
@@ -1038,6 +1118,7 @@ public abstract class StudioScreen extends GlassScreen {
 
     @Override
     public boolean keyPressed(int key, int scan, int modifiers) {
+        if (palettes.keyPressed(key)) return true;
         if (key == GLFW.GLFW_KEY_ESCAPE && contextMenu.showing()) {
             contextMenu.close();
             return true;
@@ -1058,5 +1139,21 @@ public abstract class StudioScreen extends GlassScreen {
         }
         if ((key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) && typing && submit()) return true;
         return super.keyPressed(key, scan, modifiers);
+    }
+
+    @Override
+    public boolean charTyped(char symbol, int modifiers) {
+        if (palettes.charTyped(symbol)) return true;
+        return super.charTyped(symbol, modifiers);
+    }
+
+    @Override
+    protected void renderOverlay(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        palettes.render(graphics, this.width, this.height, mouseX, mouseY);
+    }
+
+    @Override
+    protected boolean inputCaptured() {
+        return palettes.covering(cursorX(), cursorY());
     }
 }
