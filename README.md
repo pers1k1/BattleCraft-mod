@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.05v4` in files, `05.10.26v4 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.05v5` in files, `05.10.26v5 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1067,6 +1067,16 @@ Version 2026.10.05v3 - built; the bridge fix is not yet checked in game.
 - The same change is in Glass MediaPlayer Island 1.0.7.
 
 Version 2026.10.05v4 - built; not yet checked in game.
+
+## Kugou lyrics and a brighter sung syllable, 5 October 2026 (v5)
+
+- **Kugou without Spicetify.** A third source of word-timed lyrics: Kugou (`lyrics.kugou.com`, KRC format, no token). It covers Western songs missing from NetEase yrc. The text comes compressed and XOR-ed with a fixed key; it is inflated with a 1 MB cap and goes through the same yrc parsing and checks. Kugou search does not understand Cyrillic, so no request goes there for Cyrillic titles; Russian songs stay with LRCLIB, NetEase and the Spotify bridge. QQ Music is not used: its QRC is encrypted with a non-standard DES and the catalogue is the same.
+- **Source order.** Word-timed lyrics from the bridge, word-timed LRCLIB, NetEase yrc, Kugou KRC, line-synced lyrics from the bridge, line-synced LRCLIB, line-synced NetEase. The lyrics setting hint now names Kugou among the services that receive the title and artist.
+- **Brighter sung syllable.** On a dark cover the sung letters used to be dimmer than the sung ones: the cover colour mixed into them was darker than white. It is now lightened towards white first, and the glow of the sung syllable is a little stronger, as in Spicy Lyrics.
+- Credit lines like "Lyrics by:" and "Composed by:" are dropped from word-timed lyrics.
+- The same changes are in Glass MediaPlayer Island 1.0.8.
+
+Version 2026.10.05v5 - built; not yet checked in game.
 
 ## Releases
 

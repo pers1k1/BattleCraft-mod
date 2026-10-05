@@ -14,7 +14,8 @@ public final class YrcParser {
     private static final Pattern LINE = Pattern.compile("^\\[(\\d{1,8}),(\\d{1,8})](.*)$");
     private static final Pattern WORD = Pattern.compile("\\((\\d{1,8}),(\\d{1,8}),-?\\d{1,8}\\)");
     private static final Pattern CREDIT = Pattern.compile(
-            "^\\s*(作词|作曲|编曲|制作人?|混音|母带|和声|监制|录音|吉他|贝斯|鼓|弦乐|Lyrics|Composer|Producer)\\s*[:：]",
+            "^\\s*(作词|作曲|编曲|制作人?|混音|母带|和声|监制|录音|吉他|贝斯|鼓|弦乐|Lyrics( by)?|Composer|Composed by|"
+                    + "Written by|Producer|Produced by|Arranged by)\\s*[:：]",
             Pattern.CASE_INSENSITIVE);
 
     private YrcParser() {}

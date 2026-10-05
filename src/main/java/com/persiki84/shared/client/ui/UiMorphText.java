@@ -33,7 +33,8 @@ public final class UiMorphText {
     private static final float FOLLOW_SHARE = 0.45f;
     private static final float FOLLOW_RATE = 7.0f;
     private static final float ACCENT_SHARE = 0.55f;
-    private static final float BLOOM_SHARE = 0.07f;
+    private static final float BLOOM_SHARE = 0.1f;
+    private static final float ACCENT_LIGHT = 0.6f;
     private static final float HELD_GLOW = 0.16f;
     private static final float HELD_LIFT_UNITS = 0.3f;
     private static final float HELD_GROW = 0.1f;
@@ -287,12 +288,15 @@ public final class UiMorphText {
         }
 
         // WHY: уходящая строка уносит тот вид, каким горела в последнем кадре: без этого её буквы на
-        // WHY: смене разом теряли приглушение, цвет и свечение и выглядели оторванными от текста
+        // WHY: смене разом теряли приглушение, цвет и свечение и выглядели оторванными от текста.
+        // WHY: Цвет обложки сначала осветляется к белому: тёмная обложка иначе делала поющийся слог
+        // WHY: тусклее уже пропетого, а в Spicy Lyrics он самый яркий
         private int sung(int base, float shown, float lit, int accentColor, float held) {
             int toned = UiTheme.alpha(base, shown * (UNSUNG + (1.0f - UNSUNG) * lit));
             float active = Math.max(4.0f * lit * (1.0f - lit), held);
             if (active <= 0.01f) return toned;
-            return UiTheme.mix(toned, (toned & 0xFF000000) | (accentColor & 0x00FFFFFF), ACCENT_SHARE * active);
+            int light = UiTheme.mix(0xFF000000 | accentColor, UiTheme.WHITE, ACCENT_LIGHT);
+            return UiTheme.mix(toned, (toned & 0xFF000000) | (light & 0x00FFFFFF), ACCENT_SHARE * active);
         }
 
         private float shown(int index, int count) {
