@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.05hotfix` in files, `05.10.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.05v3` in files, `05.10.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1050,6 +1050,14 @@ Version 2026.10.05 - built and started on a dedicated server; not played through
 - **Gone.** The item picker window: every place that assigns an item now uses the shelf of its editor.
 
 Version 2026.10.05hotfix - built and started on a dedicated server; not played through, so report anything that looks wrong.
+
+## The Spotify bridge reaches the game, 5 October 2026 (v3)
+
+- **The bridge listened on IPv6 only.** Under Forge the Java loopback address resolves to `::1`, while the Spicetify extension posts to `127.0.0.1:47823`, so its connections hung and no Spotify or Spicy Lyrics text ever reached the island; it fell back to LRCLIB and NetEase. The bridge now binds `127.0.0.1` explicitly (shared lyrics core, synced from Glass MediaPlayer Island 1.0.6).
+- **Syllables.** Spicy Lyrics marks some songs up by syllables: each syllable keeps its own time window and the letters inside it light one by one, so such songs follow the voice more closely than word timing. Songs Spotify itself marks up by syllables (`SYLLABLE_SYNCED`) were dropped by the extension; their line timings are now sent as line-synced lyrics.
+- **Update the extension.** Take `glass-lyrics-bridge.js` from this release, replace it in `%APPDATA%\spicetify\Extensions` and run `spicetify apply`.
+
+Version 2026.10.05v3 - built; the bridge fix is not yet checked in game.
 
 ## Releases
 

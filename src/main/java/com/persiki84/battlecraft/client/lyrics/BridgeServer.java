@@ -16,8 +16,11 @@ final class BridgeServer {
         this.server = server;
     }
 
+    // WHY: getLoopbackAddress в JVM Forge отдаёт ::1, и сервер слушал только IPv6, а расширение
+    // WHY: стучится на 127.0.0.1: соединения висели в SYN_SENT, и ни одна посылка не доходила
     static BridgeServer open(int port, Consumer<BridgeDrop> sink) throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 0);
+        InetAddress loopback = InetAddress.getByAddress("localhost", new byte[] {127, 0, 0, 1});
+        HttpServer server = HttpServer.create(new InetSocketAddress(loopback, port), 0);
         server.createContext("/lyrics", new BridgeExchange(sink));
         server.start();
         return new BridgeServer(server);
