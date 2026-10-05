@@ -1,5 +1,6 @@
 package com.persiki84.battlecraft.client;
 
+import com.persiki84.capturepoints.client.ClientTreasury;
 import com.persiki84.battlecraft.BattleCraftMod;
 import com.persiki84.battlecraft.client.hud.AnnounceHud;
 import com.persiki84.battlecraft.client.hud.RadioHud;
@@ -32,6 +33,7 @@ public final class ClientLifecycle {
         ClientLobbyData.clear();
         MenuData.forget();
         IslandModel.forget();
+        ClientTreasury.forget();
         AnnounceHud.forget();
         RadioHud.forget();
         RadioChirp.forget();

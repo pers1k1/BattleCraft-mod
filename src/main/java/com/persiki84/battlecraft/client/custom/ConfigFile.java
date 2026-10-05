@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.persiki84.battlecraft.BattleCraftMod;
 import com.persiki84.shared.WorldFiles;
+import com.persiki84.shared.client.font.FontShape;
 import net.minecraft.client.Minecraft;
 
 import java.io.Reader;
@@ -50,6 +51,7 @@ public final class ConfigFile {
             live = found;
         }
         ConfigCodec.applyAll(live);
+        if (live.migrated()) write();
     }
 
     // WHY: старый json остаётся на диске нетронутым до тех пор, пока новый файл не лёг на место,
@@ -57,9 +59,13 @@ public final class ConfigFile {
     private static void readLegacy() {
         Path legacy = folder().resolve(LEGACY);
         JsonObject flat = Files.isRegularFile(legacy) ? parse(legacy) : null;
-        if (flat != null) live = ConfigMigrations.fromLegacy(flat);
+        if (flat != null) {
+            live = ConfigMigrations.fromLegacy(flat);
+            FontLook.migrate(live);
+        }
 
         ConfigCodec.applyAll(live);
+        if (flat == null) FontLook.choose(FontShape.FALLBACK);
         if (flat != null && write()) retire(legacy);
     }
 

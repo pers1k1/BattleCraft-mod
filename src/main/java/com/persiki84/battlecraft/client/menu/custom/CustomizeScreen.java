@@ -28,6 +28,8 @@ import com.persiki84.shared.client.menu.HeadingRow;
 import com.persiki84.shared.client.menu.KeyRow;
 import com.persiki84.shared.client.menu.GlidingRow;
 import com.persiki84.shared.client.menu.ManagerScreen;
+import com.persiki84.battlecraft.client.island.AvatarPicture;
+import com.persiki84.battlecraft.client.island.AvatarSource;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.MenuField;
 import com.persiki84.shared.client.menu.PaletteWindow;
@@ -373,6 +375,7 @@ public final class CustomizeScreen extends ManagerScreen {
 
     private void addElementRows(List<AbstractWidget> built) {
         built.add(heading("battlecraft.custom.group.elements"));
+        built.add(toggle("battlecraft.custom.hud_follows_screen", HudConfig::hudFollowsScreen, HudConfig::hudFollowsScreen));
         built.add(heading("battlecraft.custom.hud.in_chat"));
         for (HudSlot slot : HudSlot.values()) {
             built.add(slotRow(slot));
@@ -456,6 +459,8 @@ public final class CustomizeScreen extends ManagerScreen {
         built.add(toggle("battlecraft.custom.island", HudConfig::island, HudConfig::island));
         built.add(toggle("battlecraft.custom.island_media", HudConfig::islandMedia, HudConfig::islandMedia));
         built.add(toggle("battlecraft.custom.island.avatar", HudConfig::islandAvatar, HudConfig::islandAvatar));
+        built.add(avatarRow());
+        built.add(avatarPictureRow());
         built.add(toggle("battlecraft.custom.island.nick", HudConfig::islandNick, HudConfig::islandNick));
         built.add(toggle("battlecraft.custom.island.fps", HudConfig::islandFps, HudConfig::islandFps));
         built.add(toggle("battlecraft.custom.island.ping", HudConfig::islandPing, HudConfig::islandPing));
@@ -530,6 +535,46 @@ public final class CustomizeScreen extends ManagerScreen {
                 });
         row.hint("battlecraft.custom.font" + HINT_SUFFIX);
         return row;
+    }
+
+    private PickRow avatarRow() {
+        List<Component> options = new ArrayList<>();
+        for (AvatarSource source : AvatarSource.values()) {
+            options.add(Component.translatable(source.translationKey()));
+        }
+        PickRow row = new PickRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("battlecraft.custom.island.avatar_source"), options,
+                () -> Customization.avatar().ordinal(),
+                picked -> {
+                    AvatarSource chosen = AvatarSource.values()[picked];
+                    if (chosen == AvatarSource.PICTURE && !AvatarPicture.present()) {
+                        pickAvatarPicture();
+                        return;
+                    }
+                    Customization.avatar(chosen);
+                    Customization.save();
+                });
+        row.hint("battlecraft.custom.island.avatar_source" + HINT_SUFFIX);
+        return row;
+    }
+
+    private ActionRow avatarPictureRow() {
+        return new ActionRow(rowsLeft(), 0, rowsWidth(), ROW_HEIGHT,
+                Component.translatable("battlecraft.custom.island.avatar_picture"),
+                () -> Component.translatable(AvatarPicture.present()
+                        ? "battlecraft.custom.island.avatar_picture.change"
+                        : "battlecraft.custom.island.avatar_picture.choose"),
+                this::pickAvatarPicture);
+    }
+
+    // WHY: выбор картинки сразу ставит её в остров: игрок, открывший диалог, хочет видеть её, а не
+    // WHY: искать второй переключатель
+    private void pickAvatarPicture() {
+        AvatarPicture.pick(() -> {
+            Customization.avatar(AvatarSource.PICTURE);
+            Customization.save();
+            MenuFeedback.show(Component.translatable("battlecraft.custom.island.avatar_picture.done"), false);
+        }, reason -> MenuFeedback.show(reason, true));
     }
 
     private PickRow motionRow() {

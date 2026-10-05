@@ -26,9 +26,18 @@ public final class CardPage implements SetupPage {
     }
 
     public record Card(Component label, Component note, Sample sample, Runnable pick, Runnable hear,
-                       List<Probe> probes) {
+                       List<Probe> probes, Component badge) {
         public Card(Component label, Component note, Sample sample, Runnable pick, Runnable hear) {
-            this(label, note, sample, pick, hear, List.of());
+            this(label, note, sample, pick, hear, List.of(), null);
+        }
+
+        public Card(Component label, Component note, Sample sample, Runnable pick, Runnable hear,
+                    List<Probe> probes) {
+            this(label, note, sample, pick, hear, probes, null);
+        }
+
+        public Card badged(Component value) {
+            return new Card(label, note, sample, pick, hear, probes, value);
         }
     }
 
@@ -46,6 +55,8 @@ public final class CardPage implements SetupPage {
     private static final float NAME_SCALE = 0.86f;
     private static final float NAME_TRACKING = 1.2f;
     private static final float NOTE_SCALE = 0.62f;
+    private static final int BADGE_TOP = 2;
+    private static final float BADGE_SCALE = 0.55f;
 
     private final SetupStep step;
     private final List<Card> cards;
@@ -177,6 +188,8 @@ public final class CardPage implements SetupPage {
                 NAME_SCALE, NAME_TRACKING, UiAccent.textDim());
         UiRender.textCentered(graphics, font, card.note(), centerX, top + NOTE_TOP,
                 NOTE_SCALE, UiAccent.textFaint(), false);
+        if (card.badge() != null) UiRender.textCentered(graphics, font, card.badge(), centerX, top + BADGE_TOP,
+                BADGE_SCALE, UiAccent.color(), false);
         if (card.sample() != null) card.sample().paint(graphics, font, centerX, top + SAMPLE_TOP, width);
     }
 }

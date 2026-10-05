@@ -29,6 +29,7 @@ final class LineSweep implements UiSweep {
     private static final long SETTLE_MS = 420L;
     private static final long WAVE_MS = 70L;
     private static final float WAVE_SHARE = 0.25f;
+    private static final long FADE_MS = 380L;
 
     private long[] starts = new long[0];
     private long[] ramps = new long[0];
@@ -198,6 +199,18 @@ final class LineSweep implements UiSweep {
         float up = smooth((at - begin) / (float) rise);
         float down = 1.0f - smooth((at - groupEnd[index] - wave[index]) / (float) SETTLE_MS);
         return up * down;
+    }
+
+    // WHY: слог держит цвет обложки, пока поётся, и тает FADE_MS после своего конца, как в Spicy Lyrics:
+    // WHY: колокол по доле буквы гас раньше конца слога, и на смене слова подсветка пропадала разом
+    @Override
+    public float glow(int index) {
+        if (index < 0 || index >= starts.length) return 0.0f;
+
+        long litAt = starts[index] + ramps[index];
+        long end = group[index] == Syllables.NONE ? litAt : Math.max(groupEnd[index], litAt);
+        float rise = smooth((at - starts[index]) / (float) ramps[index]);
+        return rise * (1.0f - smooth((at - end) / (float) FADE_MS));
     }
 
     @Override

@@ -23,4 +23,10 @@ public interface UiSweep {
         float share = Math.max(0.0f, Math.min(1.0f, lit(index)));
         return 4.0f * share * (1.0f - share);
     }
+
+    // WHY: доля цвета обложки на букве: по умолчанию колокол по её доле, лирика держит его весь слог
+    default float glow(int index) {
+        float share = Math.max(0.0f, Math.min(1.0f, lit(index)));
+        return 4.0f * share * (1.0f - share);
+    }
 }

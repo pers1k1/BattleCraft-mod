@@ -6,7 +6,7 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 
 // WHY: площадки пишут в название шум, которого нет в базе текстов: «(Official Video)», «[Lyrics]»,
-// WHY: «(feat. X)», а YouTube ставит канал «Исполнитель - Topic» или «...VEVO» и кладёт исполнителя
+// WHY: «(feat. X)», SoundCloud «(prod. X)», а YouTube ставит канал «Исполнитель - Topic» или «...VEVO» и кладёт исполнителя
 // WHY: в само название через дефис. Без чистки поиск промахивался мимо существующего текста
 public record TrackQuery(String title, String artist, String leadArtist, long durationMs) {
     private static final int FIELD_LIMIT = 120;
@@ -14,7 +14,7 @@ public record TrackQuery(String title, String artist, String leadArtist, long du
     private static final long DURATION_SLACK_MS = 3000L;
     private static final Pattern NOISE = Pattern.compile(
             "\\s*[(\\[{][^)\\]}]*\\b(official|video|audio|lyrics?|visuali[sz]er|hd|hq|4k|mv|m/v|clip|explicit"
-                    + "|feat\\.?|ft\\.?|remaster(ed)?)\\b[^)\\]}]*[)\\]}]", Pattern.CASE_INSENSITIVE);
+                    + "|feat\\.?|ft\\.?|prod\\.?|remaster(ed)?)\\b[^)\\]}]*[)\\]}]", Pattern.CASE_INSENSITIVE);
     private static final Pattern FEATURING = Pattern.compile("\\s+(feat\\.?|ft\\.?|featuring)\\s+.*$",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern CHANNEL = Pattern.compile("(\\s*-\\s*topic|vevo|\\s+official)$",
@@ -43,8 +43,9 @@ public record TrackQuery(String title, String artist, String leadArtist, long du
         return fold(left).equals(fold(right)) || fold(right).startsWith(fold(left));
     }
 
+    // WHY: Яндекс Музыка пишет «ё», а в базах текстов та же песня часто лежит через «е»
     static String fold(String value) {
-        return value.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+", "");
+        return value.toLowerCase(Locale.ROOT).replace('ё', 'е').replaceAll("[^\\p{L}\\p{N}]+", "");
     }
 
     // WHY: мост читает свойства трека и шкалу времени по отдельности, и новое название приходит то
@@ -52,6 +53,18 @@ public record TrackQuery(String title, String artist, String leadArtist, long du
     // WHY: чем на допуск поиска, но не на каждом дрожании миллисекунд
     public boolean stale(long reported) {
         return Math.abs(reported - durationMs) > DURATION_SLACK_MS;
+    }
+
+    public boolean spelledWithYo() {
+        return (title + artist).toLowerCase(Locale.ROOT).indexOf('ё') >= 0;
+    }
+
+    public TrackQuery withoutYo() {
+        return new TrackQuery(plainE(title), plainE(artist), plainE(leadArtist), durationMs);
+    }
+
+    private static String plainE(String value) {
+        return value.replace('ё', 'е').replace('Ё', 'Е');
     }
 
     public boolean searchable() {

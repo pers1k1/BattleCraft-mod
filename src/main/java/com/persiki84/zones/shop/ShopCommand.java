@@ -397,6 +397,8 @@ public final class ShopCommand {
                 .then(Commands.literal("copy").then(sectionNode(entryNode().executes(ShopCommand::copyEntry))))
                 .then(stockBranch())
                 .then(restockBranch())
+                .then(ShopWindowCommand.branch("opens", true))
+                .then(ShopWindowCommand.branch("closes", false))
                 .then(scopeBranch());
     }
 
@@ -455,11 +457,11 @@ public final class ShopCommand {
         return report(context, "zones.shop.success.copied", entry.id(), copy.id());
     }
 
-    private static RequiredArgumentBuilder<CommandSourceStack, String> entryNode() {
+    static RequiredArgumentBuilder<CommandSourceStack, String> entryNode() {
         return Commands.argument("entry", StringArgumentType.word()).suggests(ENTRIES);
     }
 
-    private static ArgumentBuilder<CommandSourceStack, ?> sectionNode(ArgumentBuilder<CommandSourceStack, ?> child) {
+    static ArgumentBuilder<CommandSourceStack, ?> sectionNode(ArgumentBuilder<CommandSourceStack, ?> child) {
         return Commands.argument("section", StringArgumentType.word()).suggests(SECTIONS).then(child);
     }
 
@@ -624,7 +626,7 @@ public final class ShopCommand {
         };
     }
 
-    private static ShopEntry requireEntry(CommandContext<CommandSourceStack> context) {
+    static ShopEntry requireEntry(CommandContext<CommandSourceStack> context) {
         ShopSection owner = entryOwner(context);
         return owner == null ? null : owner.entry(StringArgumentType.getString(context, "entry"));
     }
@@ -846,7 +848,7 @@ public final class ShopCommand {
         return child;
     }
 
-    private static int report(CommandContext<CommandSourceStack> context, String key, Object... args) {
+    static int report(CommandContext<CommandSourceStack> context, String key, Object... args) {
         context.getSource().sendSuccess(() ->
                 Component.translatable(key, args).withStyle(ChatFormatting.GREEN), true);
         ZonesMod.syncShopToEveryone(context.getSource().getServer());

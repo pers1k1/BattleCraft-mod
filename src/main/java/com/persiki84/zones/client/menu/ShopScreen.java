@@ -1,5 +1,7 @@
 package com.persiki84.zones.client.menu;
 
+import com.persiki84.capturepoints.client.ClientTreasury;
+import com.persiki84.capturepoints.network.TreasuryTakePacket;
 import com.persiki84.sellmod.client.ClientSellData;
 import com.persiki84.shared.client.menu.GlassScreen;
 import com.persiki84.shared.client.menu.MenuFeedback;
@@ -21,12 +23,15 @@ import com.persiki84.zones.network.ShopPurchasePacket;
 import com.persiki84.zones.network.ShopRefreshPacket;
 import com.persiki84.zones.network.ShopSellPacket;
 import com.persiki84.zones.shop.ShopEntry;
+import com.persiki84.zones.shop.ShopSchedule;
 import com.persiki84.zones.shop.ShopSection;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +60,7 @@ public class ShopScreen extends GlassScreen {
     private static final int BUY_HEIGHT = 22;
     private static final int QUANTITY_HEIGHT = 16;
     private static final int MAX_ITEMS_PER_PURCHASE = 64;
+    private static final long DOUBLE_CLICK_MS = 400L;
 
     private static final int TITLE_TOP = 12;
     private static final float TITLE_SCALE = 1.0f;
@@ -73,6 +79,10 @@ public class ShopScreen extends GlassScreen {
     private final ShopView view = new ShopView();
     private final ShopGrid grid = new ShopGrid();
     private final ShopPreview preview = new ShopPreview();
+    private final TreasuryPane treasury = new TreasuryPane();
+    private boolean treasuryOpen;
+    private int shownTreasury = -1;
+    private long lastTreasuryClick;
 
     private EditBox search;
     private UiButton buyButton;
@@ -84,6 +94,7 @@ public class ShopScreen extends GlassScreen {
     private int shownPending = -1;
     private int shownBalance = -1;
     private int shownAvailable = Integer.MIN_VALUE;
+    private ShopSchedule.State shownWindow;
     private boolean refreshed;
     private boolean previewing;
     private Screen parent;
@@ -97,6 +108,7 @@ public class ShopScreen extends GlassScreen {
         if (!refreshed) {
             refreshed = true;
             PacketHandler.INSTANCE.sendToServer(new ShopRefreshPacket());
+            if (!previewing) sendTreasury(TreasuryTakePacket.refresh());
         }
 
         List<ShopSection> sections = ClientShopData.offered();
@@ -120,6 +132,7 @@ public class ShopScreen extends GlassScreen {
     }
 
     private void applySearch(String text) {
+        if (!text.isEmpty()) treasuryOpen = false;
         view.search(text);
         grid.reset();
         if (view.find(entryId) == null) entryId = null;
@@ -152,6 +165,7 @@ public class ShopScreen extends GlassScreen {
         placeSearch();
         addSellButton();
         addSectionButtons(left, top);
+        addTreasuryButton(left, top);
         addTabButtons(left + SIDEBAR_WIDTH + PANEL_GAP, top);
         addBuyButton(left + SIDEBAR_WIDTH + GRID_WIDTH + PANEL_GAP * 2, top);
 
@@ -241,9 +255,20 @@ public class ShopScreen extends GlassScreen {
     @Override
     public void tick() {
         if (pendingValue() != shownPending || balanceValue() != shownBalance
-                || availableValue() != shownAvailable) {
+                || availableValue() != shownAvailable || windowValue() != shownWindow) {
             rebuild();
+            return;
         }
+        if (ClientTreasury.version() != shownTreasury) {
+            rebuild();
+            return;
+        }
+        if (shownWindow != null && shownWindow != ShopSchedule.State.OPEN) refreshBuyLabel();
+    }
+
+    private ShopSchedule.State windowValue() {
+        ShopEntry entry = currentEntry();
+        return entry == null ? null : ShopClock.state(entry);
     }
 
     private int availableValue() {
@@ -267,7 +292,7 @@ public class ShopScreen extends GlassScreen {
     }
 
     private int sectionCapacity() {
-        int height = panelHeight() - (int) UiMetrics.PAD_WIDE * 2;
+        int height = panelHeight() - (int) UiMetrics.PAD_WIDE * 2 - (treasuryShown() ? ROW_HEIGHT : 0);
         int plain = Math.max(1, height / ROW_HEIGHT);
         if (ClientShopData.offered().size() <= plain) return plain;
 
@@ -296,7 +321,7 @@ public class ShopScreen extends GlassScreen {
         UiButton button = new UiButton(left + (int) UiMetrics.GAP, y,
                 SIDEBAR_WIDTH - (int) UiMetrics.GAP * 2, ROW_HEIGHT - 2,
                 sectionLabel(section), pressed -> openSection(id)).lit();
-        button.active = view.searching() || !id.equals(sectionId);
+        button.active = view.searching() || treasuryOpen || !id.equals(sectionId);
         button.anchor(y, GlidingRow.Lane.LIST);
         sectionButtons.add(button);
         addRenderableWidget(button);
@@ -320,6 +345,7 @@ public class ShopScreen extends GlassScreen {
     }
 
     private void openSection(String id) {
+        treasuryOpen = false;
         int direction = stepTo(ClientShopData.offered().stream().map(ShopSection::id).toList(), sectionId, id);
         sectionId = id;
         childId = null;
@@ -354,7 +380,7 @@ public class ShopScreen extends GlassScreen {
 
     private void addTabButtons(int gridLeft, int top) {
         ShopSection section = currentSection();
-        if (view.searching() || section == null || !hasOfferedChildren(section)) return;
+        if (treasuryOpen || view.searching() || section == null || !hasOfferedChildren(section)) return;
 
         int x = gridLeft + (int) UiMetrics.GAP;
         addTab(x, top, Component.translatable("zones.shop.tab.all"), null);
@@ -383,6 +409,12 @@ public class ShopScreen extends GlassScreen {
 
     private void addBuyButton(int previewLeft, int top) {
         ShopEntry entry = currentEntry();
+        shownWindow = entry == null ? null : ShopClock.state(entry);
+        shownTreasury = ClientTreasury.version();
+        if (treasuryOpen) {
+            addTakeButton(previewLeft, top);
+            return;
+        }
         if (entry == null || previewing) return;
 
         int affordable = maxAffordable(entry);
@@ -398,12 +430,12 @@ public class ShopScreen extends GlassScreen {
         }
 
         buyButton = new UiButton(x, buttonY, width, BUY_HEIGHT, buyLabel(entry), button -> purchase(entry));
-        buyButton.active = !entry.soldOut() && affordable > 0;
+        buyButton.active = ShopClock.open(entry) && !entry.soldOut() && affordable > 0;
         addRenderableWidget(buyButton);
     }
 
     private boolean sliderShown(ShopEntry entry) {
-        return !entry.soldOut() && maxAffordable(entry) > 1;
+        return ShopClock.open(entry) && !entry.soldOut() && maxAffordable(entry) > 1;
     }
 
     private UiSlider quantitySlider(int x, int y, int width, int affordable) {
@@ -434,6 +466,7 @@ public class ShopScreen extends GlassScreen {
     }
 
     private Component buyLabel(ShopEntry entry) {
+        if (!ShopClock.open(entry)) return ShopClock.label(entry);
         if (entry.soldOut()) return Component.translatable("zones.shop.sold_out");
         if (maxAffordable(entry) <= 0) {
             return Component.translatable("zones.shop.too_expensive", entry.price() - balanceValue());
@@ -574,6 +607,11 @@ public class ShopScreen extends GlassScreen {
     }
 
     private void renderGrid(GuiGraphics graphics, int gridLeft, int top, int height, int mouseX, int mouseY) {
+        if (treasuryOpen) {
+            treasury.place(gridLeft, top + UiMetrics.PAD_WIDE, GRID_WIDTH, height - UiMetrics.PAD_WIDE - UiMetrics.PAD);
+            treasury.render(graphics, mouseX, mouseY);
+            return;
+        }
         int gridTop = top + tabsOffset();
         grid.place(gridLeft, gridTop, GRID_WIDTH, height - tabsOffset() - (int) UiMetrics.PAD);
 
@@ -599,6 +637,10 @@ public class ShopScreen extends GlassScreen {
     }
 
     private void renderPreview(GuiGraphics graphics, int previewLeft, int top, int height) {
+        if (treasuryOpen) {
+            treasury.renderPreview(graphics, previewLeft, top, PREVIEW_WIDTH, height - BUY_HEIGHT - UiMetrics.PAD_WIDE * 2.0f);
+            return;
+        }
         ShopEntry entry = currentEntry();
         if (entry == null) {
             UiRender.textCentered(graphics, this.font, Component.translatable("zones.shop.pick_item"),
@@ -625,7 +667,7 @@ public class ShopScreen extends GlassScreen {
             preview.beginDrag();
             return true;
         }
-        if (button == 0 && grid.grabScrollbar(localX, localY, view.shown().size())) return true;
+        if (button == 0 && !treasuryOpen && grid.grabScrollbar(localX, localY, view.shown().size())) return true;
         if (pickTile(localX, localY)) return true;
         return super.mouseClicked(mouseX, mouseY, button);
     }
@@ -651,6 +693,7 @@ public class ShopScreen extends GlassScreen {
     }
 
     private boolean pickTile(double mouseX, double mouseY) {
+        if (treasuryOpen) return pickTreasury(mouseX, mouseY);
         ShopView.Found found = grid.pick(mouseX, mouseY, view.shown());
         if (found == null) return false;
 
@@ -674,7 +717,8 @@ public class ShopScreen extends GlassScreen {
             return true;
         }
         if (localX < left + SIDEBAR_WIDTH + PANEL_GAP + GRID_WIDTH) {
-            grid.scrollBy(step, view.shown().size());
+            if (treasuryOpen) treasury.scrollBy(step);
+            else grid.scrollBy(step, view.shown().size());
             return true;
         }
         if (preview.overModel(localX, localY)) {
@@ -692,6 +736,79 @@ public class ShopScreen extends GlassScreen {
         sectionGlide.snap(sectionGlide.get() + (next - sectionScroll) * ROW_HEIGHT);
         sectionScroll = next;
         rebuild();
+    }
+
+    private boolean treasuryShown() {
+        return !previewing && ClientTreasury.shown();
+    }
+
+    // WHY: казна стоит внизу списка разделов отдельной строкой: это не товар и не раздел, и в
+    // WHY: прокрутку разделов она не уезжает
+    private void addTreasuryButton(int left, int top) {
+        if (!treasuryShown()) {
+            treasuryOpen = false;
+            return;
+        }
+        int y = top + panelHeight() - (int) UiMetrics.PAD_WIDE - ROW_HEIGHT;
+        UiButton button = new UiButton(left + (int) UiMetrics.GAP, y, SIDEBAR_WIDTH - (int) UiMetrics.GAP * 2,
+                ROW_HEIGHT - 2, Component.translatable("zones.shop.treasury.button", ClientTreasury.total()),
+                pressed -> openTreasury()).lit();
+        button.active = !treasuryOpen;
+        button.hint("zones.shop.treasury.hint");
+        addRenderableWidget(button);
+    }
+
+    private void openTreasury() {
+        treasuryOpen = true;
+        entryId = null;
+        clearSearch();
+        treasury.reset();
+        sendTreasury(TreasuryTakePacket.refresh());
+        rebuild();
+    }
+
+    private void addTakeButton(int previewLeft, int top) {
+        int width = PREVIEW_WIDTH - (int) UiMetrics.PAD_WIDE * 2;
+        int x = previewLeft + (int) UiMetrics.PAD_WIDE;
+        int y = top + panelHeight() - BUY_HEIGHT - (int) UiMetrics.PAD_WIDE;
+        ItemStack stack = treasury.chosenStack();
+        UiButton take = new UiButton(x, y, width, BUY_HEIGHT, stack.isEmpty()
+                ? Component.translatable("zones.shop.treasury.pick")
+                : Component.translatable("zones.shop.treasury.take", stack.getCount()), pressed -> takeChosen());
+        take.active = !stack.isEmpty();
+        addRenderableWidget(take);
+    }
+
+    // WHY: в заявке едет место и предмет: сервер сверяет, что там всё ещё эта стопка, и отдаёт её
+    // WHY: только тому, кто в своём магазине и на ногах
+    private void takeChosen() {
+        int index = treasury.chosen();
+        ItemStack stack = treasury.chosenStack();
+        if (index < 0 || stack.isEmpty()) return;
+
+        sendTreasury(new TreasuryTakePacket(index, stack, stack.getCount()));
+        treasury.leave(index);
+        rebuild();
+    }
+
+    private static void sendTreasury(TreasuryTakePacket packet) {
+        com.persiki84.capturepoints.network.PacketHandler.INSTANCE.sendToServer(packet);
+    }
+
+    private boolean pickTreasury(double mouseX, double mouseY) {
+        int index = treasury.pick(mouseX, mouseY);
+        if (index < 0) return false;
+
+        long now = System.currentTimeMillis();
+        boolean twice = index == treasury.chosen() && now - lastTreasuryClick < DOUBLE_CLICK_MS;
+        lastTreasuryClick = now;
+        treasury.choose(index);
+        if (twice) {
+            takeChosen();
+            return true;
+        }
+        rebuild();
+        return true;
     }
 
     private ShopSection currentSection() {

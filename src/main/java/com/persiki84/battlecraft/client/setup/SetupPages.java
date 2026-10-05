@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class SetupPages {
+    private static final String RECOMMENDED = "battlecraft.setup.recommended";
     private static final int FONT_CARD_HEIGHT = 118;
     private static final int INK_CARD_HEIGHT = 96;
     private static final int SOUND_CARD_HEIGHT = 62;
@@ -108,14 +109,15 @@ public final class SetupPages {
     private static SetupPage font(SetupScreen screen) {
         List<CardPage.Card> cards = new ArrayList<>();
         for (FontShape shape : FontShape.values()) {
-            cards.add(new CardPage.Card(
+            CardPage.Card card = new CardPage.Card(
                     Component.translatable(shape.translationKey()),
                     Component.translatable(shape.noteKey()),
                     (graphics, typeface, centerX, top, width) -> FontSample.paint(graphics, typeface, shape, centerX, top, width),
                     () -> {
                         FontLook.choose(shape);
                         screen.answer(SetupStep.FONT);
-                    }, null));
+                    }, null);
+            cards.add(shape == FontShape.FALLBACK ? card.badged(Component.translatable(RECOMMENDED)) : card);
         }
         return new CardPage(SetupStep.FONT, cards, FONT_CARD_HEIGHT).onRelease(SetupPages::dropSamples);
     }

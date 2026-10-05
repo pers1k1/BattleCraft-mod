@@ -8,7 +8,7 @@ import java.util.Set;
 
 public final class ConfigDoc {
     public static final String FORMAT = "battlecraft-config";
-    public static final int VERSION = 3;
+    public static final int VERSION = 4;
     public static final String KIND_CONFIG = "config";
     public static final String KIND_PRESET = "preset";
 
@@ -19,6 +19,7 @@ public final class ConfigDoc {
     private static final String CREATED_KEY = "created";
 
     private final JsonObject root;
+    private boolean migrated;
 
     private ConfigDoc(JsonObject root) {
         this.root = root;
@@ -34,6 +35,18 @@ public final class ConfigDoc {
 
     public static ConfigDoc wrap(JsonObject parsed) {
         return new ConfigDoc(parsed);
+    }
+
+    public boolean migrated() {
+        return migrated;
+    }
+
+    void markMigrated() {
+        migrated = true;
+    }
+
+    public boolean config() {
+        return KIND_CONFIG.equals(JsonRead.text(root, KIND_KEY));
     }
 
     public JsonObject root() {

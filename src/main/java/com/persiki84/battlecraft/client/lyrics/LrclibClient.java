@@ -29,9 +29,17 @@ final class LrclibClient {
     private record Entry(String title, String artist, double seconds, boolean instrumental, boolean wordSync,
                          String synced) {}
 
-    // WHY: сначала точный поиск с полным исполнителем («Simon and Garfunkel», «Tyler, The Creator»),
+    // WHY: поиск LRCLIB не равняет «ё» и «е», поэтому промах по названию с «ё» повторяется через «е».
+    // WHY: Сначала точный поиск с полным исполнителем («Simon and Garfunkel», «Tyler, The Creator»),
     // WHY: потом с первым из соавторов, потом свободный запрос
     LyricsOutcome find(TrackQuery query) throws InterruptedException {
+        LyricsOutcome outcome = findAs(query);
+        if (outcome.kind() != LyricsOutcome.Kind.MISSING || !query.spelledWithYo()) return outcome;
+        Thread.sleep(FALLBACK_PAUSE_MS);
+        return findAs(query.withoutYo());
+    }
+
+    private LyricsOutcome findAs(TrackQuery query) throws InterruptedException {
         LyricsOutcome outcome = search(query, exact(query.title(), query.artist()));
         if (outcome.kind() != LyricsOutcome.Kind.MISSING || query.artist().isEmpty()) return outcome;
         if (!query.leadArtist().equals(query.artist())) {

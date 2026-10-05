@@ -1,5 +1,6 @@
 package com.persiki84.capturepoints.client.menu;
 
+import com.persiki84.capturepoints.capture.IncomePayout;
 import com.persiki84.capturepoints.menu.CapturePointMenuState;
 import com.persiki84.shared.client.menu.ActionRow;
 import com.persiki84.shared.client.menu.FieldRow;
@@ -40,6 +41,7 @@ final class PointForms {
     private final ToggleRow pointMarkersRow;
     private final ToggleRow finalMarkersRow;
     private final ToggleRow openerOnlyRow;
+    private final PickRow payoutRow;
     private final ActionRow resetAllRow;
     private final FieldRow nameRow;
     private final PickRow kindRow;
@@ -72,6 +74,7 @@ final class PointForms {
         openerOnlyRow = toggle("capturepoints.menu.final_opener_only", CapturePointMenuState.FINAL_OPENER_ONLY,
                 value -> screen.now(FINAL + "openeronly " + value));
         openerOnlyRow.hint("capturepoints.menu.final_opener_only.hint");
+        payoutRow = payoutRow();
         resetAllRow = new ActionRow(0, 0, 10, ROW, Component.translatable("capturepoints.menu.reset_all"),
                 () -> Component.translatable(screen.isArmed(RESET_ALL) ? "studio.sure"
                         : "capturepoints.menu.action.reset"), this::pressResetAll).alerting();
@@ -93,6 +96,18 @@ final class PointForms {
         placeRow.hint("studio.points.place_row.hint");
         createRow = new ActionRow(0, 0, 10, ROW, Component.translatable("studio.points.create"),
                 () -> Component.translatable("studio.create"), this::create);
+    }
+
+    private PickRow payoutRow() {
+        List<Component> labels = new ArrayList<>();
+        for (IncomePayout payout : IncomePayout.values()) {
+            labels.add(Component.translatable(payout.translationKey()));
+        }
+        PickRow row = new PickRow(0, 0, 10, ROW, Component.translatable("capturepoints.menu.payout"), labels,
+                () -> IncomePayout.byId(PointStudioScreen.state().getString(CapturePointMenuState.INCOME_PAYOUT)).ordinal(),
+                picked -> screen.now(POINT + "incomepayout " + IncomePayout.values()[picked].id()));
+        row.hint("capturepoints.menu.payout.hint");
+        return row;
     }
 
     private static HeadingRow heading(String key) {
@@ -147,6 +162,7 @@ final class PointForms {
         stack.add(sized(pointMarkersRow, width), x);
         stack.add(sized(finalMarkersRow, width), x);
         stack.add(sized(openerOnlyRow, width), x);
+        stack.add(sized(payoutRow, width), x);
         stack.add(sized(resetAllRow, width), x, ROW / 3);
     }
 

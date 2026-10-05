@@ -10,6 +10,7 @@ import java.util.function.BooleanSupplier;
 public enum InterfaceFlag {
     DISCORD("discord", true, HudConfig::discordRpc, InterfaceFlag::discord),
     HUD_ACCENT_TEXT("hudAccentText", true, HudConfig::hudAccentText, HudConfig::hudAccentText),
+    HUD_FOLLOWS_SCREEN("hudFollowsScreen", true, HudConfig::hudFollowsScreen, HudConfig::hudFollowsScreen),
     ISLAND("island", true, HudConfig::island, HudConfig::island),
     ISLAND_MEDIA("islandMedia", true, HudConfig::islandMedia, HudConfig::islandMedia),
     ISLAND_AVATAR("islandAvatar", true, HudConfig::islandAvatar, HudConfig::islandAvatar),

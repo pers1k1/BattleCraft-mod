@@ -26,6 +26,7 @@ public record ShopTile(ShopEntry entry, Component name, Component corner, Compon
     private static Component mark(ShopEntry entry, boolean hidden) {
         if (hidden) return Component.translatable("studio.shop.hidden_mark");
         if (!entry.access().everyone()) return Component.translatable("studio.shop.teams_mark");
+        if (entry.timed()) return Component.translatable("studio.shop.timed_mark");
         return Component.empty();
     }
 

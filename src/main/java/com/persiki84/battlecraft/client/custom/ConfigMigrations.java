@@ -5,6 +5,8 @@ import com.google.gson.JsonObject;
 
 final class ConfigMigrations {
 
+    private static final int SILK_VERSION = 4;
+
     private ConfigMigrations() {}
 
     // WHY: шаги идут цепочкой от версии файла к текущей, поэтому пропущенные версии
@@ -12,7 +14,9 @@ final class ConfigMigrations {
     static void run(ConfigDoc doc) {
         if (doc.version() >= ConfigDoc.VERSION) return;
 
+        if (doc.version() < SILK_VERSION && doc.config()) FontLook.migrate(doc);
         doc.version(ConfigDoc.VERSION);
+        doc.markMigrated();
     }
 
     static ConfigDoc fromLegacy(JsonObject flat) {

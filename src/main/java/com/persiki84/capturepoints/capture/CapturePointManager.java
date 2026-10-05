@@ -3,6 +3,7 @@ package com.persiki84.capturepoints.capture;
 import com.persiki84.capturepoints.CapturePointsMod;
 import com.persiki84.capturepoints.event.BlockProtectionHandler;
 import com.persiki84.capturepoints.network.*;
+import com.persiki84.capturepoints.treasury.TeamTreasury;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -175,20 +176,36 @@ public class CapturePointManager {
             incomeStack = itemTemplate.copy();
             incomeStack.setCount(amount);
         }
-
-        var scoreboard = currentServer.getScoreboard();
-        for (ServerPlayer player : currentServer.getPlayerList().getPlayers()) {
-            var team = scoreboard.getPlayersTeam(player.getScoreboardName());
-            if (team != null && team.getName().equals(teamName)) {
-                payIncome(player, incomeStack, amount, pointName);
+        switch (incomePayout) {
+            case TREASURY -> IncomeShares.treasury(currentServer, teamName, incomeStack, pointName);
+            case SHARE -> IncomeShares.split(teamMembers(teamName), incomeStack, pointName);
+            case EACH -> {
+                for (ServerPlayer player : teamMembers(teamName)) {
+                    payIncome(player, incomeStack, amount, pointName);
+                }
             }
         }
     }
 
-    private static void payIncome(ServerPlayer player, ItemStack incomeStack, int amount, String pointName) {
+    private static List<ServerPlayer> teamMembers(String teamName) {
+        List<ServerPlayer> members = new ArrayList<>();
+        var scoreboard = currentServer.getScoreboard();
+        for (ServerPlayer player : currentServer.getPlayerList().getPlayers()) {
+            var team = scoreboard.getPlayersTeam(player.getScoreboardName());
+            if (team != null && team.getName().equals(teamName)) members.add(player);
+        }
+        return members;
+    }
+
+    // WHY: то, что не влезло в инвентарь, уходит в казну команды, а не под ноги: брошенное у точки
+    // WHY: подобрал бы враг
+    static void payIncome(ServerPlayer player, ItemStack incomeStack, int amount, String pointName) {
         ItemStack toGive = incomeStack.copy();
-        if (!player.getInventory().add(toGive)) {
-            player.drop(toGive, false);
+        toGive.setCount(amount);
+        player.getInventory().add(toGive);
+        if (!toGive.isEmpty()) {
+            TeamTreasury.deposit(TeamTreasury.teamOf(player), toGive);
+            TeamTreasury.syncTo(player);
         }
 
         player.sendSystemMessage(Component.empty()
@@ -536,6 +553,15 @@ public class CapturePointManager {
     }
 
     private static boolean finalForOpenerOnly;
+    private static IncomePayout incomePayout = IncomePayout.DEFAULT;
+
+    public static IncomePayout incomePayout() { return incomePayout; }
+
+    public static void incomePayout(IncomePayout payout) {
+        incomePayout = payout == null ? IncomePayout.DEFAULT : payout;
+        persist();
+        TeamTreasury.syncAll(currentServer);
+    }
     private static boolean globalCaptureMarkers = true;
     private static boolean globalFinalMarkers = true;
 
@@ -578,6 +604,8 @@ public class CapturePointManager {
     private static CompoundTag snapshot() {
         CompoundTag mainTag = new CompoundTag();
         mainTag.putBoolean("finalForOpenerOnly", finalForOpenerOnly);
+        mainTag.putString("incomePayout", incomePayout.id());
+        TeamTreasury.save(mainTag);
         mainTag.putBoolean("globalCaptureMarkers", globalCaptureMarkers);
         mainTag.putBoolean("globalFinalMarkers", globalFinalMarkers);
         mainTag.putBoolean("blockProtection", BlockProtectionHandler.isProtectionEnabled());
@@ -608,6 +636,8 @@ public class CapturePointManager {
         CaptureSessions.cancelAll();
         capturePoints.clear();
         finalPoints.clear();
+        TeamTreasury.forget();
+        incomePayout = IncomePayout.DEFAULT;
         loadFailed = false;
 
         Path dataFile = server.getWorldPath(LevelResource.ROOT).resolve(DATA_FOLDER).resolve(DATA_FILE);
@@ -640,6 +670,8 @@ public class CapturePointManager {
 
     private static void restore(CompoundTag mainTag) {
         finalForOpenerOnly = mainTag.getBoolean("finalForOpenerOnly");
+        incomePayout = IncomePayout.byId(mainTag.getString("incomePayout"));
+        TeamTreasury.load(mainTag);
         globalCaptureMarkers = !mainTag.contains("globalCaptureMarkers") || mainTag.getBoolean("globalCaptureMarkers");
         globalFinalMarkers = !mainTag.contains("globalFinalMarkers") || mainTag.getBoolean("globalFinalMarkers");
         BlockProtectionHandler.restore(mainTag.getBoolean("blockProtection"),

@@ -188,6 +188,8 @@ public final class ShopStorage {
         private int stock = ShopEntry.UNLIMITED;
         private int available = ShopEntry.UNLIMITED;
         private int restockSeconds;
+        private int opensAfter;
+        private int closesAfter;
         private long readyAt;
         private String scope;
         private List<StoredPool> pools;
@@ -202,6 +204,8 @@ public final class ShopStorage {
             stored.stock = entry.stock();
             stored.available = entry.available();
             stored.restockSeconds = entry.restockSeconds();
+            stored.opensAfter = entry.opensAfter();
+            stored.closesAfter = entry.closesAfter();
             stored.scope = entry.scope().id();
             stored.pools = StoredPool.of(entry);
             stored.available = entry.availableIn(ShopEntry.OWN_POOL);
@@ -231,6 +235,7 @@ public final class ShopStorage {
                 ShopEntry entry = new ShopEntry(id, stack, price, description);
                 entry.setStock(stock, restockSeconds);
                 entry.setScope(StockScope.byId(scope));
+                entry.setWindow(opensAfter, closesAfter);
                 restorePools(entry);
                 entry.access().restore(teams);
                 return entry;

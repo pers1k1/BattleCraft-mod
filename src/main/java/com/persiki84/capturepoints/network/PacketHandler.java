@@ -9,7 +9,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.Optional;
 
 public class PacketHandler {
-    private static final String PROTOCOL_VERSION = "2";
+    private static final String PROTOCOL_VERSION = "3";
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(CapturePointsMod.MOD_ID, "main"),
             () -> PROTOCOL_VERSION,
@@ -113,5 +113,14 @@ public class PacketHandler {
                 LocalMarkerOverridePacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT)
         );
+
+        registerTreasury();
+    }
+
+    private static void registerTreasury() {
+        INSTANCE.registerMessage(id(), TreasurySyncPacket.class, TreasurySyncPacket::encode,
+                TreasurySyncPacket::decode, TreasurySyncPacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        INSTANCE.registerMessage(id(), TreasuryTakePacket.class, TreasuryTakePacket::encode,
+                TreasuryTakePacket::decode, TreasuryTakePacket::handle, Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 }

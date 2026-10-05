@@ -19,6 +19,7 @@ public final class CapturePointMenuState {
     public static final String CAPTURE_MARKERS = "captureMarkers";
     public static final String FINAL_MARKERS = "finalMarkers";
     public static final String FINAL_OPENER_ONLY = "finalOpenerOnly";
+    public static final String INCOME_PAYOUT = "incomePayout";
     public static final String FINAL_FLAG = "final";
 
     private static final int TICKS_PER_SECOND = 20;
@@ -47,6 +48,7 @@ public final class CapturePointMenuState {
         tag.putBoolean(CAPTURE_MARKERS, CapturePointManager.isGlobalCaptureMarkers());
         tag.putBoolean(FINAL_MARKERS, CapturePointManager.isGlobalFinalMarkers());
         tag.putBoolean(FINAL_OPENER_ONLY, CapturePointManager.isFinalForOpenerOnly());
+        tag.putString(INCOME_PAYOUT, CapturePointManager.incomePayout().id());
         return tag;
     }
 

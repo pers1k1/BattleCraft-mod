@@ -38,6 +38,7 @@ public final class HudConfig {
     private static ForgeConfigSpec.BooleanValue HEARTBEAT_SYNC;
     private static ForgeConfigSpec.BooleanValue HEARTBEAT_FATIGUE;
     private static ForgeConfigSpec.BooleanValue ITEM_FACTS;
+    private static ForgeConfigSpec.BooleanValue HUD_FOLLOWS_SCREEN;
     private static ForgeConfigSpec.IntValue PLAIN_SCREENS;
     private static ForgeConfigSpec.BooleanValue MENU_INTRO;
     private static ForgeConfigSpec.BooleanValue LOADING_SCREENS;
@@ -155,6 +156,8 @@ public final class HudConfig {
         HEARTBEAT_SYNC = defineHeartbeatSync();
         HEARTBEAT_FATIGUE = defineHeartbeatFatigue();
         ITEM_FACTS = defineItemFacts();
+        HUD_FOLLOWS_SCREEN = BUILDER.comment("HUD держит одну долю окна при любом разрешении, иначе растёт ступенями за масштабом интерфейса")
+                .define("hudFollowsScreen", true);
     }
 
     private static void defineScreens() {
@@ -196,7 +199,7 @@ public final class HudConfig {
         ISLAND_BAR = defineIslandPart("islandBar", "Полоса прогресса трека");
         ISLAND_TITLE = defineIslandPart("islandTitle", "Название играющего трека");
         ISLAND_ARTIST = defineIslandPart("islandArtist", "Исполнитель играющего трека");
-        ISLAND_LYRICS = defineIslandPart("islandLyrics", "Лирика на месте названия; текст ищется на lrclib.net и в NetEase Cloud Music, туда уходят название и исполнитель трека");
+        ISLAND_LYRICS = defineIslandPart("islandLyrics", "Лирика на месте названия; текст ищется на lrclib.net, в NetEase Cloud Music и в Kugou, туда уходят название и исполнитель трека");
         ISLAND_LYRICS_BRIDGE = defineIslandPart("islandLyricsBridge", "Мост Spotify: тексты из Spotify и Spicy Lyrics через расширение Spicetify, игра слушает только 127.0.0.1:47823");
         ISLAND_LYRICS_OFFSET = BUILDER.comment("Сдвиг лирики в секундах: плюс позже, минус раньше").defineInRange("islandLyricsOffset", 0.0, -3.0, 3.0);
         ISLAND_TIME = defineIslandPart("islandTime", "Таймер трека");
@@ -726,6 +729,14 @@ public final class HudConfig {
 
     public static boolean accentFromLauncher() {
         return read(ACCENT_FROM_LAUNCHER, true);
+    }
+
+    public static boolean hudFollowsScreen() {
+        return read(HUD_FOLLOWS_SCREEN, true);
+    }
+
+    public static void hudFollowsScreen(boolean value) {
+        if (SPEC.isLoaded()) HUD_FOLLOWS_SCREEN.set(value);
     }
 
     public static boolean menuDesktop() {

@@ -22,6 +22,7 @@ import com.persiki84.capturepoints.network.FinalPointSyncPacket;
 import com.persiki84.capturepoints.network.GlobalMarkerSyncPacket;
 import com.persiki84.capturepoints.network.PacketHandler;
 import com.persiki84.capturepoints.network.PointSyncData;
+import com.persiki84.capturepoints.treasury.TeamTreasury;
 import com.persiki84.shared.client.menu.MenuScreens;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.api.distmarker.Dist;
@@ -88,6 +89,14 @@ public class CapturePointsMod {
     @SubscribeEvent
     public void onMatchStarted(MatchEvent.Started event) {
         CapturePointManager.resetAllPoints();
+        TeamTreasury.clearAll(event.server());
+    }
+
+    // WHY: казна принадлежит матчу: доход прошлого боя не переходит в следующий, а после конца матча
+    // WHY: команды распускаются, и брать из неё уже некому
+    @SubscribeEvent
+    public void onMatchEnded(MatchEvent.Ended event) {
+        TeamTreasury.clearAll(event.server());
     }
 
     // WHY: выключенный модуль просто переставал тикать, и захваты замирали живыми: участники
@@ -108,6 +117,7 @@ public class CapturePointsMod {
         if (event.getEntity() instanceof ServerPlayer player) {
             syncPlayerData(player);
             CaptureRewards.flush(player);
+            TeamTreasury.syncTo(player);
         }
     }
 

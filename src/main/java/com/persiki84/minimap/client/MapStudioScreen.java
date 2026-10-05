@@ -174,7 +174,7 @@ public abstract class MapStudioScreen extends StudioScreen {
             if (thing.size() > MapThing.PIN_ONLY) {
                 map.area(graphics, thing.shape(), item.x(), item.z(), thing.size(), thing.color(), glow, item.presence());
             }
-            map.pin(graphics, item.x(), item.z(), thing.color(), glow, item.presence());
+            map.pin(graphics, item.x(), item.z(), thing.color(), glow, item.presence(), item.lift());
         }
         paintGhost(graphics);
     }

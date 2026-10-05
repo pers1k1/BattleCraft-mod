@@ -65,6 +65,10 @@ public abstract class StudioScreen extends GlassScreen {
     private static final float ART_SPEED = 11.0f;
     private static final float ART_SLIDE = 12.0f;
     private static final float CARRIED_SCALE = 1.5f;
+    private static final float PICK_CARD = 26.0f;
+    private static final float PICK_GROW = 0.12f;
+    private static final float PICK_RADIUS = 6.0f;
+    private static final float PICK_LIFT_SPEED = 14.0f;
     private static final int SHELF_HINT = 14;
     private static final int BULK_ART = 32;
     private static final long DOUBLE_CLICK_MS = 400L;
@@ -81,6 +85,7 @@ public abstract class StudioScreen extends GlassScreen {
     private final Map<UiButton, StudioMenu.Action> bulkActionsByButton = new IdentityHashMap<>();
     private final Map<String, String> due = new LinkedHashMap<>();
     private final Smooth artShown = new Smooth(0.0f, ART_SPEED);
+    private final Smooth pickLift = new Smooth(0.0f, PICK_LIFT_SPEED);
     private Screen parent;
     protected int ticks;
     private int commitAt = -1;
@@ -598,7 +603,7 @@ public abstract class StudioScreen extends GlassScreen {
         renderWidgets(graphics, mouseX, mouseY, partialTick);
         inspector.renderHints(graphics, inspectorLeft() + INSPECTOR_WIDTH / 2.0f);
         renderCanvasOverlay(graphics, mouseX, mouseY);
-        renderCarriedPick(graphics);
+        renderLifted(graphics);
         if (modalOpen()) renderModal(graphics, this.width / 2.0f, contentTop() + panelHeight() / 2.0f, mouseX, mouseY);
         contextMenu.render(graphics, mouseX, mouseY);
         MenuFeedback.render(graphics, this.width / 2.0f, panelBottom() + GAP);
@@ -697,13 +702,32 @@ public abstract class StudioScreen extends GlassScreen {
         }
     }
 
-    private void renderCarriedPick(GuiGraphics graphics) {
-        if (!carryingPick || pressPick == null) return;
+    // WHY: всё поднятое (плитка, строка раздела, предмет с полки) рисуется последним слоем, поверх окон
+    // WHY: и вне их ножниц, а перед ним интерфейс переснимается: иначе стекло поднятого преломляло бы
+    // WHY: один мир под окнами
+    private void renderLifted(GuiGraphics graphics) {
+        boolean picking = carryingPick && pressPick != null;
+        boolean tiles = gridCanvas() && grid.lifting();
+        if (!picking && !tiles && !nav.lifting()) return;
 
+        UiGlass.layer(graphics);
+        nav.renderLifted(graphics);
+        if (tiles) grid.renderLifted(graphics, tiles());
+        if (picking) renderCarriedPick(graphics);
+    }
+
+    private void renderCarriedPick(GuiGraphics graphics) {
+        float lift = pickLift.to(1.0f, UiFrame.delta());
+        float size = PICK_CARD * (1.0f + PICK_GROW * lift);
+        float x = (float) pointerX - size / 2.0f;
+        float y = (float) pointerY - size / 2.0f;
         graphics.pose().pushPose();
-        graphics.pose().translate(pointerX - 12.0f, pointerY - 12.0f, 200.0f);
-        graphics.pose().scale(CARRIED_SCALE, CARRIED_SCALE, 1.0f);
+        graphics.pose().translate(0.0f, 0.0f, 200.0f);
         try {
+            UiGlass.hush(graphics, x, y + 2.0f * lift, size, size, PICK_RADIUS, 0.5f * lift);
+            UiGlass.panel(graphics, x, y, size, size, PICK_RADIUS, 0.92f, 0.6f * lift);
+            graphics.pose().translate((float) pointerX - 8.0f * CARRIED_SCALE, (float) pointerY - 8.0f * CARRIED_SCALE, 0.0f);
+            graphics.pose().scale(CARRIED_SCALE, CARRIED_SCALE, 1.0f);
             graphics.renderItem(pressPick.stack(), 0, 0);
         } finally {
             graphics.pose().popPose();
@@ -972,6 +996,7 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     private boolean dragPick(double x, double y) {
+        if (!carryingPick && moved(x, y)) pickLift.snap(0.0f);
         carryingPick = carryingPick || moved(x, y);
         if (carryingPick && gridCanvas()) grid.openGap(x, y, tiles().size());
         return true;
@@ -1029,16 +1054,16 @@ public abstract class StudioScreen extends GlassScreen {
         nav.clearDrop();
         int[] move = grid.drop();
         if (dropKey != null && pressedMarked) {
-            grid.settle();
-            flushCommits();
             List<Integer> group = marks.indices();
+            depart(dropKey, move[0], group);
+            flushCommits();
             marks.clear();
             dropTiles(nodeByKey(dropKey), group);
             layout();
             return;
         }
         if (dropKey != null) {
-            grid.settle();
+            depart(dropKey, move[0], List.of(move[0]));
             flushCommits();
             dropTile(nodeByKey(dropKey), move[0]);
             return;
@@ -1053,6 +1078,18 @@ public abstract class StudioScreen extends GlassScreen {
         }
         flushCommits();
         moveTile(move[0], move[1]);
+    }
+
+    // WHY: брошенные в раздел плитки улетают в его строку, а числа обоих разделов меняются сразу
+    private void depart(String key, int lead, List<Integer> moved) {
+        List<? extends StudioTile> shown = tiles();
+        grid.settle();
+        float[] anchor = nav.anchor(key);
+        float toX = anchor == null ? (float) pointerX : anchor[0];
+        float toY = anchor == null ? (float) pointerY : anchor[1];
+        if (lead >= 0 && lead < shown.size()) grid.depart(shown.get(lead), moved, toX, toY);
+        nav.nudge(selectedNode(), -moved.size());
+        nav.nudge(key, moved.size());
     }
 
     private StudioNav.Node nodeByKey(String key) {

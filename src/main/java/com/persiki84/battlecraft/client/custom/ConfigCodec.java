@@ -3,6 +3,7 @@ package com.persiki84.battlecraft.client.custom;
 import com.google.gson.JsonObject;
 import com.persiki84.shared.JsonRead;
 import com.persiki84.shared.client.font.FontShape;
+import com.persiki84.battlecraft.client.island.AvatarSource;
 import com.persiki84.shared.client.ui.UiMotionSet;
 import com.persiki84.shared.client.ui.UiQuality;
 import com.persiki84.shared.client.ui.UiSoundScheme;
@@ -25,6 +26,7 @@ final class ConfigCodec {
     private static final String FONT = "font";
     private static final String SOUND = "uiSound";
     private static final String MOTION = "uiMotion";
+    private static final String AVATAR = "avatar";
     private static final String HEARTBEAT = "heartbeat";
 
     private ConfigCodec() {}
@@ -115,6 +117,7 @@ final class ConfigCodec {
         Customization.font(font == null ? FontShape.FALLBACK : font);
         UiSoundScheme sound = UiSoundScheme.byId(JsonRead.text(body, SOUND));
         Customization.sound(sound == null ? UiSoundScheme.FALLBACK : sound);
+        Customization.avatar(AvatarSource.byId(JsonRead.text(body, AVATAR)));
         UiMotionSet motion = UiMotionSet.byId(JsonRead.text(body, MOTION));
         Customization.motion(motion == null ? UiMotionSet.IGNITE : motion);
         Boolean beating = JsonRead.flag(body, HEARTBEAT);
@@ -207,6 +210,7 @@ final class ConfigCodec {
         body.addProperty(FONT, Customization.font().id());
         body.addProperty(SOUND, Customization.sound().id());
         body.addProperty(MOTION, Customization.motion().id());
+        body.addProperty(AVATAR, Customization.avatar().id());
         body.addProperty(HEARTBEAT, Customization.heartbeat());
     }
 

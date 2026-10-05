@@ -46,10 +46,16 @@ public final class HudEditLayer {
     private static final float HINT_TOP = 5.0f;
     private static final float GUIDE_SPEED = 16.0f;
     private static final float HANDLE_SPEED = 13.0f;
+    private static final float GRAB_SPEED = 16.0f;
+    private static final float GRAB_SWELL = 1.4f;
+    private static final float GRAB_HALO = 3.0f;
+    private static final float GRAB_HALO_ALPHA = 0.28f;
+    private static final float GRAB_FILL = 0.05f;
 
     private static final Smooth acrossGlow = new Smooth(0.0f, GUIDE_SPEED);
     private static final Smooth downGlow = new Smooth(0.0f, GUIDE_SPEED);
     private static final Smooth handleGrow = new Smooth(0.0f, HANDLE_SPEED);
+    private static final Smooth grab = new Smooth(0.0f, GRAB_SPEED);
     private static final Smooth[] lit = new Smooth[HudSlot.values().length];
 
     static {
@@ -116,6 +122,7 @@ public final class HudEditLayer {
         acrossGlow.to(moving && lining(across) ? 1.0f : 0.0f, delta);
         downGlow.to(moving && lining(down) ? 1.0f : 0.0f, delta);
         handleGrow.to(HudEditSession.selected() == null ? 0.0f : 1.0f, delta);
+        grab.to(HudEditSession.dragging() ? 1.0f : 0.0f, delta);
         for (HudSlot slot : HudSlot.values()) {
             lit[slot.ordinal()].to(warmth(slot), delta);
         }
@@ -157,13 +164,15 @@ public final class HudEditLayer {
 
     private static void drawFrame(GuiGraphics graphics, HudSlot slot, HudBox box, float shown) {
         float warm = UiAnim.easeOut(lit[slot.ordinal()].get());
-        float swell = LIT_SWELL * warm;
+        float held = slot == HudEditSession.selected() ? UiAnim.easeOut(grab.get()) : 0.0f;
+        float swell = LIT_SWELL * warm + GRAB_SWELL * held;
         float width = box.width() * box.scale() + swell * 2.0f;
         float height = box.height() * box.scale() + swell * 2.0f;
         float x = box.x() - swell;
         float y = box.y() - swell;
         float weight = IDLE_ALPHA + (1.0f - IDLE_ALPHA) * warm;
-        float fill = HudLayout.visible(slot) ? LIT_FILL * warm : HIDDEN_FILL + LIT_FILL * warm;
+        float fill = (HudLayout.visible(slot) ? LIT_FILL * warm : HIDDEN_FILL + LIT_FILL * warm) + GRAB_FILL * held;
+        if (held > 0.004f) drawHalo(graphics, x, y, width, height, swell, held * shown);
 
         if (fill > 0.002f) {
             UiRender.panel(graphics, x, y, width, height, FRAME_RADIUS + swell,
@@ -177,6 +186,15 @@ public final class HudEditLayer {
         if (slot == HudEditSession.selected()) {
             drawHandles(graphics, box, shown * UiAnim.easeOutBack(handleGrow.get()));
         }
+    }
+
+    // WHY: взятый элемент отрывается от экрана ореолом вокруг рамки и чуть раздаётся, а при отпускании
+    // WHY: ореол сходит и рамка садится на место тем же ходом
+    private static void drawHalo(GuiGraphics graphics, float x, float y, float width, float height, float swell,
+                                 float held) {
+        float reach = GRAB_HALO * held;
+        UiRender.rim(graphics, x - reach, y - reach, width + reach * 2.0f, height + reach * 2.0f,
+                FRAME_RADIUS + swell + reach, reach + 0.5f, UiTheme.withAlpha(UiAccent.color(), GRAB_HALO_ALPHA * held));
     }
 
     private static void drawSample(GuiGraphics graphics, HudSlot slot, HudBox box, float shown) {

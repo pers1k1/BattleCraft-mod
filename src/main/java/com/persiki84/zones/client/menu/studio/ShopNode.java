@@ -53,7 +53,7 @@ public record ShopNode(String section, String child) {
         List<StudioNav.Node> nodes = new ArrayList<>();
         for (ShopSection section : ClientShopData.sections()) {
             nodes.add(StudioNav.Node.item(keyOf(section.id(), null), Component.literal(section.title()),
-                    count(section.deepEntryIds().size()), 0, true));
+                    count(section.entries().size()), 0, true));
             for (ShopSection child : section.children().values()) {
                 nodes.add(StudioNav.Node.item(keyOf(section.id(), child.id()), Component.literal(child.title()),
                         count(child.entries().size()), 1, true));

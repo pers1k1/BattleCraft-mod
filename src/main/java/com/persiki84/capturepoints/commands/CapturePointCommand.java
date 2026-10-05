@@ -47,6 +47,7 @@ public class CapturePointCommand {
         addGeometryBranches(root);
         addTimingBranches(root);
         addToggleBranches(root);
+        root.then(IncomePayoutCommand.branch());
         PointBonusCommands.addBranches(root, POINT_SUGGESTIONS, CapturePointManager::getCapturePoint, context);
         CaptureTuningCommands.addBranches(root, POINT_SUGGESTIONS, CapturePointManager::getCapturePoint);
 

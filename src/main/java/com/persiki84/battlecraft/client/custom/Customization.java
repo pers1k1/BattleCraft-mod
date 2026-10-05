@@ -6,6 +6,7 @@ import com.persiki84.shared.client.font.FontShape;
 import com.persiki84.shared.client.font.MsdfFontSets;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiGlassStyle;
+import com.persiki84.battlecraft.client.island.AvatarSource;
 import com.persiki84.shared.client.ui.UiMotion;
 import com.persiki84.shared.client.ui.UiMotionSet;
 import com.persiki84.shared.client.ui.UiPalette;
@@ -29,6 +30,7 @@ public final class Customization {
     private static FontShape font = FontShape.FALLBACK;
     private static UiSoundScheme sound = UiSoundScheme.FALLBACK;
     private static UiMotionSet motion = UiMotionSet.IGNITE;
+    private static AvatarSource avatar = AvatarSource.FALLBACK;
     private static UiQuality.Mode mode = UiQuality.Mode.LIQUID;
     private static boolean followLauncher = true;
     private static boolean glassFollowsTheme;
@@ -138,6 +140,14 @@ public final class Customization {
         glassFollowsTheme = value;
         if (value) colors.remove(PaletteKey.GLASS);
         apply();
+    }
+
+    public static AvatarSource avatar() {
+        return avatar;
+    }
+
+    public static void avatar(AvatarSource value) {
+        avatar = value == null ? AvatarSource.FALLBACK : value;
     }
 
     public static UiMotionSet motion() {
@@ -287,7 +297,8 @@ public final class Customization {
     }
 
     public static void resetInterface() {
-        font(FontShape.FALLBACK);
+        FontLook.choose(FontShape.FALLBACK);
+        avatar(AvatarSource.FALLBACK);
         sound(UiSoundScheme.FALLBACK);
         motion(UiMotionSet.IGNITE);
         heartbeat = false;

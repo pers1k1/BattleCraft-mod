@@ -36,6 +36,8 @@ final class ShopInspector {
     private static final int MAX_STOCK = 9999;
     private static final int MAX_RESTOCK = 604800;
     private static final int RESTOCK_STEP = 30;
+    private static final int WINDOW_MINUTES = ShopEntry.WINDOW_LIMIT / 60;
+    private static final int MINUTE = 60;
     private static final int TITLE_LIMIT = 48;
     private static final int ENTRY_ART = 110;
     private static final int NODE_ART = 46;
@@ -59,6 +61,9 @@ final class ShopInspector {
     private NumberRow bundleRow;
     private NumberRow restockRow;
     private PickRow scopeRow;
+    private HeadingRow windowHeading;
+    private NumberRow opensRow;
+    private NumberRow closesRow;
     private HeadingRow noteHeading;
     private FieldRow noteRow;
     private UiButton gunsButton;
@@ -109,6 +114,20 @@ final class ShopInspector {
                 () -> entryValue(entry -> entry.scope().ordinal()),
                 picked -> screen.now(scopeCommand(SCOPES[picked])));
         scopeRow.hint("zones.shopadmin.scope.hint");
+        createWindowRows();
+    }
+
+    // WHY: окно продажи задаётся в минутах от старта матча: секунды здесь только мешали бы крутить
+    private void createWindowRows() {
+        windowHeading = heading("studio.shop.group.window");
+        opensRow = hinted(new NumberRow(0, 0, 10, ROW, Component.translatable("studio.shop.opens"),
+                () -> entryValue(entry -> entry.opensAfter() / MINUTE),
+                value -> screen.later("opens", entryCommand("opens", value * MINUTE)), 0, WINDOW_MINUTES, 1)
+                .floorLabel(Component.translatable("studio.shop.opens.now")), "studio.shop.opens");
+        closesRow = hinted(new NumberRow(0, 0, 10, ROW, Component.translatable("studio.shop.closes"),
+                () -> entryValue(entry -> entry.closesAfter() / MINUTE),
+                value -> screen.later("closes", entryCommand("closes", value * MINUTE)), 0, WINDOW_MINUTES, 1)
+                .floorLabel(Component.translatable("studio.shop.closes.never")), "studio.shop.closes");
     }
 
     private void createNoteRows() {
@@ -267,6 +286,9 @@ final class ShopInspector {
         stack.add(sized(stockRow(entry.bundle()), width), x);
         stack.add(sized(restockRow, width), x);
         stack.add(sized(scopeRow, width), x);
+        stack.add(sized(windowHeading, width), x, GAP);
+        stack.add(sized(opensRow, width), x);
+        stack.add(sized(closesRow, width), x);
         stack.add(sized(noteHeading, width), x, GAP);
         stack.add(sized(noteRow, width), x);
         access.target(accessCommand(), this::entryAccess);

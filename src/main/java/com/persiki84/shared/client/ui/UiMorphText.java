@@ -53,6 +53,8 @@ public final class UiMorphText {
     private float[] litShown = new float[0];
     private int accentShown = -1;
     private float[] leavingLit = new float[0];
+    private float[] glowShown = new float[0];
+    private float[] leavingGlow = new float[0];
     private int leavingAccent = -1;
     private float scale = 1.0f;
     private UiSweep sweep = UiSweep.NONE;
@@ -78,8 +80,10 @@ public final class UiMorphText {
         prefix = whole ? 0 : commonPrefix(previousCodes, codes);
         suffix = whole ? 0 : commonSuffix(previousCodes, codes, prefix);
         leavingLit = litShown;
+        leavingGlow = glowShown;
         leavingAccent = accentShown;
         litShown = new float[0];
+        glowShown = new float[0];
         clock = previousCodes.length == 0 ? IDLE : 0.0f;
         leaving = shown;
         shown = 0.0f;
@@ -169,14 +173,22 @@ public final class UiMorphText {
         return morphing() ? leaving : 0.0f;
     }
 
-    private void remember(int index, int count, float lit, int accent) {
+    private void remember(int index, int count, float lit, float glow, int accent) {
         if (litShown.length != count) litShown = new float[count];
-        if (index < count) litShown[index] = lit;
+        if (glowShown.length != count) glowShown = new float[count];
+        if (index < count) {
+            litShown[index] = lit;
+            glowShown[index] = glow;
+        }
         accentShown = accent;
     }
 
     private float frozen(int index) {
         return index >= 0 && index < leavingLit.length ? leavingLit[index] : 1.0f;
+    }
+
+    private float frozenGlow(int index) {
+        return index >= 0 && index < leavingGlow.length ? leavingGlow[index] : 0.0f;
     }
 
     public float follow(GuiGraphics graphics, Font font, float textScale, float slot, UiSweep lit) {
@@ -253,8 +265,8 @@ public final class UiMorphText {
 
         @Override
         public float glow(int index, int count) {
-            float lit = direction < 0.0f ? frozen(index) : clamp(sweep.lit(index));
-            float bloom = BLOOM_SHARE * 4.0f * lit * (1.0f - lit) + HELD_GLOW * held(index);
+            float lit = direction < 0.0f ? frozenGlow(index) : clamp(sweep.glow(index));
+            float bloom = BLOOM_SHARE * lit + HELD_GLOW * held(index);
             return bloom * (direction < 0.0f ? shown(index, count) : 1.0f);
         }
 
@@ -276,24 +288,25 @@ public final class UiMorphText {
             return direction < 0.0f ? 0.0f : clamp(sweep.held(index));
         }
 
-        // WHY: буква, которая поётся сейчас, отдаёт в цвет обложки и светится: колокол по её доле
+        // WHY: слог, который поётся сейчас, отдаёт в цвет обложки и светится, пока поётся, и тает после
         @Override
         public int tint(int index, int count, int base) {
             float shown = shown(index, count);
-            if (direction < 0.0f) return sung(base, shown, frozen(index), leavingAccent, 0.0f);
+            if (direction < 0.0f) return sung(base, shown, frozen(index), frozenGlow(index), leavingAccent, 0.0f);
             float lit = clamp(sweep.lit(index));
+            float glow = clamp(sweep.glow(index));
             int accent = sweep.accent(base);
-            remember(index, count, lit, accent);
-            return sung(base, shown, lit, accent, held(index));
+            remember(index, count, lit, glow, accent);
+            return sung(base, shown, lit, glow, accent, held(index));
         }
 
         // WHY: уходящая строка уносит тот вид, каким горела в последнем кадре: без этого её буквы на
         // WHY: смене разом теряли приглушение, цвет и свечение и выглядели оторванными от текста.
         // WHY: Цвет обложки сначала осветляется к белому: тёмная обложка иначе делала поющийся слог
         // WHY: тусклее уже пропетого, а в Spicy Lyrics он самый яркий
-        private int sung(int base, float shown, float lit, int accentColor, float held) {
+        private int sung(int base, float shown, float lit, float glow, int accentColor, float held) {
             int toned = UiTheme.alpha(base, shown * (UNSUNG + (1.0f - UNSUNG) * lit));
-            float active = Math.max(4.0f * lit * (1.0f - lit), held);
+            float active = Math.max(glow, held);
             if (active <= 0.01f) return toned;
             int light = UiTheme.mix(0xFF000000 | accentColor, UiTheme.WHITE, ACCENT_LIGHT);
             return UiTheme.mix(toned, (toned & 0xFF000000) | (light & 0x00FFFFFF), ACCENT_SHARE * active);

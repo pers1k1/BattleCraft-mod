@@ -36,6 +36,9 @@ public final class MapCanvas {
     private static final int GRID_COLOR = 0x14FFFFFF;
     private static final float FRAME_SHARE = 0.32f;
     private static final float PIN = 3.2f;
+    private static final float PIN_RISE = 2.0f;
+    private static final float PIN_GROW = 0.3f;
+    private static final float PIN_SHADOW = 0.45f;
     private static final float LABEL_SCALE = 0.62f;
     private static final float PLAYER_ARROW = 4.2f;
     private static final float REVEAL_ZOOM = 0.82f;
@@ -259,10 +262,19 @@ public final class MapCanvas {
     }
 
     public void pin(GuiGraphics graphics, double worldX, double worldZ, int color, float glow, float presence) {
+        pin(graphics, worldX, worldZ, color, glow, presence, 0.0f);
+    }
+
+    // WHY: взятая булавка приподнимается над картой: подрастает, отходит вверх от своей тени и
+    // WHY: садится обратно, когда её отпускают
+    public void pin(GuiGraphics graphics, double worldX, double worldZ, int color, float glow, float presence,
+                    float lift) {
         float x = screenX(worldX);
-        float y = screenY(worldZ);
-        float size = PIN * (1.0f + 0.35f * glow) * UiAnim.easeOut(presence);
+        float y = screenY(worldZ) - PIN_RISE * lift;
+        float size = PIN * (1.0f + 0.35f * glow + PIN_GROW * lift) * UiAnim.easeOut(presence);
         if (size <= 0.05f) return;
+        if (lift > 0.01f) UiRender.dot(graphics, x, y + PIN_RISE * lift + 1.0f, size + 1.5f,
+                UiTheme.alpha(UiPalette.panelDeep(), PIN_SHADOW * lift * presence));
         UiRender.dot(graphics, x, y, size + 0.8f, UiTheme.alpha(UiPalette.panelDeep(), presence));
         UiRender.dot(graphics, x, y, size, UiTheme.alpha(color, presence));
         if (glow > 0.01f) {

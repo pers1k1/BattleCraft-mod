@@ -37,6 +37,19 @@ public final class ShopTransactions {
         return zone != null;
     }
 
+    // WHY: казна команды открывается в магазине, где команда торгует: в ничейном или в своём, но не
+    // WHY: в магазине чужой базы. Остальные условия те же, что у покупки
+    public static boolean treasuryReady(ServerPlayer player, String team) {
+        if (!ready(player, ModuleId.ZONES)) return false;
+
+        Zone zone = ZoneLookup.smallestOfTypeAt(ZoneLookup.dimensionOf(player), ZoneType.SHOP,
+                player.getX(), player.getY(), player.getZ());
+        if (zone == null || zone.ownerTeam() == null || zone.ownerTeam().equals(team)) return zone != null;
+
+        deny(player, "capturepoints.treasury.error.foreign_shop");
+        return false;
+    }
+
     private static boolean ready(ServerPlayer player, ModuleId module) {
         if (!ModuleSwitches.allows(module)) {
             denyModule(player, module);
@@ -70,14 +83,10 @@ public final class ShopTransactions {
             return;
         }
 
-        if (!allowed(player, ShopCatalog.section(sectionId), section, entry)) {
-            deny(player, "zones.shop.error.not_for_team");
-            return;
-        }
-
         String pool = ShopViewer.of(player).key(entry.scope());
-        if (entry.soldOutIn(pool)) {
-            deny(player, "zones.shop.error.sold_out");
+        String refusal = refusal(player, ShopCatalog.section(sectionId), section, entry, pool);
+        if (refusal != null) {
+            deny(player, refusal);
             return;
         }
 
@@ -89,6 +98,17 @@ public final class ShopTransactions {
         }
 
         checkout(player, entry, entry.take(pool, units, System.currentTimeMillis()));
+    }
+
+    // WHY: окно продажи сверяется по часам сервера: закрытая на клиенте плитка это лишь вид, а пакет
+    // WHY: покупки можно прислать и мимо неё
+    private static String refusal(ServerPlayer player, ShopSection parent, ShopSection section, ShopEntry entry,
+                                  String pool) {
+        if (!allowed(player, parent, section, entry)) return "zones.shop.error.not_for_team";
+        ShopSchedule.State window = ShopSchedule.server(entry);
+        if (window == ShopSchedule.State.WAITING) return "zones.shop.error.locked";
+        if (window == ShopSchedule.State.CLOSED) return "zones.shop.error.closed";
+        return entry.soldOutIn(pool) ? "zones.shop.error.sold_out" : null;
     }
 
     // WHY: клиентский пакет это заявка: ограничение по командам обязано проверяться здесь,

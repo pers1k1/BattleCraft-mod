@@ -52,6 +52,14 @@ public final class StudioGrid {
     private static final float GROUP_DIM = 0.6f;
     private static final float STACK_STEP = 3.5f;
     private static final float BADGE_RADIUS = 7.0f;
+    private static final float LAND_SPEED = 20.0f;
+    private static final float DEPART_MS = 260.0f;
+    private static final float DEPART_SCALE = 0.35f;
+    private static final float HUSH_ALPHA = 0.55f;
+    private static final float HUSH_DROP = 3.0f;
+    private static final float LAND_REST = 0.5f;
+
+    private record Departure(StudioTile tile, float fromX, float fromY, float toX, float toY, int group, long at) {}
 
     private final List<Smooth> hover = new ArrayList<>();
     private final List<Smooth> slideX = new ArrayList<>();
@@ -61,6 +69,10 @@ public final class StudioGrid {
     private final Smooth gapGlow = new Smooth(0.0f, GAP_SPEED);
     private final List<Smooth> marks = new ArrayList<>();
     private final Smooth bandShown = new Smooth(0.0f, BAND_SPEED);
+    private final Smooth land = new Smooth(0.0f, LAND_SPEED);
+    private final BitSet vanished = new BitSet();
+    private int landing = -1;
+    private Departure departure;
     private BitSet marked = new BitSet();
     private int groupCount;
     private boolean banding;
@@ -104,6 +116,8 @@ public final class StudioGrid {
         carriedTo = -1;
         holding = false;
         gap = -1;
+        landing = -1;
+        vanished.clear();
         slideX.clear();
         slideY.clear();
     }
@@ -169,17 +183,40 @@ public final class StudioGrid {
         carriedTo = placing ? Math.min(total - 1, slotAt(mouseX, mouseY, total)) : carriedFrom;
     }
 
-    // WHY: отпущенная плитка едет в своё место от курсора, а не возникает там из прежнего слота;
-    // WHY: порядок соседей держится до ответа сервера, иначе сетка на полсекунды вернулась бы назад
+    // WHY: отпущенная плитка едет в своё место от курсора и садится: подъём сходит на нет по пути, и всё
+    // WHY: это время она рисуется поверх окон, иначе брошенная за окном плитка пропадала бы до слота.
+    // WHY: Порядок соседей держится до ответа сервера, иначе сетка на полсекунды вернулась бы назад
     public int[] drop() {
         int[] move = {carriedFrom, carriedTo};
         holding = false;
+        boolean seen = carriedFrom >= 0 && carriedFrom < slideX.size() && visible(slotOf(carriedFrom));
+        landing = seen ? carriedFrom : -1;
+        land.snap(carryLift.get());
         carryLift.snap(0.0f);
         if (carriedFrom >= 0 && carriedFrom < slideX.size()) {
             slideX.get(carriedFrom).snap(carryX - TILE / 2.0f);
             slideY.get(carriedFrom).snap(carryY - TILE / 2.0f);
         }
         return move;
+    }
+
+    // WHY: брошенная в раздел плитка улетает в его строку и тает там, а её место пустеет сразу: до ответа
+    // WHY: сервера она стояла бы в старой витрине. Сборка сетки по ответу возвращает всё как есть
+    public void depart(StudioTile tile, List<Integer> indices, float toX, float toY) {
+        departure = new Departure(tile, carryX, carryY, toX, toY, indices.size(), System.currentTimeMillis());
+        landing = -1;
+        for (int index : indices) {
+            if (index >= 0) vanished.set(index);
+        }
+    }
+
+    public boolean lifting() {
+        return carrying() || landing >= 0 || departure != null;
+    }
+
+    private boolean visible(int slot) {
+        float y = tileY(slot);
+        return y >= top && y + TILE <= top + height;
     }
 
     // WHY: предмет, который несут с полки, раздвигает соседей там, куда ляжет: без просвета игрок
@@ -249,14 +286,63 @@ public final class StudioGrid {
         try {
             paintGap(graphics);
             for (int index = 0; index < total; index++) {
-                if (carrying() && index == carriedFrom) continue;
+                if (raised(index) || vanished.get(index)) continue;
                 paintSlot(graphics, tiles.get(index), index, mouseX, mouseY);
             }
-            if (carrying() && carriedFrom < total) paintCarried(graphics, tiles.get(carriedFrom));
             paintBand(graphics);
             graphics.flush();
         } finally {
             graphics.disableScissor();
+        }
+    }
+
+    private boolean raised(int index) {
+        return carrying() && index == carriedFrom || index == landing;
+    }
+
+    // WHY: поднятая плитка рисуется вне ножниц сетки, поверх всех окон: её можно унести хоть за край
+    // WHY: окна, и она не пропадает из виду. Экран перед этим переснимает интерфейс, поэтому её стекло
+    // WHY: преломляет плитки и строки под собой, а не один мир
+    public void renderLifted(GuiGraphics graphics, List<? extends StudioTile> tiles) {
+        grow(tiles.size());
+        paintDeparture(graphics);
+        if (landing >= 0 && landing < tiles.size()) paintLanding(graphics, tiles.get(landing));
+        if (carrying() && carriedFrom < tiles.size()) paintCarried(graphics, tiles.get(carriedFrom));
+    }
+
+    private void paintLanding(GuiGraphics graphics, StudioTile tile) {
+        float delta = UiFrame.delta();
+        int index = landing;
+        int slot = slotOf(index);
+        float x = slideX.get(index).to(tileX(slot), delta);
+        float y = slideY.get(index).to(tileY(slot), delta);
+        float lift = land.to(0.0f, delta);
+        float mark = marks.get(index).to(marked.get(index) ? 1.0f : 0.0f, delta);
+        if (lift < 0.01f && Math.abs(x - tileX(slot)) < LAND_REST && Math.abs(y - tileY(slot)) < LAND_REST) landing = -1;
+        paintRaised(graphics, tile, index, x, y, lift, 1.0f, mark, false);
+    }
+
+    private void paintDeparture(GuiGraphics graphics) {
+        if (departure == null) return;
+        float age = (System.currentTimeMillis() - departure.at()) / DEPART_MS;
+        if (age >= 1.0f) {
+            departure = null;
+            return;
+        }
+        float travel = UiAnim.easeOut(age);
+        float x = departure.fromX() + (departure.toX() - departure.fromX()) * travel - TILE / 2.0f;
+        float y = departure.fromY() + (departure.toY() - departure.fromY()) * travel - TILE / 2.0f;
+        float shrink = CARRY_LIFT + (DEPART_SCALE - CARRY_LIFT) * travel;
+        float fade = 1.0f - UiAnim.smoothstep(0.45f, 1.0f, age);
+        graphics.pose().pushPose();
+        graphics.pose().translate(x + TILE / 2.0f, y + TILE / 2.0f, 50.0f);
+        graphics.pose().scale(shrink, shrink, 1.0f);
+        graphics.pose().translate(-(x + TILE / 2.0f), -(y + TILE / 2.0f), 0.0f);
+        try {
+            if (departure.group() > 1) paintStack(graphics, x, y, departure.group(), fade);
+            paintTile(graphics, departure.tile(), -1, x, y, CARRY_ALPHA * fade, 1.0f - travel, 1.0f);
+        } finally {
+            graphics.pose().popPose();
         }
     }
 
@@ -311,15 +397,26 @@ public final class StudioGrid {
 
     private void paintCarried(GuiGraphics graphics, StudioTile tile) {
         float lift = carryLift.to(1.0f, UiFrame.delta());
+        paintRaised(graphics, tile, carriedFrom, carryX - TILE / 2.0f, carryY - TILE / 2.0f, lift, CARRY_ALPHA, 1.0f,
+                groupCount > 1);
+    }
+
+    // WHY: подъём читается тенью, которая растёт и уходит вниз вместе с ростом плитки: без неё плитка
+    // WHY: просто увеличивалась и не отрывалась от сетки
+    private void paintRaised(GuiGraphics graphics, StudioTile tile, int index, float x, float y, float lift,
+                             float alpha, float mark, boolean stacked) {
         float scale = 1.0f + (CARRY_LIFT - 1.0f) * lift;
+        float centerX = x + TILE / 2.0f;
+        float centerY = y + TILE / 2.0f;
         graphics.pose().pushPose();
-        graphics.pose().translate(carryX, carryY, 50.0f);
+        graphics.pose().translate(centerX, centerY, 50.0f);
         graphics.pose().scale(scale, scale, 1.0f);
-        graphics.pose().translate(-carryX, -carryY, 0.0f);
+        graphics.pose().translate(-centerX, -centerY, 0.0f);
         try {
-            if (groupCount > 1) paintStack(graphics, lift);
-            paintTile(graphics, tile, carriedFrom, carryX - TILE / 2.0f, carryY - TILE / 2.0f, CARRY_ALPHA, lift, 1.0f);
-            if (groupCount > 1) paintCount(graphics, lift);
+            UiGlass.hush(graphics, x, y + HUSH_DROP * lift, TILE, TILE, RADIUS, HUSH_ALPHA * lift);
+            if (stacked) paintStack(graphics, x, y, groupCount, lift);
+            paintTile(graphics, tile, index, x, y, alpha, lift, mark);
+            if (stacked) paintCount(graphics, x, y, lift);
         } finally {
             graphics.pose().popPose();
         }
@@ -327,19 +424,18 @@ public final class StudioGrid {
 
     // WHY: пачка при переносе видна стопкой карточек под курсором и числом: иначе группа выглядит
     // WHY: как одна плитка, и непонятно, уедет ли в раздел всё выделенное или только она
-    private void paintStack(GuiGraphics graphics, float lift) {
-        int layers = Math.min(2, groupCount - 1);
+    private void paintStack(GuiGraphics graphics, float x, float y, int count, float lift) {
+        int layers = Math.min(2, count - 1);
         for (int layer = layers; layer >= 1; layer--) {
             float shift = STACK_STEP * layer * lift;
-            UiGlass.panel(graphics, carryX - TILE / 2.0f + shift, carryY - TILE / 2.0f + shift, TILE, TILE, RADIUS,
-                    CARRY_ALPHA * (1.0f - 0.25f * layer), 0.2f);
+            UiGlass.panel(graphics, x + shift, y + shift, TILE, TILE, RADIUS, CARRY_ALPHA * (1.0f - 0.25f * layer), 0.2f);
         }
     }
 
-    private void paintCount(GuiGraphics graphics, float lift) {
+    private void paintCount(GuiGraphics graphics, float x, float y, float lift) {
         float pop = UiAnim.easeOutBack(lift);
-        float cx = carryX + TILE / 2.0f - 2.0f;
-        float cy = carryY - TILE / 2.0f + 2.0f;
+        float cx = x + TILE - 2.0f;
+        float cy = y + 2.0f;
         UiRender.dot(graphics, cx, cy, BADGE_RADIUS * pop, UiAccent.color());
         UiRender.textCentered(graphics, font(), String.valueOf(groupCount), cx, cy - 3.5f * pop, 0.75f * pop,
                 UiTheme.WHITE, false);
@@ -367,7 +463,7 @@ public final class StudioGrid {
 
     private void paintTile(GuiGraphics graphics, StudioTile tile, int index, float x, float y, float appear, float focus,
                            float mark) {
-        float taken = index == chosen ? choice.get() : 0.0f;
+        float taken = index >= 0 && index == chosen ? choice.get() : 0.0f;
         UiGlass.panel(graphics, x, y, TILE, TILE, RADIUS, appear, 0.35f * taken + focus * 0.5f);
         if (taken > 0.01f) {
             UiRender.rim(graphics, x, y, TILE, TILE, RADIUS, 1.2f, UiTheme.alpha(UiAccent.color(), 0.75f * taken));
@@ -383,7 +479,7 @@ public final class StudioGrid {
     }
 
     private void paintBorn(GuiGraphics graphics, int index, float x, float y) {
-        if (index != born) return;
+        if (index < 0 || index != born) return;
         float age = (System.currentTimeMillis() - bornAt) / BORN_MS;
         if (age >= 1.0f) return;
 

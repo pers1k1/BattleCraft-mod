@@ -14,6 +14,7 @@ public final class ShopEntry {
     public static final int DESCRIPTION_LIMIT = 160;
     public static final int BUNDLE_LIMIT = 64;
     public static final String OWN_POOL = "";
+    public static final int WINDOW_LIMIT = 86400;
 
     private final String id;
     private final ItemStack stack;
@@ -24,6 +25,8 @@ public final class ShopEntry {
     private int stock = UNLIMITED;
     private int restockSeconds;
     private StockScope scope = StockScope.DEFAULT;
+    private int opensAfter;
+    private int closesAfter;
 
     public ShopEntry(String id, ItemStack stack, int price, String description) {
         this.id = id;
@@ -40,6 +43,22 @@ public final class ShopEntry {
     public int stock() { return stock; }
     public int restockSeconds() { return restockSeconds; }
     public StockScope scope() { return scope; }
+    public int opensAfter() { return opensAfter; }
+    public int closesAfter() { return closesAfter; }
+
+    public boolean timed() { return opensAfter > 0 || closesAfter > 0; }
+
+    // WHY: закрытие раньше открытия дало бы товар, который не продаётся никогда: такое окно не ставится
+    public boolean windowValid(int opens, int closes) {
+        return closes <= 0 || closes > Math.max(0, opens);
+    }
+
+    public void setWindow(int opens, int closes) {
+        int open = Math.max(0, Math.min(WINDOW_LIMIT, opens));
+        int close = Math.max(0, Math.min(WINDOW_LIMIT, closes));
+        opensAfter = open;
+        closesAfter = windowValid(open, close) ? close : 0;
+    }
 
     public void setPrice(int price) { this.price = price; }
     public void setDescription(String description) { this.description = description; }
@@ -108,6 +127,8 @@ public final class ShopEntry {
         copy.stock = stock;
         copy.restockSeconds = restockSeconds;
         copy.scope = scope;
+        copy.opensAfter = opensAfter;
+        copy.closesAfter = closesAfter;
         for (Map.Entry<String, StockPool> pool : pools.entrySet()) {
             copy.pools.put(pool.getKey(), new StockPool(pool.getValue().available(), pool.getValue().readyAt()));
         }
@@ -120,6 +141,8 @@ public final class ShopEntry {
         copy.stock = stock;
         copy.restockSeconds = restockSeconds;
         copy.scope = scope;
+        copy.opensAfter = opensAfter;
+        copy.closesAfter = closesAfter;
         return copy;
     }
 
@@ -176,6 +199,8 @@ public final class ShopEntry {
         buf.writeInt(restockSeconds);
         buf.writeVarInt(remainingSecondsIn(key, System.currentTimeMillis()));
         buf.writeUtf(scope.id());
+        buf.writeVarInt(opensAfter);
+        buf.writeVarInt(closesAfter);
         access.write(buf);
     }
 
@@ -194,6 +219,7 @@ public final class ShopEntry {
         entry.restorePool(OWN_POOL, available,
                 waiting <= 0 ? 0L : System.currentTimeMillis() + waiting * 1000L);
         entry.scope = StockScope.byId(buf.readUtf());
+        entry.setWindow(buf.readVarInt(), buf.readVarInt());
         entry.access.read(buf);
         return entry;
     }

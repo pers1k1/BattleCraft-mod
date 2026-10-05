@@ -1,5 +1,6 @@
 package com.persiki84.battlecraft.client.island;
 
+import com.persiki84.battlecraft.client.custom.Customization;
 import com.persiki84.battlecraft.client.hud.HudConfig;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTheme;
@@ -34,13 +35,25 @@ public final class IslandFace {
             return true;
         }
         if (!allowFace || awaited()) return false;
-        if (DiscordAvatar.ready()) {
-            stretch(graphics, DiscordAvatar.texture(), centerX, centerY, size, alpha);
+        ResourceLocation picture = chosenPicture();
+        if (picture != null) {
+            stretch(graphics, picture, centerX, centerY, size, alpha);
             return true;
         }
 
         ResourceLocation skin = ownSkin();
         return skin != null && head(graphics, skin, centerX, centerY, size, alpha);
+    }
+
+    // WHY: игрок выбирает, что стоит в острове: аватар Discord, голову скина или свою картинку. Пока
+    // WHY: выбранное не готово (Discord не запущен, файла ещё нет), место держит голова скина
+    private static ResourceLocation chosenPicture() {
+        AvatarSource source = Customization.avatar();
+        if (source == AvatarSource.DISCORD && DiscordAvatar.ready()) return DiscordAvatar.texture();
+        if (source != AvatarSource.PICTURE) return null;
+
+        AvatarPicture.ensure();
+        return AvatarPicture.ready() ? AvatarPicture.texture() : null;
     }
 
     // WHY: картинка кладётся дробными координатами на физическую сетку, а не целыми единицами

@@ -6,10 +6,12 @@ import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
+import com.persiki84.shared.client.ui.UiMorphText;
 import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTheme;
 import com.persiki84.zones.shop.ShopEntry;
+import com.persiki84.zones.shop.ShopSchedule;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -30,6 +32,9 @@ public final class ShopGrid {
     private static final float TILE_LEAD = 3.0f;
     private static final float HOVER_SPEED = 16.0f;
     private static final int SOLD_OUT_SCRIM = 0xB2101014;
+    private static final float SHADE_SPEED = 6.0f;
+    private static final float LOCK_SIZE = 9.0f;
+    private static final float LOCK_TOP = 21.0f;
     private static final int ITEM_TOP = 13;
     private static final int SECTION_TOP = 4;
     private static final int NAME_TOP = 34;
@@ -66,6 +71,8 @@ public final class ShopGrid {
     private static final float SLIDE_SPEED = 17.0f;
 
     private final Map<String, Slide> slides = new HashMap<>();
+    private final Map<String, Smooth> shades = new HashMap<>();
+    private final Map<String, UiMorphText> footers = new HashMap<>();
     private final List<Smooth> hover = new ArrayList<>();
     private final Smooth glide = new Smooth(0.0f, GLIDE_SPEED);
     private final Smooth thumb = new Smooth(0.0f, THUMB_SPEED);
@@ -342,7 +349,23 @@ public final class ShopGrid {
         if (entry.soldOut()) {
             UiRender.panel(graphics, x, y, TILE_SIZE, TILE_SIZE, TILE_RADIUS, SOLD_OUT_SCRIM);
         }
-        renderPrice(graphics, entry, x, y, taken, focus);
+        String key = found.sectionId() + '/' + found.childId() + '/' + entry.id();
+        renderLock(graphics, key, entry, x, y);
+        renderPrice(graphics, key, entry, x, y, taken, focus);
+    }
+
+    // WHY: товар с окном продажи стоит под тенью с замком, пока окно не открылось или уже закрылось.
+    // WHY: Открытие видно: дужка замка откидывается, и тень с замком тают, а не пропадают кадром
+    private void renderLock(GuiGraphics graphics, String key, ShopEntry entry, float x, float y) {
+        boolean shut = !ShopClock.open(entry);
+        float shade = shades.computeIfAbsent(key, unused -> new Smooth(shut ? 1.0f : 0.0f, SHADE_SPEED))
+                .to(shut ? 1.0f : 0.0f, UiFrame.delta());
+        if (shade <= 0.01f) return;
+
+        float eased = UiAnim.easeOut(shade);
+        UiRender.panel(graphics, x, y, TILE_SIZE, TILE_SIZE, TILE_RADIUS, UiTheme.alpha(SOLD_OUT_SCRIM, eased));
+        UiRender.iconLock(graphics, x + TILE_SIZE / 2.0f, y + LOCK_TOP, LOCK_SIZE * (0.8f + 0.2f * eased), shut,
+                UiTheme.alpha(UiAccent.text(), eased));
     }
 
     // WHY: renderItem принимает целые координаты, а плитка едет субпиксельно - значок прыгал по
@@ -400,24 +423,39 @@ public final class ShopGrid {
         }
     }
 
-    private void renderPrice(GuiGraphics graphics, ShopEntry entry, float x, float y, float taken, float focus) {
+    private void renderPrice(GuiGraphics graphics, String key, ShopEntry entry, float x, float y, float taken,
+                             float focus) {
         float plateWidth = TILE_SIZE - UiMetrics.GAP * 2.0f;
         float plateX = x + UiMetrics.GAP;
         float plateY = y + TILE_SIZE - PRICE_HEIGHT - PRICE_BOTTOM;
 
         UiGlass.sunken(graphics, plateX, plateY, plateWidth, PRICE_HEIGHT,
                 UiMetrics.radius(PRICE_HEIGHT), 0.9f);
-        UiRender.textTrackedFit(graphics, font(), footer(entry), x + TILE_SIZE / 2.0f, plateY,
-                PRICE_HEIGHT, plateWidth - UiMetrics.GAP, PRICE_SCALE, 0.0f,
-                priceColor(entry, taken, focus), false);
+        String text = footer(entry).getString();
+        UiMorphText morph = footers.computeIfAbsent(key, unused -> {
+            UiMorphText made = new UiMorphText();
+            made.snap(text);
+            return made;
+        });
+        morph.set(text);
+        morph.advance(UiFrame.delta());
+        float scale = Math.min(PRICE_SCALE, PRICE_SCALE * (plateWidth - UiMetrics.GAP)
+                / Math.max(1.0f, morph.measure(graphics, font(), PRICE_SCALE)));
+        float width = morph.measure(graphics, font(), scale);
+        morph.draw(graphics, font(), x + (TILE_SIZE - width) / 2.0f, UiRender.centerY(plateY, PRICE_HEIGHT, scale),
+                scale, priceColor(entry, taken, focus));
     }
 
     private static int priceColor(ShopEntry entry, float taken, float focus) {
-        if (entry.soldOut()) return UiPalette.alert();
+        if (entry.soldOut() || ShopClock.state(entry) == ShopSchedule.State.CLOSED) return UiPalette.alert();
+        if (!ShopClock.open(entry)) return UiAccent.textDim();
         return UiTheme.mix(UiAccent.text(), UiAccent.color(), Math.max(taken, focus));
     }
 
+    // WHY: подпись плитки перекатывается по цифрам, как таймер острова: отсчёт до открытия, завоза
+    // WHY: и смена цены меняют только изменившиеся знаки
     private static Component footer(ShopEntry entry) {
+        if (!ShopClock.open(entry)) return ShopClock.label(entry);
         if (!entry.soldOut()) return Component.translatable("zones.shop.price", entry.price());
 
         int waiting = entry.remainingSeconds(System.currentTimeMillis());

@@ -40,6 +40,7 @@ import com.persiki84.battlecraft.sound.ModSounds;
 import com.persiki84.shared.client.font.MsdfFontSets;
 import com.persiki84.shared.client.menu.MenuScreens;
 import com.persiki84.shared.client.ui.UiDress;
+import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.menu.MenuNetwork;
 import net.minecraftforge.api.distmarker.Dist;
@@ -149,6 +150,7 @@ public class BattleCraftMod {
                     MenuBackground.shared().render(graphics, width, height));
             UiDress.wardrobe(ScreenDress.shared());
             MsdfFontSets.chooser(Customization::font);
+            UiScale.followScreen(HudConfig::hudFollowsScreen);
             LauncherTheme.apply();
             UiSound.source(HudConfig::soundVolume);
             UiSound.hoverSource(HudConfig::hoverSound);

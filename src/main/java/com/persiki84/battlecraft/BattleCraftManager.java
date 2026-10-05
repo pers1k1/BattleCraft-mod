@@ -73,6 +73,8 @@ public class BattleCraftManager {
     private long lobbyOpenedAt = 0;
     private int lobbyTimer = 0;
     private int lobbyMaxTimer = 0;
+    private static final int MATCH_PERSIST_TICKS = 1200;
+
     private boolean softDisabled = false;
     private long matchStartTime = 0;
 
@@ -106,6 +108,11 @@ public class BattleCraftManager {
     // WHY: работать всегда, а не никогда: иначе без режима матча точки и тайники мертвы
     public boolean matchRunning() {
         return softDisabled || phase == GamePhase.ACTIVE;
+    }
+
+    public long matchElapsedMillis() {
+        if (phase != GamePhase.ACTIVE || matchStartTime <= 0L) return -1L;
+        return Math.max(0L, System.currentTimeMillis() - matchStartTime);
     }
 
     public void setSoftDisabled(boolean disabled) {
@@ -803,6 +810,7 @@ public class BattleCraftManager {
 
         tickLobbyCountdown(server);
         expireVotes(server);
+        if (phase == GamePhase.ACTIVE && server.getTickCount() % MATCH_PERSIST_TICKS == 0) persistMatch(server);
     }
 
     private void tickLobbyCountdown(MinecraftServer server) {
