@@ -28,13 +28,14 @@ public final class UiMorphText {
     private float[] stops = new float[0];
     private float[] previousStops = new float[0];
     private static final float UNSUNG = 0.42f;
-    private static final float LIFT_UNITS = 0.55f;
+    private static final float LIFT_UNITS = 0.42f;
+    private static final float MOTION_GROW = 0.035f;
     private static final float FOLLOW_SHARE = 0.45f;
     private static final float FOLLOW_RATE = 7.0f;
     private static final float ACCENT_SHARE = 0.55f;
     private static final float BLOOM_SHARE = 0.07f;
     private static final float HELD_GLOW = 0.16f;
-    private static final float HELD_LIFT_UNITS = 0.45f;
+    private static final float HELD_LIFT_UNITS = 0.3f;
     private static final float HELD_GROW = 0.1f;
     private static final float HELD_WEIGHT_UNITS = 0.35f;
     private static final float LEAVE_SHARE = 0.45f;
@@ -261,7 +262,8 @@ public final class UiMorphText {
         // WHY: гаснет плавно и к смене строки уже погас
         @Override
         public float grow(int index, int count) {
-            return HELD_GROW * held(index);
+            float moving = direction < 0.0f ? 0.0f : clamp(sweep.motion(index));
+            return HELD_GROW * held(index) + MOTION_GROW * moving;
         }
 
         @Override
@@ -304,18 +306,13 @@ public final class UiMorphText {
 
         @Override
         public float rise(int index, int count) {
-            float lift = direction < 0.0f ? 0.0f : lift(sweep.lit(index)) + HELD_LIFT_UNITS * scale * held(index);
+            float lift = direction < 0.0f ? 0.0f
+                    : LIFT_UNITS * scale * clamp(sweep.motion(index)) + HELD_LIFT_UNITS * scale * held(index);
             if (direction == 0.0f || index < prefix || index >= count - suffix || holds(index)) return lift;
 
             float share = share(index, direction);
             float travel = TRAVEL_UNITS * scale;
             return direction > 0.0f ? lift - (1.0f - share) * travel : share * travel;
-        }
-
-        // WHY: буква, которая поётся сейчас, чуть приподнимается и опускается на место: колокол по её доле
-        private float lift(float lit) {
-            float share = clamp(lit);
-            return LIFT_UNITS * scale * 4.0f * share * (1.0f - share);
         }
 
         private float clamp(float value) {

@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.05v3` in files, `05.10.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.05v4` in files, `05.10.26v4 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1058,6 +1058,15 @@ Version 2026.10.05hotfix - built and started on a dedicated server; not played t
 - **Update the extension.** Take `glass-lyrics-bridge.js` from this release, replace it in `%APPDATA%\spicetify\Extensions` and run `spicetify apply`.
 
 Version 2026.10.05v3 - built; the bridge fix is not yet checked in game.
+
+## Lyrics by syllables, 5 October 2026 (v4)
+
+- **Syllables like Spicy Lyrics.** Lyrics light and lift by syllables. Spicy Lyrics syllables are used as they come; words from yrc, LRCLIB and line-synced lyrics are split by vowels (Russian and English: one consonant between vowels goes to the next syllable, two or more split after the first, ь, ъ and й stay with the previous one).
+- **Several letters at once.** The soft edge of the highlight spans half a syllable, so a few letters glow together like a gradient instead of one letter at a time.
+- **Calmer lift.** A syllable rises as a whole in 170 ms with a light wave across its letters (up to 70 ms), grows by 3.5%, stays raised while it is sung and settles in 0.42 s, so neighbouring syllables flow into each other. Each letter used to hop separately in its own short window. Held words lift a little less on top of this.
+- The same change is in Glass MediaPlayer Island 1.0.7.
+
+Version 2026.10.05v4 - built; not yet checked in game.
 
 ## Releases
 

@@ -24,10 +24,20 @@ final class LineSweep implements UiSweep {
     private static final float HELD_RISE_SHARE = 0.15f;
     private static final float HELD_SUSTAIN_SHARE = 0.6f;
     private static final long NOT_HELD = Long.MIN_VALUE;
+    private static final float GROUP_SOFT = 0.5f;
+    private static final long RISE_MS = 170L;
+    private static final long SETTLE_MS = 420L;
+    private static final long WAVE_MS = 70L;
+    private static final float WAVE_SHARE = 0.25f;
 
     private long[] starts = new long[0];
     private long[] ramps = new long[0];
     private long[] heldUntil = new long[0];
+    private long[] ends = new long[0];
+    private int[] group = new int[0];
+    private long[] groupStart = new long[0];
+    private long[] groupEnd = new long[0];
+    private long[] wave = new long[0];
     private long at;
 
     void load(LyricLine line, long finishBy) {
@@ -35,13 +45,46 @@ final class LineSweep implements UiSweep {
         starts = new long[points.length];
         ramps = new long[points.length];
         heldUntil = new long[points.length];
+        ends = new long[points.length];
+        group = new int[points.length];
         Arrays.fill(heldUntil, NOT_HELD);
+        Arrays.fill(group, Syllables.NONE);
         if (line.words().isEmpty()) {
             spread(points, 0, points.length, line.startMs(), line.endMs());
+            Syllables.mark(points, 0, points.length, group, 0);
         } else {
             spreadWords(points, line);
         }
+        gather(points.length);
         fit(line.startMs(), finishBy);
+    }
+
+    // WHY: окно слога это от начала его первой буквы до конца последней; мягкий край каждой буквы
+    // WHY: растягивается на половину слога, поэтому горит сразу несколько букв, как градиент Spicy
+    private void gather(int count) {
+        groupStart = new long[count];
+        groupEnd = new long[count];
+        wave = new long[count];
+        int from = 0;
+        while (from < count) {
+            int to = from + 1;
+            while (to < count && group[from] != Syllables.NONE && group[to] == group[from]) to++;
+            if (group[from] != Syllables.NONE) widen(from, to);
+            from = to;
+        }
+    }
+
+    private void widen(int from, int to) {
+        long start = starts[from];
+        long end = Math.max(start + 1L, ends[to - 1]);
+        long soft = Math.min(SOFT_MAX_MS, Math.round((end - start) * GROUP_SOFT));
+        long spread = Math.min(WAVE_MS, Math.round((end - start) * WAVE_SHARE));
+        for (int index = from; index < to; index++) {
+            groupStart[index] = start;
+            groupEnd[index] = end;
+            ramps[index] = Math.max(ramps[index], soft);
+            wave[index] = to - from > 1 ? spread * (index - from) / (to - from - 1) : 0L;
+        }
     }
 
     private void spreadWords(int[] points, LyricLine line) {
@@ -51,6 +94,7 @@ final class LineSweep implements UiSweep {
             LyricWord word = words.get(index);
             int next = index + 1 < words.size() ? words.get(index + 1).firstGlyph() : points.length;
             spread(points, word.firstGlyph(), next, word.startMs(), word.endMs());
+            Syllables.mark(points, word.firstGlyph(), Math.min(next, points.length), group, word.firstGlyph());
             markHeld(points, word, next);
         }
     }
@@ -81,6 +125,9 @@ final class LineSweep implements UiSweep {
             ramps[index] = Math.max(RAMP_FLOOR_MS, Math.round(ramps[index] * factor));
             long scaled = scaled(starts[index], lineStart, factor);
             starts[index] = Math.max(lineStart, Math.min(scaled, finishBy - ramps[index]));
+            groupStart[index] = scaled(groupStart[index], lineStart, factor);
+            groupEnd[index] = Math.min(finishBy, scaled(groupEnd[index], lineStart, factor));
+            wave[index] = Math.round(wave[index] * factor);
             if (heldUntil[index] != NOT_HELD) heldUntil[index] = Math.min(finishBy, scaled(heldUntil[index], lineStart, factor));
         }
     }
@@ -104,6 +151,7 @@ final class LineSweep implements UiSweep {
             if (length > 0.0) ramp = Math.max(SOFT_MIN_MS, Math.min(SOFT_MAX_MS, Math.round(length * SOFT_GLYPHS)));
             ramps[index] = ramp;
             cursor += length;
+            ends[index] = Math.round(cursor);
         }
     }
 
@@ -139,6 +187,19 @@ final class LineSweep implements UiSweep {
         return count;
     }
 
+    // WHY: слог поднимается целиком, мягко и с лёгкой волной по буквам, стоит приподнятым, пока
+    // WHY: поётся, и оседает после: колокол на каждую букву в своём коротком окне выходил дёрганым
+    @Override
+    public float motion(int index) {
+        if (index < 0 || index >= group.length || group[index] == Syllables.NONE) return 0.0f;
+
+        long begin = groupStart[index] + wave[index];
+        long rise = Math.max(1L, Math.min(RISE_MS, (groupEnd[index] - groupStart[index]) * 3L / 5L));
+        float up = smooth((at - begin) / (float) rise);
+        float down = 1.0f - smooth((at - groupEnd[index] - wave[index]) / (float) SETTLE_MS);
+        return up * down;
+    }
+
     @Override
     public int accent(int base) {
         return IslandTone.barAt(ACCENT_COLUMN, ACCENT_ROW);
@@ -162,6 +223,7 @@ final class LineSweep implements UiSweep {
     }
 
     private static float smooth(float share) {
-        return share * share * (3.0f - 2.0f * share);
+        float clamped = Math.max(0.0f, Math.min(1.0f, share));
+        return clamped * clamped * (3.0f - 2.0f * clamped);
     }
 }
