@@ -63,6 +63,8 @@ public class MapScreen extends GlassScreen {
     private String clickedLabel;
     private long clickedAt;
     private boolean movedLabel;
+    private double grabOffsetX;
+    private double grabOffsetZ;
     private boolean sizingLabel;
     private double sizingFrom;
     private int sizingPercent;
@@ -353,6 +355,7 @@ public class MapScreen extends GlassScreen {
 
     private void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY, int centerX, int centerY) {
         MapLabels.zoom(markerScale());
+        MapLabels.carry(movedLabel ? armedLabel : null);
         hoveredLabel = canEdit() && !actions.open() && !prompt.open()
                 ? MapLabels.under(this.font, mouseX, mouseY, mapX, mapZ, zoom, centerX, centerY)
                 : null;
@@ -492,14 +495,31 @@ public class MapScreen extends GlassScreen {
     }
 
     private void dragLabel(double mouseX, double mouseY) {
+        if (!movedLabel) rememberGrab(mouseX, mouseY);
         movedLabel = true;
-        MapLabels.hold(armedLabel, Mth.floor(worldXAt(mouseX)), Mth.floor(worldZAt(mouseY)));
+        MapLabels.hold(armedLabel, heldX(mouseX), heldZ(mouseY));
+    }
+
+    // WHY: надпись держится за ту точку, за которую её взяли: иначе на первом же сдвиге она прыгала
+    // WHY: центром под курсор, а не отрывалась от своего места
+    private void rememberGrab(double mouseX, double mouseY) {
+        MapMark mark = ClientMarkData.byId(armedLabel);
+        grabOffsetX = mark == null ? 0.0 : MapLabels.worldX(mark) - 0.5 - worldXAt(mouseX);
+        grabOffsetZ = mark == null ? 0.0 : MapLabels.worldZ(mark) - 0.5 - worldZAt(mouseY);
+    }
+
+    private int heldX(double mouseX) {
+        return Mth.floor(worldXAt(mouseX) + grabOffsetX + 0.5);
+    }
+
+    private int heldZ(double mouseY) {
+        return Mth.floor(worldZAt(mouseY) + grabOffsetZ + 0.5);
     }
 
     private void dropLabel(double mouseX, double mouseY) {
         if (movedLabel) {
-            int x = Mth.floor(worldXAt(mouseX));
-            int z = Mth.floor(worldZAt(mouseY));
+            int x = heldX(mouseX);
+            int z = heldZ(mouseY);
             MapLabels.hold(armedLabel, x, z);
             send(MarkEditPacket.Action.MOVE, armedLabel, x, z, 0, 0, "");
             armedLabel = null;

@@ -1,5 +1,6 @@
 package com.persiki84.shared.client.menu;
 
+import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiAssemble;
@@ -59,6 +60,11 @@ public final class PaletteWindow {
     private static final float PULSE_SECONDS = 0.9f;
     private static final float PANEL_RADIUS = 9.0f;
     private static final float PANEL_LIFT = 0.25f;
+    private static final float CARRY_SPEED = 13.0f;
+    private static final float CARRY_RISE = 2.0f;
+    private static final float CARRY_GLINT = 0.2f;
+    private static final float CARRY_HUSH_DROP = 4.0f;
+    private static final float CARRY_HUSH_ALPHA = 0.55f;
 
     private static final float ENTER_SECONDS = 0.45f;
     private static final float BURN_SECONDS = 0.32f;
@@ -107,6 +113,7 @@ public final class PaletteWindow {
     private float grabX;
     private float grabY;
     private boolean held;
+    private final Smooth carried = new Smooth(0.0f, CARRY_SPEED);
     private long sentAt;
     private boolean typing;
     private String typed = "";
@@ -235,11 +242,20 @@ public final class PaletteWindow {
         resolve(graphics, width, height);
     }
 
+    // WHY: окно, взятое за пустое место, приподнимается, светлеет кромкой и отбрасывает тень вниз, а
+    // WHY: отпущенное так же плавно садится: без этого перенос окна ничем не отличался от покоя
+    private float lift() {
+        return UiAnim.easeOut(carried.get());
+    }
+
     private void paintStaged(GuiGraphics graphics, int mouseX, int mouseY, boolean staged) {
         float outerPresence = UiGlassStyle.scalePresence(staged ? presence() : 1.0f);
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0f, -CARRY_RISE * lift(), 0.0f);
         try {
             paint(graphics, mouseX, mouseY);
         } finally {
+            graphics.pose().popPose();
             UiGlassStyle.restorePresence(outerPresence);
             UiBackdrop.plain();
             if (staged) {
@@ -285,6 +301,7 @@ public final class PaletteWindow {
 
         float step = fresh ? 0.0f : Math.min(MAX_STEP, UiFrame.delta());
         fresh = false;
+        carried.to(grab == Grab.MOVE ? 1.0f : 0.0f, step);
         copyPulse = Math.max(0.0f, copyPulse - step / PULSE_SECONDS);
         pastePulse = Math.max(0.0f, pastePulse - step / PULSE_SECONDS);
         if (closing()) {
@@ -319,6 +336,11 @@ public final class PaletteWindow {
                 ? UiAnim.easeOut(leavingArrival) * leavingHush(1.0f - phase())
                 : UiAnim.easeOut(phase());
         UiGlass.hush(graphics, left, top, WIDTH, height(), PANEL_RADIUS, shown);
+        float lift = lift();
+        if (lift > 0.004f) {
+            UiGlass.hush(graphics, left, top + CARRY_HUSH_DROP * lift, WIDTH, height(), PANEL_RADIUS,
+                    CARRY_HUSH_ALPHA * lift * shown);
+        }
     }
 
     // WHY: иней гасит тело окна своей кривой ухода (frostCloseOpacity в ui_assemble.fsh), и ореол гаснет
@@ -337,7 +359,7 @@ public final class PaletteWindow {
     }
 
     private void paint(GuiGraphics graphics, int mouseX, int mouseY) {
-        UiGlass.window(graphics, left, top, WIDTH, height(), PANEL_RADIUS, 1.0f, PANEL_LIFT);
+        UiGlass.window(graphics, left, top, WIDTH, height(), PANEL_RADIUS, 1.0f, PANEL_LIFT + CARRY_GLINT * lift());
         paintTitle(graphics, mouseX, mouseY);
         paintField(graphics);
         paintHue(graphics);

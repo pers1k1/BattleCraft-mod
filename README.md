@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.09` in files, `09.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.09hotfix` in files, `09.10.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1098,6 +1098,13 @@ Version 2026.10.05v6 - built; not yet checked in game.
 - **Lyric word settles.** The sung word rises a little, as before; when the line changed, the lift of the word just sung dropped to zero in a single frame. The leaving line now carries the lift, growth and held accent it had in its last frame and fades out with them. The same change is in Glass MediaPlayer Island 1.0.10.
 
 Version 2026.10.09 - built; not yet checked in game.
+
+## Map labels and the colour window lift when carried, 9 October 2026 (hotfix)
+
+- **Map labels.** A label on the big map is held by the point it was grabbed at instead of jumping its centre under the cursor on the first move. While carried it rises 2.5 pixels over a shadow of its own text left on the map and stops pulsing; on release it settles back onto its new place while the shadow fades.
+- **Colour window.** The colour window, dragged by an empty spot, rises 2 pixels, its rim brightens and a shadow grows under it; on release it settles back smoothly.
+
+Version 2026.10.09hotfix - built; not yet checked in game.
 
 ## Releases
 

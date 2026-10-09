@@ -41,6 +41,10 @@ public final class MapLabels {
     private static final float PRESENCE_SPEED = 6.5f;
     private static final float TRAVEL_SPEED = 11.0f;
     private static final float SPAWN_RISE = 5.0f;
+    private static final float CARRY_SPEED = 13.0f;
+    private static final float CARRY_RISE = 2.5f;
+    private static final float CARRY_SHADOW_DROP = 1.0f;
+    private static final float CARRY_SHADOW_ALPHA = 0.55f;
 
     private static final Map<String, Glow> glows = new HashMap<>();
     private static final List<MapMark> visible = new ArrayList<>();
@@ -56,6 +60,7 @@ public final class MapLabels {
     private static String sizedId;
     private static int sizedPercent;
     private static float mapGrown = 1.0f;
+    private static String carriedId;
 
     private MapLabels() {}
 
@@ -70,6 +75,10 @@ public final class MapLabels {
             visible.add(mark);
         }
         return visible;
+    }
+
+    public static void carry(String id) {
+        carriedId = id;
     }
 
     public static boolean isLabel(MapMark mark) {
@@ -143,17 +152,21 @@ public final class MapLabels {
         float delta = UiFrame.delta();
         for (MapMark mark : all()) {
             Glow state = glowOf(mark);
+            boolean carried = mark.id().equals(carriedId);
             boolean lit = mark.id().equals(hovered) || mark.id().equals(armed);
             float glow = state.highlight.to(lit ? 1.0f : 0.0f, HOVER_SPEED, delta);
-            if (mark.id().equals(armed)) {
+            if (mark.id().equals(armed) && !carried) {
                 glow *= UiAnim.pulse(ARMED_PERIOD_MS, ARMED_LOW, ARMED_HIGH);
             }
 
             float shown = state.presence.to(1.0f, PRESENCE_SPEED, delta);
+            float lift = UiAnim.easeOut(state.lift.to(carried ? 1.0f : 0.0f, CARRY_SPEED, delta));
             float worldX = state.travelX.to((float) worldX(mark), TRAVEL_SPEED, delta);
             float worldZ = state.travelZ.to((float) worldZ(mark), TRAVEL_SPEED, delta);
             float screenX = (float) (centerX + (worldX - mapX) * zoom);
-            float screenY = (float) (centerY + (worldZ - mapZ) * zoom) + (1.0f - shown) * SPAWN_RISE;
+            float restY = (float) (centerY + (worldZ - mapZ) * zoom) + (1.0f - shown) * SPAWN_RISE;
+            float screenY = restY - CARRY_RISE * lift;
+            if (lift > 0.01f) paintShadow(graphics, font, mark, screenX, restY + CARRY_SHADOW_DROP, lift * shown);
             paint(graphics, font, mark, screenX, screenY, glow, shown);
             if (mark.id().equals(armed)) paintHandle(graphics, font, mark, screenX, screenY, glow);
         }
@@ -170,9 +183,21 @@ public final class MapLabels {
 
         if (glow > 0.01f) paintAura(graphics, mark.color(), screenX, screenY, width, height, glow * shown);
 
+        paintLines(graphics, font, mark, screenX, screenY - height / 2.0f, color);
+    }
+
+    // WHY: подъём взятой надписи читается тенью её же текста, оставшейся на карте: подложка под
+    // WHY: текстом сделала бы из надписи обычную метку
+    private static void paintShadow(GuiGraphics graphics, Font font, MapMark mark,
+                                    float screenX, float screenY, float strength) {
+        int color = UiTheme.withAlpha(UiPalette.panelDeep(), CARRY_SHADOW_ALPHA * strength);
+        paintLines(graphics, font, mark, screenX, screenY - blockHeight(font, mark) / 2.0f, color);
+    }
+
+    private static void paintLines(GuiGraphics graphics, Font font, MapMark mark, float screenX, float top, int color) {
         float scale = UiRender.crisp(graphics, scaleOf(mark));
         float lineHeight = font.lineHeight * scale + LINE_GAP;
-        float y = screenY - height / 2.0f;
+        float y = top;
         for (String line : mark.lines()) {
             if (!line.isEmpty()) UiRender.labelCentered(graphics, font, line, screenX, y, scale, color);
             y += lineHeight;
@@ -276,6 +301,8 @@ public final class MapLabels {
     private static final class Glow {
         private final Smooth highlight = new Smooth(0.0f, HOVER_SPEED);
         private final Smooth presence = new Smooth(0.0f, PRESENCE_SPEED);
+        private final Smooth lift = new Smooth(0.0f, CARRY_SPEED);
+
         private final Smooth travelX;
         private final Smooth travelZ;
         private float width;
