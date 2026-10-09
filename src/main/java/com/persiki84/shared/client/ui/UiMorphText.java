@@ -55,6 +55,10 @@ public final class UiMorphText {
     private float[] leavingLit = new float[0];
     private float[] glowShown = new float[0];
     private float[] leavingGlow = new float[0];
+    private float[] motionShown = new float[0];
+    private float[] leavingMotion = new float[0];
+    private float[] heldShown = new float[0];
+    private float[] leavingHeld = new float[0];
     private int leavingAccent = -1;
     private float scale = 1.0f;
     private UiSweep sweep = UiSweep.NONE;
@@ -81,9 +85,13 @@ public final class UiMorphText {
         suffix = whole ? 0 : commonSuffix(previousCodes, codes, prefix);
         leavingLit = litShown;
         leavingGlow = glowShown;
+        leavingMotion = motionShown;
+        leavingHeld = heldShown;
         leavingAccent = accentShown;
         litShown = new float[0];
         glowShown = new float[0];
+        motionShown = new float[0];
+        heldShown = new float[0];
         clock = previousCodes.length == 0 ? IDLE : 0.0f;
         leaving = shown;
         shown = 0.0f;
@@ -176,11 +184,19 @@ public final class UiMorphText {
     private void remember(int index, int count, float lit, float glow, int accent) {
         if (litShown.length != count) litShown = new float[count];
         if (glowShown.length != count) glowShown = new float[count];
+        if (motionShown.length != count) motionShown = new float[count];
+        if (heldShown.length != count) heldShown = new float[count];
         if (index < count) {
             litShown[index] = lit;
             glowShown[index] = glow;
+            motionShown[index] = Math.max(0.0f, Math.min(1.0f, sweep.motion(index)));
+            heldShown[index] = Math.max(0.0f, Math.min(1.0f, sweep.held(index)));
         }
         accentShown = accent;
+    }
+
+    private static float frozenAt(float[] values, int index) {
+        return index >= 0 && index < values.length ? values[index] : 0.0f;
     }
 
     private float frozen(int index) {
@@ -275,8 +291,14 @@ public final class UiMorphText {
         // WHY: гаснет плавно и к смене строки уже погас
         @Override
         public float grow(int index, int count) {
-            float moving = direction < 0.0f ? 0.0f : clamp(sweep.motion(index));
-            return HELD_GROW * held(index) + MOTION_GROW * moving;
+            return HELD_GROW * held(index) + MOTION_GROW * motion(index);
+        }
+
+        // WHY: уходящая строка уносит подъём и рост слога такими, какими они были в последнем кадре, и
+        // WHY: уходит с ними вверх и гаснет. Раньше подъём на смене строки обнулялся, и только что
+        // WHY: пропетое слово за один кадр падало на место
+        private float motion(int index) {
+            return direction < 0.0f ? frozenAt(leavingMotion, index) : clamp(sweep.motion(index));
         }
 
         @Override
@@ -285,7 +307,7 @@ public final class UiMorphText {
         }
 
         private float held(int index) {
-            return direction < 0.0f ? 0.0f : clamp(sweep.held(index));
+            return direction < 0.0f ? frozenAt(leavingHeld, index) : clamp(sweep.held(index));
         }
 
         // WHY: слог, который поётся сейчас, отдаёт в цвет обложки и светится, пока поётся, и тает после
@@ -323,8 +345,7 @@ public final class UiMorphText {
 
         @Override
         public float rise(int index, int count) {
-            float lift = direction < 0.0f ? 0.0f
-                    : LIFT_UNITS * scale * clamp(sweep.motion(index)) + HELD_LIFT_UNITS * scale * held(index);
+            float lift = LIFT_UNITS * scale * motion(index) + HELD_LIFT_UNITS * scale * held(index);
             if (direction == 0.0f || index < prefix || index >= count - suffix || holds(index)) return lift;
 
             float share = share(index, direction);

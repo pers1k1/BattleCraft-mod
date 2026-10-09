@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.05v6` in files, `05.10.26v6 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.09` in files, `09.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1090,6 +1090,14 @@ Version 2026.10.05v5 - built; not yet checked in game.
 - **Section counts.** A shop section counts only its own items (a subsection counts its own), so moving an item into a subsection changes both numbers. The numbers change on drop, without waiting for the server, and roll digit by digit.
 
 Version 2026.10.05v6 - built; not yet checked in game.
+
+## Tiles that pick up and land smoothly, a lyric word that settles, 9 October 2026
+
+- **Picking up.** A tile in the editors no longer jumps its centre under the cursor when it is grabbed: it glides from its slot to the cursor in about a tenth of a second while it already follows the hand. A section row in the list on the left does the same.
+- **Letting go.** A tile released without a move (on its own place or outside the grid) used to snap back into its slot: the editor reset the smoothing at once. It now glides back. A tile moved to a new place glides there, and when the server answers, the smoothing follows the tiles into their new order, so neither the tile nor its neighbours click into place at that moment. A section row dropped on a new place waits there for the server answer and the list then moves under it; rows that change place glide instead of jumping.
+- **Lyric word settles.** The sung word rises a little, as before; when the line changed, the lift of the word just sung dropped to zero in a single frame. The leaving line now carries the lift, growth and held accent it had in its last frame and fades out with them. The same change is in Glass MediaPlayer Island 1.0.10.
+
+Version 2026.10.09 - built; not yet checked in game.
 
 ## Releases
 

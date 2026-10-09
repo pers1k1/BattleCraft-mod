@@ -569,7 +569,7 @@ public abstract class StudioScreen extends GlassScreen {
 
         shownStamp = stamp;
         pendingSince = -1;
-        grid.settle();
+        grid.commit();
         refreshed();
         refreshMarks();
         layout();

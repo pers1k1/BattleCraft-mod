@@ -40,12 +40,15 @@ public final class StudioNav {
     private static final float GUIDE_WIDTH = 1.0f;
     private static final float LIFT_SPEED = 14.0f;
     private static final float SETTLE_MS = 220.0f;
+    private static final long HOLD_MS = 1500L;
+    private static final float GRAB_SPEED = 16.0f;
+    private static final float SHIFT_SPEED = 17.0f;
     private static final float HUSH_ALPHA = 0.5f;
     private static final float HUSH_DROP = 2.0f;
     private static final float COUNT_WIDTH = 22.0f;
     private static final long NUDGE_MS = 3000L;
 
-    private record Settling(Node node, float fromY, float toY, float lift, long at) {}
+    private record Settling(Node node, float fromY, float toY, float lift, boolean moved, long at) {}
 
     private record Nudge(String base, int delta, long at) {}
 
@@ -70,6 +73,9 @@ public final class StudioNav {
     private final Map<String, UiMorphText> counts = new HashMap<>();
     private final Map<String, Nudge> nudges = new HashMap<>();
     private Settling settling;
+    private final Map<String, Smooth> rowShift = new HashMap<>();
+    private final Map<String, Integer> rowIndex = new HashMap<>();
+    private float grabY;
     private List<Node> shown = List.of();
     private long shownAt = System.currentTimeMillis();
     private String hovered;
@@ -135,9 +141,12 @@ public final class StudioNav {
         return top + UiMetrics.PAD + (index - scroll) * ROW + glide.get();
     }
 
+    // WHY: взятая строка подъезжает к курсору от своего места, а не прыгает серединой под него
     public void carry(Node node, double mouseY) {
         carried = node;
         carryY = (float) mouseY;
+        int own = indexOf(node.key());
+        grabY = own < 0 ? 0.0f : shownY(own) - (carryY - ROW / 2.0f);
         carryLift.snap(0.0f);
         target = null;
         drop = Drop.NONE;
@@ -164,23 +173,31 @@ public final class StudioNav {
         return drop;
     }
 
-    // WHY: отпущенная строка не исчезает, а садится туда, куда её бросили, или назад на своё место,
-    // WHY: и подъём сходит на нет по пути. Новый порядок приходит с сервера уже под ней
+    // WHY: отпущенная строка садится туда, куда её бросили, или назад на своё место, и подъём сходит
+    // WHY: на нет по пути. Брошенная на новое место ждёт там ответа сервера, а сама строка списка на
+    // WHY: это время спрятана: иначе на полсекунды она стояла бы в двух местах сразу
     public void release() {
-        if (carried != null) settling = new Settling(carried, carryY - ROW / 2.0f, settleY(), carryLift.get(),
-                System.currentTimeMillis());
+        boolean moved = target != null && drop != Drop.NONE;
+        if (carried != null) settling = new Settling(carried, carryY - ROW / 2.0f + grabY, settleY(),
+                carryLift.get(), moved, System.currentTimeMillis());
         carried = null;
         target = null;
         drop = Drop.NONE;
     }
 
     private float settleY() {
-        if (target != null && drop != Drop.NONE) {
-            float row = rowY(indexOf(target.key()));
-            return drop == Drop.AFTER ? row + ROW : row;
-        }
         int own = indexOf(carried.key());
-        return own < 0 ? carryY - ROW / 2.0f : rowY(own);
+        if (target != null && drop != Drop.NONE) {
+            int place = indexOf(target.key());
+            float row = rowY(place) + (drop == Drop.AFTER ? ROW : 0.0f);
+            return own >= 0 && own < place ? row - ROW : row;
+        }
+        return own < 0 ? carryY - ROW / 2.0f : shownY(own);
+    }
+
+    private float shownY(int index) {
+        Smooth shift = rowShift.get(shown.get(index).key());
+        return rowY(index) + (shift == null ? 0.0f : shift.get());
     }
 
     public boolean lifting() {
@@ -238,6 +255,7 @@ public final class StudioNav {
     public void render(GuiGraphics graphics, List<Node> nodes, String selected, int mouseX, int mouseY) {
         shown = nodes;
         glide.to(0.0f, UiFrame.delta());
+        trackRows();
         advanceCounts();
         UiRender.clip(graphics, left, top, width, height);
         try {
@@ -247,6 +265,23 @@ public final class StudioNav {
             graphics.flush();
         } finally {
             graphics.disableScissor();
+        }
+    }
+
+    // WHY: строки, сменившие место после ответа сервера, доезжают до него, а не перескакивают. Строку,
+    // WHY: которую несли, принимает её поднятая копия: она стоит ровно там, где строка теперь живёт
+    private void trackRows() {
+        float delta = UiFrame.delta();
+        for (int index = 0; index < shown.size(); index++) {
+            String key = shown.get(index).key();
+            Integer was = rowIndex.put(key, index);
+            Smooth shift = rowShift.computeIfAbsent(key, unused -> new Smooth(0.0f, SHIFT_SPEED));
+            if (was != null && was != index) shift.snap(shift.get() + (was - index) * ROW);
+            if (was != null && was != index && settling != null && settling.node().key().equals(key)) {
+                shift.snap(settledY() - rowY(index));
+                settling = null;
+            }
+            shift.to(0.0f, delta);
         }
     }
 
@@ -293,8 +328,9 @@ public final class StudioNav {
         String pointed = null;
         for (int index = 0; index < shown.size(); index++) {
             Node node = shown.get(index);
-            float y = rowY(index);
+            float y = shownY(index);
             if (y + ROW < top || y > top + height) continue;
+            if (settling != null && settling.node().key().equals(node.key())) continue;
             boolean over = !node.heading() && carried == null && mouseY >= y && mouseY < y + ROW && over(mouseX, mouseY);
             if (over) pointed = node.key();
             paintRow(graphics, node, index, y, node.key().equals(selected), over);
@@ -366,19 +402,27 @@ public final class StudioNav {
     }
 
     private void paintCarried(GuiGraphics graphics) {
-        paintRaised(graphics, carried, carryY - ROW / 2.0f, carryLift.to(1.0f, UiFrame.delta()), 1.0f);
+        float delta = UiFrame.delta();
+        grabY *= (float) Math.exp(-GRAB_SPEED * delta);
+        paintRaised(graphics, carried, carryY - ROW / 2.0f + grabY, carryLift.to(1.0f, delta), 1.0f);
     }
 
+    // WHY: строка, вернувшаяся на своё место, отдаёт его списку, как только доехала. Брошенная на новое
+    // WHY: место стоит там до ответа сервера, а если ответа нет (отказ), через HOLD_MS уходит
     private void paintSettling(GuiGraphics graphics) {
-        float age = (System.currentTimeMillis() - settling.at()) / SETTLE_MS;
-        if (age >= 1.0f) {
+        long age = System.currentTimeMillis() - settling.at();
+        boolean arrived = age >= SETTLE_MS;
+        if (arrived && (!settling.moved() || age >= HOLD_MS)) {
             settling = null;
             return;
         }
-        float travel = UiAnim.easeOut(age);
-        float y = settling.fromY() + (settling.toY() - settling.fromY()) * travel;
-        float fade = 1.0f - UiAnim.smoothstep(0.6f, 1.0f, age);
-        paintRaised(graphics, settling.node(), y, settling.lift() * (1.0f - travel), fade);
+        float travel = UiAnim.easeOut(Math.min(1.0f, age / SETTLE_MS));
+        paintRaised(graphics, settling.node(), settledY(), settling.lift() * (1.0f - travel), 1.0f);
+    }
+
+    private float settledY() {
+        float travel = UiAnim.easeOut(Math.min(1.0f, (System.currentTimeMillis() - settling.at()) / SETTLE_MS));
+        return settling.fromY() + (settling.toY() - settling.fromY()) * travel;
     }
 
     private void paintRaised(GuiGraphics graphics, Node node, float y, float lift, float alpha) {

@@ -58,6 +58,7 @@ public final class StudioGrid {
     private static final float HUSH_ALPHA = 0.55f;
     private static final float HUSH_DROP = 3.0f;
     private static final float LAND_REST = 0.5f;
+    private static final float GRAB_SPEED = 16.0f;
 
     private record Departure(StudioTile tile, float fromX, float fromY, float toX, float toY, int group, long at) {}
 
@@ -95,6 +96,8 @@ public final class StudioGrid {
     private boolean holding;
     private float carryX;
     private float carryY;
+    private float grabX;
+    private float grabY;
 
     public void place(float gridLeft, float gridTop, float gridWidth, float gridHeight) {
         left = gridLeft;
@@ -107,19 +110,39 @@ public final class StudioGrid {
         scroll = 0;
         shownAt = System.currentTimeMillis();
         settle();
+        landing = -1;
+        slideX.clear();
+        slideY.clear();
     }
 
-    // WHY: после ответа сервера номера плиток уже в новом порядке, и сглаживание по номеру
-    // WHY: повело бы плитку от места чужой записи: места защёлкиваются на новом составе
+    // WHY: перенос закончен или отменён: соседи и сама плитка доезжают до своих мест тем же
+    // WHY: сглаживанием, что и шли. Раньше места защёлкивались, и отпущенная плитка прыгала в слот
     public void settle() {
         carriedFrom = -1;
         carriedTo = -1;
         holding = false;
         gap = -1;
-        landing = -1;
         vanished.clear();
-        slideX.clear();
-        slideY.clear();
+    }
+
+    // WHY: сервер принял перенос, и номера плиток теперь в новом порядке. Сглаживание переезжает за
+    // WHY: своими плитками, а не остаётся на номерах: иначе в момент ответа плитка, ещё не доехавшая
+    // WHY: до места, и её соседи щёлкали бы в новые места
+    public void commit() {
+        if (carriedFrom >= 0 && carriedTo >= 0 && carriedTo != carriedFrom && carriedFrom < slideX.size()) {
+            follow(slideX);
+            follow(slideY);
+            follow(hover);
+            follow(marks);
+            if (landing == carriedFrom) landing = carriedTo;
+        }
+        settle();
+    }
+
+    private <T> void follow(List<T> places) {
+        if (carriedFrom >= places.size()) return;
+        T moved = places.remove(carriedFrom);
+        places.add(Math.min(carriedTo, places.size()), moved);
     }
 
     public void flash(int index) {
@@ -163,12 +186,17 @@ public final class StudioGrid {
         return mouseX >= left && mouseX < left + width && mouseY >= top && mouseY < top + height;
     }
 
+    // WHY: взятая плитка не прыгает центром под курсор, а подъезжает к нему от своего места:
+    // WHY: разница сходит на нет за десятые доли секунды, пока плитка уже идёт за рукой
     public void carry(int index, double mouseX, double mouseY) {
         carriedFrom = index;
         carriedTo = index;
         holding = true;
         carryX = (float) mouseX;
         carryY = (float) mouseY;
+        boolean placed = index >= 0 && index < slideX.size();
+        grabX = placed ? slideX.get(index).get() - (carryX - TILE / 2.0f) : 0.0f;
+        grabY = placed ? slideY.get(index).get() - (carryY - TILE / 2.0f) : 0.0f;
         carryLift.snap(0.0f);
     }
 
@@ -194,8 +222,8 @@ public final class StudioGrid {
         land.snap(carryLift.get());
         carryLift.snap(0.0f);
         if (carriedFrom >= 0 && carriedFrom < slideX.size()) {
-            slideX.get(carriedFrom).snap(carryX - TILE / 2.0f);
-            slideY.get(carriedFrom).snap(carryY - TILE / 2.0f);
+            slideX.get(carriedFrom).snap(carryX - TILE / 2.0f + grabX);
+            slideY.get(carriedFrom).snap(carryY - TILE / 2.0f + grabY);
         }
         return move;
     }
@@ -203,7 +231,8 @@ public final class StudioGrid {
     // WHY: брошенная в раздел плитка улетает в его строку и тает там, а её место пустеет сразу: до ответа
     // WHY: сервера она стояла бы в старой витрине. Сборка сетки по ответу возвращает всё как есть
     public void depart(StudioTile tile, List<Integer> indices, float toX, float toY) {
-        departure = new Departure(tile, carryX, carryY, toX, toY, indices.size(), System.currentTimeMillis());
+        departure = new Departure(tile, carryX + grabX, carryY + grabY, toX, toY, indices.size(),
+                System.currentTimeMillis());
         landing = -1;
         for (int index : indices) {
             if (index >= 0) vanished.set(index);
@@ -396,9 +425,13 @@ public final class StudioGrid {
     }
 
     private void paintCarried(GuiGraphics graphics, StudioTile tile) {
-        float lift = carryLift.to(1.0f, UiFrame.delta());
-        paintRaised(graphics, tile, carriedFrom, carryX - TILE / 2.0f, carryY - TILE / 2.0f, lift, CARRY_ALPHA, 1.0f,
-                groupCount > 1);
+        float delta = UiFrame.delta();
+        float lift = carryLift.to(1.0f, delta);
+        float keep = (float) Math.exp(-GRAB_SPEED * delta);
+        grabX *= keep;
+        grabY *= keep;
+        paintRaised(graphics, tile, carriedFrom, carryX - TILE / 2.0f + grabX, carryY - TILE / 2.0f + grabY, lift,
+                CARRY_ALPHA, 1.0f, groupCount > 1);
     }
 
     // WHY: подъём читается тенью, которая растёт и уходит вниз вместе с ростом плитки: без неё плитка
