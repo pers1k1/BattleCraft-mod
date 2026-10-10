@@ -287,7 +287,7 @@ public final class UiMorphText {
         }
 
         // WHY: буква затянутого слова держит акцент, пока слово тянется: подрастает, стоит выше, светится
-        // WHY: цветом обложки и густеет, как жирное начертание. Всё идёт по held, акцент разгорается и
+        // WHY: цветом подсветки и густеет, как жирное начертание. Всё идёт по held, акцент разгорается и
         // WHY: гаснет плавно и к смене строки уже погас
         @Override
         public float grow(int index, int count) {
@@ -310,7 +310,7 @@ public final class UiMorphText {
             return direction < 0.0f ? frozenAt(leavingHeld, index) : clamp(sweep.held(index));
         }
 
-        // WHY: слог, который поётся сейчас, отдаёт в цвет обложки и светится, пока поётся, и тает после
+        // WHY: слог, который поётся сейчас, отдаёт в цвет подсветки и светится, пока поётся, и тает после
         @Override
         public int tint(int index, int count, int base) {
             float shown = shown(index, count);
@@ -324,7 +324,7 @@ public final class UiMorphText {
 
         // WHY: уходящая строка уносит тот вид, каким горела в последнем кадре: без этого её буквы на
         // WHY: смене разом теряли приглушение, цвет и свечение и выглядели оторванными от текста.
-        // WHY: Цвет обложки сначала осветляется к белому: тёмная обложка иначе делала поющийся слог
+        // WHY: Цвет подсветки сначала осветляется к белому: тёмный цвет иначе делал поющийся слог
         // WHY: тусклее уже пропетого, а в Spicy Lyrics он самый яркий
         private int sung(int base, float shown, float lit, float glow, int accentColor, float held) {
             int toned = UiTheme.alpha(base, shown * (UNSUNG + (1.0f - UNSUNG) * lit));

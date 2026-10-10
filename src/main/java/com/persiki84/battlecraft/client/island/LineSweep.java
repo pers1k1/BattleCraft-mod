@@ -17,8 +17,7 @@ final class LineSweep implements UiSweep {
     private static final long SOFT_MAX_MS = 700L;
     private static final float SPACE_WEIGHT = 0.3f;
     private static final float MARK_WEIGHT = 0.25f;
-    private static final int ACCENT_COLUMN = 2;
-    private static final float ACCENT_ROW = 0.85f;
+    private static final int HIGHLIGHT = 0xFFFFFFFF;
     private static final long HELD_MIN_MS = 1000L;
     private static final int HELD_MAX_GLYPHS = 12;
     private static final float HELD_RISE_SHARE = 0.15f;
@@ -201,7 +200,7 @@ final class LineSweep implements UiSweep {
         return up * down;
     }
 
-    // WHY: слог держит цвет обложки, пока поётся, и тает FADE_MS после своего конца, как в Spicy Lyrics:
+    // WHY: слог держит подсветку, пока поётся, и тает FADE_MS после своего конца, как в Spicy Lyrics:
     // WHY: колокол по доле буквы гас раньше конца слога, и на смене слова подсветка пропадала разом
     @Override
     public float glow(int index) {
@@ -213,9 +212,11 @@ final class LineSweep implements UiSweep {
         return rise * (1.0f - smooth((at - end) / (float) FADE_MS));
     }
 
+    // WHY: поющийся слог подсвечивается белым на любой обложке: цвет обложки на буквах владелец
+    // WHY: забраковал, обложка остаётся за визуализатором
     @Override
     public int accent(int base) {
-        return IslandTone.barAt(ACCENT_COLUMN, ACCENT_ROW);
+        return HIGHLIGHT;
     }
 
     @Override

@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.09hotfix` in files, `09.10.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.10` in files, `10.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1105,6 +1105,12 @@ Version 2026.10.09 - built; not yet checked in game.
 - **Colour window.** The colour window, dragged by an empty spot, rises 2 pixels, its rim brightens and a shadow grows under it; on release it settles back smoothly.
 
 Version 2026.10.09hotfix - built; not yet checked in game.
+
+## White lyric highlight, 10 October 2026
+
+- **White highlight.** The syllable being sung now lights up and glows in white on any cover instead of taking the cover colour; the visualiser keeps the cover colours. The same change is in Glass MediaPlayer Island 1.0.11.
+
+Version 2026.10.10 - built; not yet checked in game.
 
 ## Releases
 
