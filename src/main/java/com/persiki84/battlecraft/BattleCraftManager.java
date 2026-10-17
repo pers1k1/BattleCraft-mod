@@ -1,6 +1,7 @@
 package com.persiki84.battlecraft;
 
 import com.persiki84.killreward.KillRewardMod;
+import com.persiki84.shared.ActionGate;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -66,6 +67,10 @@ public class BattleCraftManager {
     private final Map<UUID, Long> teamSwitchAt = new HashMap<>();
     private final Map<UUID, Long> readyToggleAt = new HashMap<>();
     private static final long REJOIN_CHOICE_MS = 10_000L;
+    private static final String PICK_GATE = "battlecraft_lobby_pick";
+    private static final String READY_GATE = "battlecraft_lobby_ready";
+    private static final String TOLD_GATE = "battlecraft_lobby_told";
+    private static final int LOBBY_GATE_TICKS = 10;
     private static final long GRACE_CEILING_WINDOWS = 2L;
 
     private final java.util.Set<java.util.UUID> graced = new java.util.HashSet<>();
@@ -131,7 +136,14 @@ public class BattleCraftManager {
         if (softDisabled) return;
 
         MinecraftServer server = player.getServer();
-        if (server == null || !acceptsChoices(player)) return;
+        // WHY: каждая заявка рассылает состав всем игрокам, а при нулевом откате смены команды
+        // WHY: ничто, кроме сторожа, не мешает гнать её каждый тик
+        if (server == null) return;
+        if (!ActionGate.allow(player, PICK_GATE, LOBBY_GATE_TICKS)) {
+            tooFast(player);
+            return;
+        }
+        if (!acceptsChoices(player)) return;
 
         PlayerTeam targetTeam = server.getScoreboard().getPlayerTeam(teamName);
         if (targetTeam == null) {
@@ -193,6 +205,14 @@ public class BattleCraftManager {
         player.sendSystemMessage(reason.copy().withStyle(ChatFormatting.RED));
     }
 
+    // WHY: срезанная заявка обязана читаться, но и сам отказ не имеет права уходить на каждый
+    // WHY: пакет правленого клиента, поэтому о частоте говорится не чаще окна сторожа
+    private void tooFast(ServerPlayer player) {
+        if (ActionGate.allow(player, TOLD_GATE, LOBBY_GATE_TICKS)) {
+            deny(player, Component.translatable("battlecraft.error.too_fast"));
+        }
+    }
+
     private long switchCooldownRemaining(UUID uuid) {
         Long last = teamSwitchAt.get(uuid);
         if (last == null) return 0;
@@ -225,6 +245,11 @@ public class BattleCraftManager {
 
     public void toggleReady(ServerPlayer player) {
         if (softDisabled || phase != GamePhase.LOBBY) return;
+        if (player.getServer() == null) return;
+        if (!ActionGate.allow(player, READY_GATE, LOBBY_GATE_TICKS)) {
+            tooFast(player);
+            return;
+        }
 
         UUID uuid = player.getUUID();
         boolean ready = readyPlayers.contains(uuid);

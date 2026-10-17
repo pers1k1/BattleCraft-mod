@@ -227,9 +227,19 @@ public final class StudioMenu {
             float y = top + PAD + row * ROW;
             if (row > 0 && action.danger() && !actions.get(row - 1).danger()) paintRule(graphics, y, appear);
             Component label = row == armed && System.currentTimeMillis() - armedAt < ARM_MS ? SURE : action.label();
-            UiRender.textTrackedBox(graphics, font, label, left + PAD + TEXT_PAD + (1.0f - appear) * ROW_SLIDE, y,
-                    ROW, width - PAD * 2.0f - TEXT_PAD * 2.0f, LABEL_SCALE, 0.0f,
-                    UiTheme.alpha(color(action, row), appear), false, 0.0f);
+            paintLabel(graphics, font, label, y, appear, UiTheme.alpha(color(action, row), appear));
+        }
+    }
+
+    // WHY: въезд строки заявлен ходом, а не прибавлен к координате: с координатой подпись шла
+    // WHY: ступенями по пикселю и последний шаг приходил, когда строка уже выглядела вставшей
+    private void paintLabel(GuiGraphics graphics, Font font, Component label, float y, float appear, int tint) {
+        UiRestFrame.shift(graphics, (1.0f - appear) * ROW_SLIDE, 0.0f);
+        try {
+            UiRender.textTrackedBox(graphics, font, label, left + PAD + TEXT_PAD, y, ROW,
+                    width - PAD * 2.0f - TEXT_PAD * 2.0f, LABEL_SCALE, 0.0f, tint, false, 0.0f);
+        } finally {
+            UiRestFrame.pop(graphics);
         }
     }
 

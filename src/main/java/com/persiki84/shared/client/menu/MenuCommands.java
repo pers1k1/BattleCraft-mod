@@ -15,16 +15,20 @@ public final class MenuCommands {
 
     public static boolean run(String command) {
         LocalPlayer player = Minecraft.getInstance().player;
-        if (player == null) return false;
-        if (command.length() > SharedConstants.MAX_CHAT_LENGTH) {
-            MenuFeedback.show(Component.translatable("battlecraft.menu.command_too_long",
-                    SharedConstants.MAX_CHAT_LENGTH), true);
-            return false;
-        }
+        if (player == null || !fits(command)) return false;
 
         quietUntil = System.currentTimeMillis() + QUIET_MS;
         player.connection.sendCommand(command);
         return true;
+    }
+
+    // WHY: экран, который двигает счётчики и выбор до ответа сервера, обязан знать заранее, уйдёт ли
+    // WHY: команда: иначе отказ по длине оставлял бы на экране правку, которой на сервере нет
+    public static boolean fits(String command) {
+        if (command.length() <= SharedConstants.MAX_CHAT_LENGTH) return true;
+        MenuFeedback.show(Component.translatable("battlecraft.menu.command_too_long",
+                SharedConstants.MAX_CHAT_LENGTH), true);
+        return false;
     }
 
     public static void run(String command, String menuId) {

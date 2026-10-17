@@ -4,12 +4,15 @@ import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 // WHY: слова «ПАУЗА» и «ОТКАТ» менялись кадром и читались как дефект: тег уезжает вверх и гаснет,
-// WHY: новый приходит снизу, а место под них едет шириной, иначе карточка прыгает на смене
+// WHY: новый приходит снизу, а место под них едет шириной, иначе карточка прыгает на смене. Числа
+// WHY: внутри одного тега (секунды до старта, счёт атакующих) меняются тикером: уходят только
+// WHY: сменившиеся цифры, а не весь тег
 public final class CaptureState {
     private static final float SWAP_SPEED = 13.0f;
     private static final float WIDTH_SPEED = 15.0f;
@@ -22,8 +25,8 @@ public final class CaptureState {
     private final Smooth swap = new Smooth(1.0f, SWAP_SPEED);
     private final Smooth room = new Smooth(0.0f, WIDTH_SPEED);
 
-    private Component shown = Component.empty();
-    private Component leaving = Component.empty();
+    private UiTicker shown = new UiTicker();
+    private UiTicker leaving = new UiTicker();
     private String shownKey = "";
     private String leavingKey = "";
     private int shownTint;
@@ -32,20 +35,23 @@ public final class CaptureState {
     private float leavingWidth;
 
     // WHY: тег сравнивается ключом, а не текстом: в счёте атакующих меняются числа, и по тексту
-    // WHY: «3 : 2» уезжало бы горением каждый раз, когда кто-то вошёл в зону
-    public void want(String key, Component tag, int tint) {
+    // WHY: «3 : 2» уезжало бы горением каждый раз, когда кто-то вошёл в зону. Строка собирается
+    // WHY: форматом только на смене числа
+    public void want(String key, long value, UiTicker.Format format, int tint) {
         shownTint = tint;
         if (key.equals(shownKey)) {
-            shown = tag;
+            if (!key.isEmpty()) shown.set(value, format);
             return;
         }
 
+        UiTicker spare = leaving;
         leaving = shown;
+        shown = spare;
         leavingKey = shownKey;
         leavingTint = shownTint;
         leavingWidth = shownWidth;
-        shown = tag;
         shownKey = key;
+        if (!key.isEmpty()) shown.snap(value, format);
         swap.snap(0.0f);
     }
 
@@ -72,27 +78,26 @@ public final class CaptureState {
                 UiTheme.alpha(shownTint, alpha * presence * SEPARATOR_ALPHA));
 
         if (phase < 0.999f && !leavingKey.isEmpty()) {
-            UiRender.labelScaled(graphics, font(), leaving, textLeft, textY - phase * RISE, scale,
-                    UiTheme.alpha(leavingTint, alpha * (1.0f - phase)));
+            leaving.draw(graphics, font(), textLeft, textY - phase * RISE, scale, leavingTint,
+                    alpha * (1.0f - phase));
         }
         if (!shownKey.isEmpty()) {
-            UiRender.labelScaled(graphics, font(), shown, textLeft, textY + (1.0f - phase) * RISE, scale,
-                    UiTheme.alpha(shownTint, alpha * phase));
+            shown.draw(graphics, font(), textLeft, textY + (1.0f - phase) * RISE, scale, shownTint, alpha * phase);
         }
     }
 
     public void settle() {
         swap.snap(1.0f);
         room.snap(0.0f);
-        leaving = Component.empty();
-        shown = Component.empty();
+        shown.reset();
+        leaving.reset();
         leavingKey = "";
         shownKey = "";
     }
 
     private float measure(GuiGraphics graphics, float scale) {
         if (shownKey.isEmpty()) return 0.0f;
-        return UiRender.measure(graphics, font(), shown, scale);
+        return shown.steadyWidth(graphics, font(), scale);
     }
 
     private static net.minecraft.client.gui.Font font() {

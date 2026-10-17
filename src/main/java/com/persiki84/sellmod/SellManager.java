@@ -20,7 +20,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.server.level.ServerPlayer;
+import com.persiki84.shared.economy.CurrencyItems;
+import com.persiki84.shared.economy.Wallet;
+import com.persiki84.shared.economy.WalletEntryKind;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -53,38 +56,60 @@ public class SellManager {
         SELL_PRICES.put("minecraft:deepslate_diamond_ore", new SellPrice("minecraft:deepslate_diamond_ore", 8));
     }
 
-    public static SellResult sellAllItems(Player player) {
+    // WHY: выручка идёт через кошелёк, а не стопками напрямую: в режиме «Счёт» она ложится на счёт, и
+    // WHY: скупка тогда принимает и саму валюту по номиналу. Счёт не растёт выше предела, поэтому
+    // WHY: стопка, которая его превысила бы, остаётся у игрока, а не исчезает за бесценок. В режиме
+    // WHY: «Предмет» потолок это место под монеты, и оно растёт с каждой проданной стопкой: иначе
+    // WHY: дорогая скупка роняла бы под ноги по сущности на стопку, миллионы за один вызов
+    public static SellResult sellAllItems(ServerPlayer player) {
         SellResult result = new SellResult();
-        Item currency = currencyGuard ? getCurrencyItem() : null;
-        sellFrom(player.getInventory().items, currency, result);
-        sellFrom(player.getInventory().offhand, currency, result);
+        boolean accounts = Wallet.accounts();
+        Item currency = Wallet.currencyItem();
+        SellBudget budget = accounts ? SellBudget.fixed(Wallet.room(player)) : SellBudget.coins(player, currency);
+        Item skipped = accounts || currencyGuard ? currency : null;
+        Item deposited = accounts ? currency : null;
+        sellFrom(player.getInventory().items, true, skipped, deposited, budget, result);
+        sellFrom(player.getInventory().offhand, false, skipped, deposited, budget, result);
 
         if (result.totalCurrencyEarned > 0) {
-            giveCurrencyToPlayer(player, result.totalCurrencyEarned);
+            Wallet.credit(player, result.totalCurrencyEarned, WalletEntryKind.SELL, "", result.totalItemsSold);
+            player.level().playSound(null, player.blockPosition(), SoundEvents.EXPERIENCE_ORB_PICKUP,
+                    SoundSource.PLAYERS, 1.0f, 1.0f);
         }
         return result;
     }
 
     // WHY: цена задаётся без верхней границы, а сумма считалась в int уже после очистки слота:
     // WHY: полный инвентарь дорогих предметов уходил в минус, вещи пропадали, денег не было
-    private static void sellFrom(List<ItemStack> slots, Item currency, SellResult result) {
+    private static void sellFrom(List<ItemStack> slots, boolean mainGrid, Item skipped, Item deposited,
+                                 SellBudget budget, SellResult result) {
         for (int slot = 0; slot < slots.size(); slot++) {
             ItemStack stack = slots.get(slot);
-            if (stack.isEmpty() || (currency != null && stack.is(currency))) continue;
+            if (stack.isEmpty()) continue;
 
-            String itemName = getItemName(stack);
-            SellPrice price = SELL_PRICES.get(itemName);
-            if (price == null) continue;
+            long unit = unitPrice(stack, skipped, deposited);
+            if (unit <= 0L) continue;
 
             int count = stack.getCount();
-            long earned = result.totalCurrencyEarned + (long) count * price.price;
-            if (earned > Integer.MAX_VALUE) return;
+            long earned = result.totalCurrencyEarned + count * unit;
+            long ceiling = budget.ceiling + budget.freedBy(stack, mainGrid);
+            if (earned > ceiling) continue;
 
+            budget.ceiling = ceiling;
+            String itemName = getItemName(stack);
             slots.set(slot, ItemStack.EMPTY);
             result.totalItemsSold += count;
-            result.totalCurrencyEarned = (int) earned;
+            result.totalCurrencyEarned = earned;
             result.itemsSold.put(itemName, result.itemsSold.getOrDefault(itemName, 0) + count);
         }
+    }
+
+    private static long unitPrice(ItemStack stack, Item skipped, Item deposited) {
+        if (deposited != null && stack.is(deposited)) return 1L;
+        if (skipped != null && stack.is(skipped)) return 0L;
+
+        SellPrice price = SELL_PRICES.get(getItemName(stack));
+        return price == null ? 0L : price.price;
     }
 
     private static String getItemName(ItemStack stack) {
@@ -226,21 +251,6 @@ public class SellManager {
         return FMLPaths.CONFIGDIR.get().resolve(CONFIG_FILE);
     }
 
-    // WHY: выручка выдавалась одной кучей, а writeItem пишет размер стака байтом: полный инвентарь
-    // WHY: руды давал дроп с невозможным количеством, который клиент показывал неверно
-    private static void giveCurrencyToPlayer(Player player, int amount) {
-        Item item = getCurrencyItem();
-        int perStack = Math.max(1, new ItemStack(item).getMaxStackSize());
-
-        for (int left = amount; left > 0; left -= perStack) {
-            ItemStack payout = new ItemStack(item, Math.min(left, perStack));
-            if (!player.getInventory().add(payout)) {
-                player.spawnAtLocation(payout);
-            }
-        }
-        player.level().playSound(null, player.blockPosition(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0f, 1.0f);
-    }
-
     public static Map<String, SellPrice> getSellPrices() {
         return SELL_PRICES;
     }
@@ -255,11 +265,10 @@ public class SellManager {
 
     public static Component getPriceList() {
         MutableComponent message = Component.translatable("sellmod.prices.header").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD);
-        Component currencyName = getCurrencyItem().getDescription();
         for (SellPrice price : SELL_PRICES.values()) {
             Component displayName = getDisplayName(price.itemName);
-            message = message.copy()
-                    .append(Component.translatable("sellmod.prices.entry", displayName, price.price, currencyName).withStyle(ChatFormatting.WHITE));
+            message = message.copy().append(Component.translatable("sellmod.prices.entry.amount", displayName,
+                    Wallet.amountText(price.price)).withStyle(ChatFormatting.WHITE));
         }
         return message;
     }
@@ -274,9 +283,34 @@ public class SellManager {
         }
     }
 
+    private static final class SellBudget {
+        private final Item coin;
+        private final int perStack;
+        private long ceiling;
+
+        private SellBudget(long ceiling, Item coin, int perStack) {
+            this.ceiling = ceiling;
+            this.coin = coin;
+            this.perStack = perStack;
+        }
+
+        static SellBudget fixed(long ceiling) {
+            return new SellBudget(ceiling, null, 0);
+        }
+
+        static SellBudget coins(ServerPlayer player, Item coin) {
+            int perStack = CurrencyItems.perStack(player.getInventory(), coin);
+            return new SellBudget(CurrencyItems.room(player, coin), coin, perStack);
+        }
+
+        long freedBy(ItemStack stack, boolean mainGrid) {
+            return coin == null ? 0L : CurrencyItems.freedBy(stack, coin, perStack, mainGrid);
+        }
+    }
+
     public static class SellResult {
         public int totalItemsSold = 0;
-        public int totalCurrencyEarned = 0;
+        public long totalCurrencyEarned = 0L;
         public Map<String, Integer> itemsSold = new HashMap<>();
     }
 }

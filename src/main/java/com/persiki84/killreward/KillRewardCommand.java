@@ -140,7 +140,7 @@ public class KillRewardCommand {
         ServerPlayer player = CommandHelper.requirePlayer(context, "killreward");
         if (player == null) return 0;
 
-        String last = KillRewardMod.lastRewards.get(player.getUUID());
+        Component last = KillRewardMod.lastRewards.get(player.getUUID());
         if (last == null) {
             context.getSource().sendFailure(
                     Component.translatable("killreward.no_rewards").withStyle(ChatFormatting.RED));
@@ -148,7 +148,7 @@ public class KillRewardCommand {
         }
 
         context.getSource().sendSuccess(() -> Component.translatable("killreward.last_reward",
-                Component.literal(last).withStyle(ChatFormatting.GREEN)).withStyle(ChatFormatting.YELLOW), false);
+                last.copy().withStyle(ChatFormatting.GREEN)).withStyle(ChatFormatting.YELLOW), false);
         return 1;
     }
 

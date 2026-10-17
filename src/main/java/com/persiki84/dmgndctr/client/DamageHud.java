@@ -4,7 +4,7 @@ import com.persiki84.battlecraft.client.ClientModules;
 import com.persiki84.battlecraft.client.hud.HudConfig;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.shared.client.ui.UiAnim;
-import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiTheme;
 import com.persiki84.shared.client.ui.UiWorldPalette;
@@ -47,6 +47,8 @@ public final class DamageHud {
         }
     }
 
+    // WHY: толчок и размер по дальности заявлены ходом вокруг точки удара, а кегль тикера постоянный:
+    // WHY: кегль, менявшийся каждый кадр, заставлял бы тикер перемерять буквы в каждом кадре
     private static void draw(GuiGraphics graphics, Minecraft minecraft, DamageNumber number,
                              float scale, float size) {
         float progress = number.progress();
@@ -54,14 +56,19 @@ public final class DamageHud {
         if (alpha <= GONE) return;
 
         float travel = UiAnim.easeOut(progress);
-        float emphasis = number.crit() ? CRIT_SCALE : 1.0f;
-        float textScale = size * emphasis * distanceSize(number.distance()) * pop(number.sinceHit());
+        float textScale = size * (number.crit() ? CRIT_SCALE : 1.0f);
+        float stretch = distanceSize(number.distance()) * pop(number.sinceHit());
         float x = number.screenX() / scale + number.drift() * travel;
-        float y = number.screenY() / scale - RISE * travel - minecraft.font.lineHeight * textScale / 2.0f;
+        float centerY = number.screenY() / scale - RISE * travel;
         int color = number.crit() ? UiWorldPalette.damageCrit() : UiWorldPalette.damage();
 
-        UiRender.textCentered(graphics, minecraft.font, number.text(), x, y, textScale,
-                UiTheme.withAlpha(color, alpha * alphaOf(color)), false);
+        UiRestFrame.push(graphics, x, centerY, stretch, stretch, 0.0f, 0.0f);
+        try {
+            number.label().draw(graphics, minecraft.font, x, centerY - minecraft.font.lineHeight * textScale / 2.0f,
+                    textScale, UiTheme.withAlpha(color, alpha * alphaOf(color)));
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
     }
 
     // WHY: толчок идёт от последнего удара, а не от рождения цифры: сложенная цифра на каждом

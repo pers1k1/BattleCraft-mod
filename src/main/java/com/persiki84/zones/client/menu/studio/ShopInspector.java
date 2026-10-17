@@ -1,16 +1,19 @@
 package com.persiki84.zones.client.menu.studio;
 
 import com.persiki84.shared.client.menu.ActionRow;
+import com.persiki84.shared.client.menu.CountedText;
 import com.persiki84.shared.client.menu.FieldRow;
 import com.persiki84.shared.client.menu.HeadingRow;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.PickRow;
+import com.persiki84.shared.client.menu.TickerLines;
 import com.persiki84.shared.client.menu.studio.StudioStack;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTheme;
 import com.persiki84.shared.gunsmith.GunSmith;
+import com.persiki84.zones.client.ClientShopData;
 import com.persiki84.zones.client.menu.ItemTurntable;
 import com.persiki84.zones.shop.ShopAccess;
 import com.persiki84.zones.shop.ShopEntry;
@@ -54,6 +57,13 @@ final class ShopInspector {
 
     private final ShopStudioScreen screen;
     private final ItemTurntable turntable = new ItemTurntable();
+    private final TickerLines stockLines = new TickerLines(0.5f);
+    private final TickerLines countLines = new TickerLines(0.5f);
+    private final CountedText stockText = new CountedText();
+    private final CountedText countText = new CountedText();
+    private ShopSection countedOwner;
+    private int countedDeep;
+    private int countedVersion = -1;
     private final ShopAccessRows access;
     private final Map<Integer, NumberRow> stockRows = new HashMap<>();
     private HeadingRow tradeHeading;
@@ -410,14 +420,14 @@ final class ShopInspector {
                 0.85f, 0.0f, UiTheme.alpha(UiAccent.text(), appear), false);
         line(graphics, Component.literal(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()),
                 left, width, y + 15.0f, appear);
-        line(graphics, stockLine(entry), left, width, y + 26.0f, appear);
+        counted(graphics, stockLines, entry.id(), stockLine(entry), left, width, y + 26.0f, appear);
     }
 
-    private static Component stockLine(ShopEntry entry) {
-        if (!entry.limited()) return Component.translatable("studio.shop.art.unlimited");
-        if (entry.soldOut()) return Component.translatable("studio.shop.art.sold_out");
-        return Component.translatable("studio.shop.art.stock", Math.max(0, entry.available()) * entry.bundle(),
-                entry.stock() * entry.bundle());
+    private Component stockLine(ShopEntry entry) {
+        if (!entry.limited()) return stockText.of("studio.shop.art.unlimited");
+        if (entry.soldOut()) return stockText.of("studio.shop.art.sold_out");
+        return stockText.of("studio.shop.art.stock", (long) Math.max(0, entry.available()) * entry.bundle(),
+                (long) entry.stock() * entry.bundle());
     }
 
     private void renderNodeArt(GuiGraphics graphics, ShopNode node, ShopSection owner, float left, float top,
@@ -425,15 +435,34 @@ final class ShopInspector {
         UiRender.textTrackedFit(graphics, font(), Component.literal(owner.title()), left + width / 2.0f, top, 14.0f,
                 width, 0.95f, 0.0f, UiTheme.alpha(UiAccent.text(), appear), false);
         Component counts = node.top()
-                ? Component.translatable("studio.shop.art.section", owner.deepEntryIds().size(), owner.children().size())
-                : Component.translatable("studio.shop.art.child", owner.entries().size());
-        line(graphics, counts, left, width, top + 16.0f, appear);
+                ? countText.of("studio.shop.art.section", deepCount(owner), owner.children().size())
+                : countText.of("studio.shop.art.child", owner.entries().size());
+        counted(graphics, countLines, node, counts, left, width, top + 16.0f, appear);
         line(graphics, accessLine(owner.access()), left, width, top + 27.0f, appear);
+    }
+
+    // WHY: число товаров раздела вместе с отделами пересчитывается по смене раздела или снимка
+    // WHY: магазина, а не обходом с новым списком в каждом кадре
+    private int deepCount(ShopSection owner) {
+        int version = ClientShopData.version();
+        if (owner == countedOwner && version == countedVersion) return countedDeep;
+        countedOwner = owner;
+        countedVersion = version;
+        countedDeep = owner.deepEntryIds().size();
+        return countedDeep;
     }
 
     private static Component accessLine(ShopAccess access) {
         if (access.everyone()) return Component.translatable("studio.shop.art.everyone");
         return Component.translatable("studio.shop.art.teams", String.join(", ", access.list()));
+    }
+
+    // WHY: число подписи перекатывается по цифрам у той же вещи; у другой вещи свой тикер, и её число
+    // WHY: встаёт сразу, вместе с переездом колонки
+    private void counted(GuiGraphics graphics, TickerLines lines, Object key, Component text, float left, float width,
+                         float y, float appear) {
+        lines.of(key).box(graphics, font(), text, left, y, 10.0f, width, LINE_SCALE,
+                UiTheme.alpha(UiAccent.textDim(), appear));
     }
 
     private void line(GuiGraphics graphics, Component text, float left, float width, float y, float appear) {

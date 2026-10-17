@@ -15,15 +15,18 @@ import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiTagStack;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiWorldTag;
 import com.persiki84.shared.client.ui.UiVital;
 import com.persiki84.battlecraft.client.ClientModules;
 import com.persiki84.battlecraft.client.hud.HudConfig;
 import com.persiki84.battlecraft.client.hud.HudInk;
+import com.persiki84.battlecraft.client.hud.HudMeasure;
 import com.persiki84.battlecraft.client.hud.PointsView;
 import com.persiki84.battlecraft.modules.ModuleId;
 import net.minecraft.client.Minecraft;
@@ -72,6 +75,21 @@ public class CaptureHudOverlay {
     private static final String STATE_CONTEST = "capturepoints.hud.state.contest";
     private static final String STATE_ROLLBACK = "capturepoints.hud.state.rollback";
     private static final String STATE_FINAL = "capturepoints.hud.state.final";
+    private static final float FAST_NUMBER_SECONDS = 0.1f;
+    private static final int COUNT_BITS = 16;
+    private static final long COUNT_MASK = 0xFFFFL;
+
+    private static final UiTicker.Format RANGE =
+            meters -> Component.translatable("capturepoints.hud.marker.range", meters).getString();
+    private static final UiTicker.Format ARMING =
+            seconds -> Component.translatable(STATE_ARMING, seconds).getString();
+    private static final UiTicker.Format CONTEST = CaptureHudOverlay::contestText;
+    private static final UiTicker.Format HELD = unused -> Component.translatable(STATE_HELD).getString();
+    private static final UiTicker.Format STALLED = unused -> Component.translatable(STATE_STALLED).getString();
+    private static final UiTicker.Format ROLLBACK = unused -> Component.translatable(STATE_ROLLBACK).getString();
+    private static final UiTicker.Format FINAL = unused -> Component.translatable(STATE_FINAL).getString();
+    private static final UiTicker.Format SAMPLE =
+            unused -> Component.translatable("battlecraft.custom.sample.capture").getString();
 
     private static final Smooth bannerPresence = new Smooth(0.0f, PRESENCE_SPEED);
     private static final Map<String, Pill> pills = new LinkedHashMap<>();
@@ -81,8 +99,11 @@ public class CaptureHudOverlay {
     private static boolean centralFinal;
     private static float centralValue;
     private static boolean centralLive;
-    private static Component centralCached;
-    private static Component centralCachedTag = Component.empty();
+    private static String centralFormatted;
+    private static UiTicker.Format centralProgressFormat;
+    private static UiTicker.Format centralIdleFormat;
+    private static final UiTicker centralTicker = new UiTicker().throttle(FAST_NUMBER_SECONDS);
+    private static final UiTicker sampleTicker = new UiTicker();
     private static int centralCachedTint;
     private static final CaptureState centralState = new CaptureState();
     private static final CaptureState sampleState = new CaptureState();
@@ -275,16 +296,15 @@ public class CaptureHudOverlay {
 
     // WHY: пилюля уходит сужением, поэтому её нутро обязано сужаться вместе с ней: текст, который
     // WHY: только гаснет в схлопывающейся плашке, читается как застрявшая надпись без кнопки.
-    // WHY: Масштаб взят от левой кромки и середины по высоте - там же, откуда растёт сама плашка
+    // WHY: Масштаб взят от левой кромки и середины по высоте - там же, откуда растёт сама плашка,
+    // WHY: и заявлен ходом: голым масштабом перо пересчитывалось под каждый кадр, и буквы имени
+    // WHY: переставлялись по пикселю до самого конца сужения
     private static void renderPillBody(GuiGraphics graphics, Minecraft mc, String name, Pill pill,
                                        float x, float y, float alpha) {
         float shrink = UiAnim.easeOut(alpha);
         float middle = y + PILL_HEIGHT / 2.0f;
 
-        graphics.pose().pushPose();
-        graphics.pose().translate(x, middle, 0.0f);
-        graphics.pose().scale(shrink, shrink, 1.0f);
-        graphics.pose().translate(-x, -middle, 0.0f);
+        UiRestFrame.push(graphics, x, middle, shrink, shrink, 0.0f, 0.0f);
         try {
             UiRender.dot(graphics, x + PILL_PADDING - 1.0f, middle, 1.5f,
                     UiTheme.alpha(dotTint(pill), alpha));
@@ -292,7 +312,7 @@ public class CaptureHudOverlay {
                     UiRender.centerY(y, PILL_HEIGHT, LABEL_SCALE), LABEL_SCALE,
                     UiTheme.alpha(CaptureColors.label(), alpha));
         } finally {
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
         }
     }
 
@@ -323,7 +343,7 @@ public class CaptureHudOverlay {
             centralPoint = null;
             centralValue = 0.0f;
             centralProgress.snap(0.0f);
-            centralCachedTag = Component.empty();
+            centralTicker.reset();
             centralState.settle();
         }
         if (alpha <= 0.01f || centralPoint == null) return;
@@ -333,18 +353,24 @@ public class CaptureHudOverlay {
                 centralProgress.to(centralValue, delta), delta);
     }
 
-    private static Component centralLabel(float progress) {
-        if (!centralLive) return centralCached == null ? Component.empty() : centralCached;
+    // WHY: проценты захвата едут тикером: сменившиеся цифры уходят, остальные стоят, а при откате
+    // WHY: новая цифра падает сверху. Формат строки знает имя точки, поэтому заводится заново только
+    // WHY: на смене точки, а не в кадре; после ухода из зоны строка стоит на последнем значении
+    private static void aimCentralLabel(float progress) {
+        if (!centralLive) return;
 
-        centralCached = buildCentralLabel(progress);
-        return centralCached;
-    }
-
-    private static Component buildCentralLabel(float progress) {
         String point = centralPoint;
-        if (!ClientCaptureData.isRunning(point)) return Component.translatable("capturepoints.hud.point", point);
-
-        return Component.translatable("capturepoints.hud.capture_progress", point, (int) (progress * 100));
+        if (!point.equals(centralFormatted)) {
+            centralFormatted = point;
+            centralProgressFormat = percent ->
+                    Component.translatable("capturepoints.hud.capture_progress", point, percent).getString();
+            centralIdleFormat = unused -> Component.translatable("capturepoints.hud.point", point).getString();
+        }
+        if (ClientCaptureData.isRunning(point)) {
+            centralTicker.set((int) (progress * 100), centralProgressFormat);
+        } else {
+            centralTicker.set(0L, centralIdleFormat);
+        }
     }
 
     // WHY: тег состояния отделён от строки прогресса, потому что проценты меняются каждый кадр,
@@ -352,36 +378,44 @@ public class CaptureHudOverlay {
     private static void wantCentralTag() {
         if (!centralLive) return;
 
-        String key = resolveTag();
-        centralState.want(key, centralCachedTag, HudInk.text());
+        String point = centralPoint;
+        int tint = HudInk.text();
+        if (!ClientCaptureData.isRunning(point)) {
+            centralState.want(STATE_ARMING, ClientCaptureData.getArmingSeconds(point), ARMING, tint);
+            return;
+        }
+        if (ClientCaptureData.isHeld(point)) {
+            centralState.want(STATE_HELD, 0L, HELD, tint);
+            return;
+        }
+        wantContestTag(point, tint);
     }
 
-    private static String resolveTag() {
-        String point = centralPoint;
-        if (!ClientCaptureData.isRunning(point)) {
-            centralCachedTag = Component.translatable(STATE_ARMING,
-                    ClientCaptureData.getArmingSeconds(point));
-            return STATE_ARMING;
-        }
-        if (ClientCaptureData.isHeld(point)) return tag(STATE_HELD);
-
+    private static void wantContestTag(String point, int tint) {
         int attackers = ClientCaptureData.getAttackerCount(point);
         int rivals = ClientCaptureData.getRivalCount(point);
-        if (rivals > 0 && attackers == rivals) return tag(STATE_STALLED);
-        if (rivals > 0) {
-            centralCachedTag = Component.translatable(STATE_CONTEST, attackers, rivals);
-            return STATE_CONTEST;
+        if (rivals > 0 && attackers == rivals) {
+            centralState.want(STATE_STALLED, 0L, STALLED, tint);
+        } else if (rivals > 0) {
+            long score = packCount(attackers) << COUNT_BITS | packCount(rivals);
+            centralState.want(STATE_CONTEST, score, CONTEST, tint);
+        } else if (ClientCaptureData.isDecaying(point)) {
+            centralState.want(STATE_ROLLBACK, 0L, ROLLBACK, tint);
+        } else if (centralFinal) {
+            centralState.want(STATE_FINAL, 0L, FINAL, tint);
+        } else {
+            centralState.want("", 0L, null, tint);
         }
-        if (ClientCaptureData.isDecaying(point)) return tag(STATE_ROLLBACK);
-        if (centralFinal) return tag(STATE_FINAL);
-
-        centralCachedTag = Component.empty();
-        return "";
     }
 
-    private static String tag(String key) {
-        centralCachedTag = Component.translatable(key);
-        return key;
+    private static long packCount(int count) {
+        return Math.max(0L, Math.min(COUNT_MASK, count));
+    }
+
+    private static String contestText(long packed) {
+        long attackers = packed >>> COUNT_BITS & COUNT_MASK;
+        long rivals = packed & COUNT_MASK;
+        return Component.translatable(STATE_CONTEST, attackers, rivals).getString();
     }
 
     private static int centralTint() {
@@ -399,12 +433,12 @@ public class CaptureHudOverlay {
                                           float alpha, float progress, float delta) {
         if (!HudLayout.visible(HudSlot.CAPTURE)) return;
 
-        Component label = centralLabel(progress);
+        aimCentralLabel(progress);
 
         float labelScale = UiRender.crisp(graphics, CENTRAL_LABEL_SCALE);
-        float tagRoom = centralState.advance(graphics, labelScale, delta);
-        float textWidth = UiRender.measure(graphics, mc.font, label, labelScale) + tagRoom;
-        float barWidth = Math.max(CENTRAL_WIDTH, textWidth + 12.0f);
+        float tagRoom = measureTag(graphics, labelScale, delta);
+        float labelWidth = HudMeasure.steady(graphics, centralTicker, mc.font, labelScale, HudSlot.CAPTURE);
+        float barWidth = Math.max(CENTRAL_WIDTH, labelWidth + tagRoom + 12.0f);
         float cardWidth = barWidth + CENTRAL_PADDING * 2.0f;
         float cardHeight = mc.font.lineHeight * labelScale + CENTRAL_BAR_HEIGHT + CENTRAL_PADDING * 2.0f + 4.0f;
         HudBox box = HudLayout.place(HudSlot.CAPTURE, cardWidth, cardHeight, screenWidth, screenHeight);
@@ -413,38 +447,46 @@ public class CaptureHudOverlay {
 
         HudLayout.push(graphics, box);
         try {
-            paintCentralCard(graphics, mc, label, cardX, cardY, cardWidth, cardHeight, barWidth,
+            paintCentralCard(graphics, mc, centralTicker, labelWidth, cardX, cardY, cardWidth, cardHeight, barWidth,
                     labelScale, progress, alpha, centralTint(), centralState);
         } finally {
             HudLayout.pop(graphics, box);
         }
     }
 
+    private static float measureTag(GuiGraphics graphics, float labelScale, float delta) {
+        boolean scaled = HudMeasure.begin(graphics, HudSlot.CAPTURE);
+        try {
+            return centralState.advance(graphics, labelScale, delta);
+        } finally {
+            HudMeasure.end(graphics, scaled);
+        }
+    }
+
     public static void preview(GuiGraphics graphics, float x, float y, float width, float height, float alpha) {
         Minecraft mc = Minecraft.getInstance();
         float labelScale = UiRender.crisp(graphics, CENTRAL_LABEL_SCALE);
-        Component label = Component.translatable("battlecraft.custom.sample.capture");
-        float barWidth = Math.max(CENTRAL_WIDTH, UiRender.width(mc.font, label) * labelScale + 12.0f);
+        sampleTicker.set(0L, SAMPLE);
+        float labelWidth = sampleTicker.steadyWidth(graphics, mc.font, labelScale);
+        float barWidth = Math.max(CENTRAL_WIDTH, labelWidth + 12.0f);
         float cardWidth = barWidth + CENTRAL_PADDING * 2.0f;
         float cardHeight = mc.font.lineHeight * labelScale + CENTRAL_BAR_HEIGHT + CENTRAL_PADDING * 2.0f + 4.0f;
         HudLayout.sample(HudSlot.CAPTURE, cardWidth, cardHeight);
-        sampleState.want(STATE_ROLLBACK, Component.translatable(STATE_ROLLBACK), HudInk.text());
+        sampleState.want(STATE_ROLLBACK, 0L, ROLLBACK, HudInk.text());
         sampleState.advance(graphics, labelScale, UiFrame.delta());
-        paintCentralCard(graphics, mc, label, x, y, cardWidth, cardHeight, barWidth, labelScale,
+        paintCentralCard(graphics, mc, sampleTicker, labelWidth, x, y, cardWidth, cardHeight, barWidth, labelScale,
                 SAMPLE_PROGRESS, alpha, CaptureColors.progress(), sampleState);
     }
 
-    private static void paintCentralCard(GuiGraphics graphics, Minecraft mc, Component label, float cardX,
-                                         float cardY, float cardWidth, float cardHeight, float barWidth,
-                                         float labelScale, float progress, float alpha, int tint,
+    private static void paintCentralCard(GuiGraphics graphics, Minecraft mc, UiTicker label, float labelWidth,
+                                         float cardX, float cardY, float cardWidth, float cardHeight,
+                                         float barWidth, float labelScale, float progress, float alpha, int tint,
                                          CaptureState state) {
         UiVital.card(graphics, cardX, cardY, cardWidth, cardHeight, UiMetrics.radius(cardHeight), alpha);
 
         float textY = cardY + CENTRAL_PADDING;
-        float labelWidth = UiRender.measure(graphics, mc.font, label, labelScale);
         float textLeft = cardX + (cardWidth - labelWidth - state.room()) / 2.0f;
-        UiRender.labelScaled(graphics, mc.font, label, textLeft, textY, labelScale,
-                UiTheme.alpha(HudInk.text(), alpha));
+        label.draw(graphics, mc.font, textLeft, textY, labelScale, HudInk.text(), alpha);
         state.paint(graphics, textLeft + labelWidth, textY, labelScale, alpha);
 
         float barX = cardX + CENTRAL_PADDING;
@@ -504,8 +546,8 @@ public class CaptureHudOverlay {
         state.stack.depth((float) marker.distance());
 
         paintDot(graphics, marker, x, y, focus, presence * (1.0f - plate));
-        UiWorldTag.render(graphics, mc.font, Component.literal(marker.name()),
-                Component.translatable("capturepoints.hud.marker.range", (int) marker.distance()), ranged,
+        state.meters.set((long) marker.distance(), RANGE);
+        UiWorldTag.render(graphics, mc.font, state.name(marker.name()), state.meters, ranged,
                 x, y - height - MARKER_TAG_GAP, height, scale, markerColor(marker), alpha, focus,
                 presence * plate, state.stack);
     }
@@ -548,10 +590,21 @@ public class CaptureHudOverlay {
         private final Smooth range = new Smooth(0.0f, RANGE_FADE_SPEED);
         private final Smooth presence = new Smooth(0.0f, PRESENCE_SPEED);
         private final UiTagStack.Slot stack = UiTagStack.slot();
+        private final UiTicker meters = new UiTicker().throttle(FAST_NUMBER_SECONDS);
+        private String nameRaw;
+        private Component nameShown = Component.empty();
         private long seen;
 
         private float presence(boolean wanted, float delta) {
             return UiAnim.easeOut(presence.to(wanted ? 1.0f : 0.0f, delta));
+        }
+
+        private Component name(String raw) {
+            if (!raw.equals(nameRaw)) {
+                nameRaw = raw;
+                nameShown = Component.literal(raw);
+            }
+            return nameShown;
         }
     }
 

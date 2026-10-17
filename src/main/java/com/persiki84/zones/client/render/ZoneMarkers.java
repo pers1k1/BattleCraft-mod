@@ -6,6 +6,7 @@ import com.persiki84.battlecraft.rules.MarkerRange;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiTagStack;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiWorldPalette;
 import com.persiki84.shared.zone.ZoneArea;
 import com.persiki84.zones.Zone;
@@ -39,6 +40,12 @@ public final class ZoneMarkers {
 
     private static final Component BASE_LABEL = Component.translatable("zones.marker.base");
     private static final Component SHOP_LABEL = Component.translatable("zones.marker.shop");
+
+    // WHY: дальность метки идёт тикером: на ходу меняются только сменившиеся цифры, а не вся строка;
+    // WHY: строка собирается форматом только на смене числа, не чаще раза в METERS_THROTTLE_SECONDS
+    private static final float METERS_THROTTLE_SECONDS = 0.1f;
+    private static final UiTicker.Format METERS =
+            meters -> Component.translatable("zones.marker.range.only", meters).getString();
 
     private static final Map<String, Marker> known = new HashMap<>();
     private static final Map<String, Component> markLabels = new HashMap<>();
@@ -242,9 +249,8 @@ public final class ZoneMarkers {
         private final Smooth ranged = new Smooth(0.0f, RANGE_FADE_SPEED);
         private final Smooth presence = new Smooth(0.0f, PRESENCE_SPEED);
         private final UiTagStack.Slot stack = UiTagStack.slot();
+        private final UiTicker meters = new UiTicker().throttle(METERS_THROTTLE_SECONDS);
         private Component name;
-        private Component rangeLabel = Component.empty();
-        private int labelledDistance = -1;
         private float screenX;
         private float screenY;
         private int distance;
@@ -267,7 +273,7 @@ public final class ZoneMarkers {
             color = packedColor;
             held = kept;
             stack.depth(away);
-            relabel();
+            meters.set(away, METERS);
             return this;
         }
 
@@ -280,13 +286,6 @@ public final class ZoneMarkers {
             return UiAnim.easeOut(presence.to(held ? 1.0f : 0.0f, delta));
         }
 
-        private void relabel() {
-            if (distance == labelledDistance) return;
-
-            labelledDistance = distance;
-            rangeLabel = Component.translatable("zones.marker.range.only", distance);
-        }
-
         public float ranged(float delta) {
             return ranged.to(distance >= RANGE_SHOWN_FROM ? 1.0f : 0.0f, delta);
         }
@@ -297,7 +296,7 @@ public final class ZoneMarkers {
 
         public UiTagStack.Slot stack() { return stack; }
         public Component label() { return name; }
-        public Component rangeLabel() { return rangeLabel; }
+        public UiTicker meters() { return meters; }
         public float screenX() { return screenX; }
         public float screenY() { return screenY; }
         public int color() { return color; }

@@ -1,6 +1,7 @@
 package com.persiki84.zones.client.menu;
 
 import com.persiki84.shared.client.menu.ScrollHint;
+import com.persiki84.shared.client.menu.TickerLine;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiFrame;
@@ -14,6 +15,7 @@ import com.persiki84.shared.gunsmith.GunStat;
 import com.persiki84.shared.gunsmith.VehiclePower;
 import com.persiki84.zones.client.ClientModifierData;
 import com.persiki84.zones.shop.ShopEntry;
+import com.persiki84.sellmod.client.ClientSellData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -32,7 +34,6 @@ import java.util.Locale;
 public final class ShopPreview {
     public static final float BOX_HEIGHT = 78.0f;
 
-
     private static final float LINE_SCALE = 0.75f;
     private static final float NAME_SCALE = 0.85f;
     private static final float HEAD_SCALE = 0.7f;
@@ -43,6 +44,14 @@ public final class ShopPreview {
     private static final float TEXT_SCROLL_STEP = 14.0f;
     private static final float TEXT_RIDE_SPEED = 19.0f;
 
+    private int labelledPrice = Integer.MIN_VALUE;
+    private int labelledVersion = Integer.MIN_VALUE;
+    private Component priceText;
+    private int labelledBundle = Integer.MIN_VALUE;
+    private Component bundleText;
+    private final TickerLine priceLine = new TickerLine(0.5f);
+    private final TickerLine bundleLine = new TickerLine(0.5f);
+    private final TickerLine stockLine = new TickerLine(0.5f);
     private final List<GunAmmo> ammo = new ArrayList<>();
     private final List<GunSlot> slots = new ArrayList<>();
     private final List<GunStat> stats = new ArrayList<>();
@@ -179,6 +188,7 @@ public final class ShopPreview {
         boolean expanded = Screen.hasShiftDown();
         if (entry.id().equals(describedEntry) && expanded == describedExpanded) return;
 
+        if (!entry.id().equals(describedEntry)) forgetLines();
         describedEntry = entry.id();
         describedExpanded = expanded;
         ammo.clear();
@@ -223,21 +233,20 @@ public final class ShopPreview {
         float centerX = left + width / 2.0f;
 
         if (visible(textY, step)) {
-            UiRender.labelCentered(graphics, font(), priceLabel(entry), centerX, textY, LINE_SCALE, UiAccent.text());
+            priceLine.at(graphics, font(), priceLabel(entry), centerX, textY, LINE_SCALE, UiAccent.text());
         }
         textY += step;
 
         if (entry.bundle() > 1) {
             if (visible(textY, step)) {
-                UiRender.labelCentered(graphics, font(), Component.translatable("zones.shop.bundle", entry.bundle()),
-                        centerX, textY, LINE_SCALE, UiAccent.text());
+                bundleLine.at(graphics, font(), bundleLabel(entry), centerX, textY, LINE_SCALE, UiAccent.text());
             }
             textY += step;
         }
 
         if (entry.limited()) {
             if (visible(textY, step)) {
-                UiRender.labelCentered(graphics, font(), stockLabel(entry), centerX, textY, LINE_SCALE,
+                stockLine.at(graphics, font(), stockLabel(entry), centerX, textY, LINE_SCALE,
                         entry.soldOut() ? UiPalette.alert() : UiAccent.text());
             }
             textY += step;
@@ -386,8 +395,29 @@ public final class ShopPreview {
                 : GunSmith.optionName(slot.installed());
     }
 
-    private static Component priceLabel(ShopEntry entry) {
-        return Component.translatable("zones.shop.price", entry.price());
+    // WHY: у другого товара свои цена и остаток: их число встаёт сразу, а по цифрам перекатывается
+    // WHY: только смена у того же товара (покупка, завоз, правка цены)
+    private void forgetLines() {
+        priceLine.forget();
+        bundleLine.forget();
+        stockLine.forget();
+    }
+
+    private Component bundleLabel(ShopEntry entry) {
+        if (entry.bundle() != labelledBundle || bundleText == null) {
+            labelledBundle = entry.bundle();
+            bundleText = Component.translatable("zones.shop.bundle", entry.bundle());
+        }
+        return bundleText;
+    }
+
+    private Component priceLabel(ShopEntry entry) {
+        if (entry.price() != labelledPrice || ClientSellData.version() != labelledVersion || priceText == null) {
+            labelledPrice = entry.price();
+            labelledVersion = ClientSellData.version();
+            priceText = Component.translatable("zones.shop.price", ClientSellData.amountText(entry.price()));
+        }
+        return priceText;
     }
 
     private static Component stockLabel(ShopEntry entry) {

@@ -433,5 +433,9 @@
   "zones.shop.error.bad_title": "A name must be 1 to %s characters long.",
   "zones.shop.success.renamed": "'%s' is now called \"%s\".",
   "zones.shop.success.resized": "Item '%s' now sells %s at a time.",
-  "zones.shop.success.copied": "A copy of '%s' is added as '%s'."
+  "zones.shop.success.copied": "A copy of '%s' is added as '%s'.",
+  "zones.shop.treasury.take.account": "Credit %s to account",
+  "zones.shop.treasury.take.account.hint": "In the Account mode currency from the treasury goes to your account, not to the inventory.",
+  "zones.shop.treasury.credit": "To account: %s",
+  "zones.shop.treasury.note.account": "Only point income fills the treasury. Currency taken from it is credited to your account, so the inventory does not need room. The whole team sees what is taken."
 }

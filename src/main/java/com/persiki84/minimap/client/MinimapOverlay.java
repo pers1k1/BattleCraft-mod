@@ -16,6 +16,7 @@ import com.persiki84.minimap.network.MapWorldMarkerSyncPacket;
 import com.persiki84.minimap.network.PlayerPositionSyncPacket;
 import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiClip;
@@ -48,6 +49,11 @@ public class MinimapOverlay {
     private static final float BASE_RADIUS = 3.4f;
     private static final float MARKER_DOT = 1.5f;
     private static final Component BASE_LABEL = Component.translatable("zones.marker.base");
+    private static final float COORDS_THROTTLE_SECONDS = 0.1f;
+    private static final long COORD_MASK = 0xFFFFFFFFL;
+    private static final UiTicker.Format COORDS = MinimapOverlay::coordsText;
+    private static final UiTicker coords =
+            new UiTicker().align(UiTicker.CENTER).throttle(COORDS_THROTTLE_SECONDS);
 
     public static boolean isVisible() {
         if (!ClientMapData.enableMinimap) return false;
@@ -105,7 +111,25 @@ public class MinimapOverlay {
             renderDepthClipped(guiGraphics, mc, partialTick, x, y, size, radius, scale, mapX, mapZ);
         }
 
-        label(guiGraphics, mc, Mth.floor(mapX) + " " + Mth.floor(mapZ), x + size / 2.0f, y + size - 9.0f, PLATE_TEXT);
+        coordsLabel(guiGraphics, mc, Mth.floor(mapX), Mth.floor(mapZ), x + size / 2.0f, y + size - 9.0f);
+    }
+
+    // WHY: координаты под картой меняются цифрами, как таймер острова: на ходу уходят только
+    // WHY: сменившиеся разряды, а плашка держит удерживаемую ширину и не дрожит на каждом блоке.
+    // WHY: X и Z едут одним тикером, упакованные в одно число, поэтому строка собирается только на смене
+    private static void coordsLabel(GuiGraphics guiGraphics, Minecraft mc, int blockX, int blockZ, float centerX,
+                                    float y) {
+        coords.set((long) blockX << 32 | blockZ & COORD_MASK, COORDS);
+        float scale = UiRender.crisp(guiGraphics, LABEL_SCALE);
+        float height = PLATE_HEIGHT * scale + PLATE_PAD_Y * 2.0f;
+        float plateY = y - PLATE_PAD_Y;
+        float width = coords.steadyWidth(guiGraphics, mc.font, scale) + PLATE_PAD_X * 2.0f;
+        UiRender.panel(guiGraphics, centerX - width / 2.0f, plateY, width, height, height / 2.0f, PLATE_COLOR);
+        coords.draw(guiGraphics, mc.font, centerX, UiRender.centerY(plateY, height, scale), scale, PLATE_TEXT);
+    }
+
+    private static String coordsText(long packed) {
+        return (int) (packed >> 32) + " " + (int) packed;
     }
 
     private static void renderInside(GuiGraphics guiGraphics, Minecraft mc, float partialTick, float x, float y,
@@ -278,15 +302,6 @@ public class MinimapOverlay {
         float scale = UiRender.crisp(guiGraphics, LABEL_SCALE);
         float height = PLATE_HEIGHT * scale + PLATE_PAD_Y * 2.0f;
         float plateY = markerY - markerRadius - MARKER_CLEARANCE - height;
-        plate(guiGraphics, mc, value, centerX, plateY, height, scale);
-        UiRender.labelCentered(guiGraphics, mc.font, value, centerX,
-                UiRender.centerY(plateY, height, scale), scale, color);
-    }
-
-    private static void label(GuiGraphics guiGraphics, Minecraft mc, String value, float centerX, float y, int color) {
-        float scale = UiRender.crisp(guiGraphics, LABEL_SCALE);
-        float height = PLATE_HEIGHT * scale + PLATE_PAD_Y * 2.0f;
-        float plateY = y - PLATE_PAD_Y;
         plate(guiGraphics, mc, value, centerX, plateY, height, scale);
         UiRender.labelCentered(guiGraphics, mc.font, value, centerX,
                 UiRender.centerY(plateY, height, scale), scale, color);

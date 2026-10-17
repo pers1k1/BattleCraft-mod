@@ -23,7 +23,7 @@ public final class UiIcon {
     public enum Kind {
         PERSON, GLOBE, GEAR, SLIDERS, PHOTO, POWER, SEARCH, TOGGLES, SPEAKER, SUN, NOTE, FULLSCREEN,
         SPARKLE, DROP, PLUS, PLAY, PAUSE, FORWARD, BACKWARD, CHEVRON_LEFT, CHEVRON_RIGHT, CALENDAR, CHAT,
-        MOTION
+        MOTION, COIN
     }
 
     private static final ResourceLocation SHADER = new ResourceLocation("battlecraft", "ui_icon");

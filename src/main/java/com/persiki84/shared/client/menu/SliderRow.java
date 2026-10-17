@@ -8,6 +8,7 @@ import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
@@ -35,6 +36,7 @@ public class SliderRow extends MenuRow {
     private float scale = 1.0f;
     private String suffix = "";
     private boolean dragging;
+    private UiTicker readout = new UiTicker().align(UiTicker.RIGHT);
 
     public SliderRow(int x, int y, int width, int height, Component label,
                      Supplier<Float> value, Consumer<Float> apply, float minimum, float maximum, float step) {
@@ -76,9 +78,19 @@ public class SliderRow extends MenuRow {
         UiGlass.inner(graphics, knobX - knobRadius, trackY + TRACK_HEIGHT / 2.0f - knobRadius,
                 knobRadius * 2.0f, knobRadius * 2.0f, knobRadius, valueAlpha(), 0.55f + 0.45f * focus);
 
-        UiRender.textRight(graphics, font(), readoutOf(current), getX() + width - PAD,
-                UiRender.centerY(getY(), height, READOUT_SCALE), READOUT_SCALE,
-                faded() ? UiAccent.textFaint() : UiAccent.text(), false);
+        paintReadout(graphics, readoutOf(current));
+    }
+
+    // WHY: число, которое игрок тянет сам, идёт за курсором без хода; значение, пришедшее извне
+    // WHY: (пресет, сброс), перекатывается по цифрам, как таймер острова
+    private void paintReadout(GuiGraphics graphics, String text) {
+        if (dragging) {
+            readout.snap(text);
+        } else {
+            readout.set(text);
+        }
+        readout.draw(graphics, font(), getX() + width - PAD, UiRender.centerY(getY(), height, READOUT_SCALE),
+                READOUT_SCALE, faded() ? UiAccent.textFaint() : UiAccent.text());
     }
 
     private float readoutValue = Float.NaN;
@@ -112,6 +124,7 @@ public class SliderRow extends MenuRow {
 
         fill.take(older.fill);
         settled = older.settled;
+        readout = older.readout;
     }
 
     @Override

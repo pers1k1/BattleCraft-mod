@@ -13,6 +13,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
@@ -24,6 +25,7 @@ import net.minecraftforge.client.ForgeRenderTypes;
 import org.joml.Matrix4f;
 import org.joml.Vector2f;
 
+import java.util.Arrays;
 import java.util.List;
 
 public final class UiRender {
@@ -115,8 +117,13 @@ public final class UiRender {
     private static final float ALIGN_RIGHT = 1.0f;
     private static final float BAKE_SLACK = 0.02f;
     private static final float SUPERSAMPLE = 1.3f;
+    private static final double PIXEL_GRID = 1024.0;
     private static final float FADE_UNITS = 5.0f;
     private static final int MAX_GLYPHS = 512;
+    private static final int PLAIN_SLOTS = 128;
+    private static final Component[] PLAIN_KEYS = new Component[PLAIN_SLOTS];
+    private static final String[] PLAIN_TEXTS = new String[PLAIN_SLOTS];
+    private static Language plainLanguage;
     private static final int FULL_BRIGHT = 15728880;
     private static final int OPAQUE_FALLBACK_ALPHA = 4;
 
@@ -149,7 +156,9 @@ public final class UiRender {
     private static int points;
     private static int glyphs;
     private static boolean smoothing;
-    private static boolean floating;
+    private static float looseness;
+    private static float driftX;
+    private static float driftY;
     private static boolean dissolving;
     private static boolean fading;
     private static final float GLYPH_MIDDLE = 4.0f;
@@ -1115,6 +1124,10 @@ public final class UiRender {
         return measured(graphics, font, value, TITLE, PLAIN_BAKE, scale, tracking);
     }
 
+    public static float titleScale(GuiGraphics graphics, float scale) {
+        return crisp(PLAIN_BAKE, textPixels(graphics), scale);
+    }
+
     // WHY: ширину строки считает то же перо, что и рисует её, иначе плашка под заголовком разъезжается с текстом
     private static float measured(GuiGraphics graphics, Font font, Component value, ResourceLocation[] faces,
                                   float[] bakes, float scale, float tracking) {
@@ -1129,11 +1142,21 @@ public final class UiRender {
     // WHY: перо кладёт каждый глиф на целый пиксель, поэтому измеренная ширина куска строки не совпадает
     // WHY: с местом букв в ней: подчёркивание слова берёт границы тем же ходом пера, что и отрисовка
     public static float[] trackedStops(GuiGraphics graphics, Font font, Component value, float scale, float tracking) {
+        return stopsFaced(graphics, font, value, BOLD, scale, tracking);
+    }
+
+    public static float[] trackedStopsRegular(GuiGraphics graphics, Font font, Component value, float scale,
+                                              float tracking) {
+        return stopsFaced(graphics, font, value, REGULAR, scale, tracking);
+    }
+
+    private static float[] stopsFaced(GuiGraphics graphics, Font font, Component value, ResourceLocation[] faces,
+                                      float scale, float tracking) {
         float pixels = textPixels(graphics);
         if (pixels <= 0.01f || value.getString().isEmpty()) return new float[]{0.0f};
 
         float snapped = crisp(REGULAR_BAKE, pixels, scale);
-        layout(value, BOLD, BOLD, REGULAR_BAKE, pixels * snapped);
+        layout(value, faces, BOLD, REGULAR_BAKE, pixels * snapped);
         return stops(font, pixels * snapped, pixels, tracking);
     }
 
@@ -1217,12 +1240,31 @@ public final class UiRender {
 
     public static void labelToned(GuiGraphics graphics, Font font, Component value, float x, float y, float scale,
                                   int color, GlyphTone tone) {
+        labelToned(graphics, font, value, x, y, scale, 0.0f, color, tone);
+    }
+
+    // WHY: места букв для такой строки отдаёт trackedStops с тем же трекингом: ширина и место каждой
+    // WHY: буквы считаются тем же ходом пера, что и отрисовка
+    public static void labelToned(GuiGraphics graphics, Font font, Component value, float x, float y, float scale,
+                                  float tracking, int color, GlyphTone tone) {
+        labelFaced(graphics, font, value, BOLD, x, y, scale, tracking, color, tone);
+    }
+
+    // WHY: та же строка с тоном, но начертанием экрана, каким textLine пишет обычный текст: число
+    // WHY: внутри строки тоста иначе выходило жирнее соседних слов
+    public static void labelTonedRegular(GuiGraphics graphics, Font font, Component value, float x, float y,
+                                         float scale, float tracking, int color, GlyphTone tone) {
+        labelFaced(graphics, font, value, REGULAR, x, y, scale, tracking, color, tone);
+    }
+
+    private static void labelFaced(GuiGraphics graphics, Font font, Component value, ResourceLocation[] faces,
+                                   float x, float y, float scale, float tracking, int color, GlyphTone tone) {
         if (value.getString().isEmpty()) return;
 
         float pixels = textPixels(graphics);
         float snapped = crisp(REGULAR_BAKE, pixels, scale);
-        layout(value, BOLD, BOLD, REGULAR_BAKE, pixels * snapped);
-        drawGlyphs(graphics, font, x, y, snapped, 0.0f, color, false, tone);
+        layout(value, faces, BOLD, REGULAR_BAKE, pixels * snapped);
+        drawGlyphs(graphics, font, x, y, snapped, tracking, color, false, tone);
     }
 
     // WHY: ширина и места букв считаются тем же пером, что рисует строку с тоном: другой замер давал
@@ -1328,7 +1370,8 @@ public final class UiRender {
     public static void textTrackedBox(GuiGraphics graphics, Font font, Component value, float boxX, float boxY,
                                       float boxHeight, float boxWidth, float scale, float tracking, int color,
                                       boolean bold, float align) {
-        if (value.getString().isEmpty()) return;
+        String plain = plainOf(value);
+        if (plain.isEmpty()) return;
 
         float pixels = textPixels(graphics);
         scale = crisp(REGULAR_BAKE, pixels, scale);
@@ -1341,7 +1384,7 @@ public final class UiRender {
             return;
         }
 
-        float start = boxX - marqueeShift(graphics, value.getString(), span - boxWidth);
+        float start = boxX - marqueeShift(graphics, plain, span - boxWidth);
         float margin = UiMarquee.margin(boxWidth, scale);
         scissor(graphics, boxX - margin, boxY, boxWidth + margin * 2.0f, boxHeight);
         marqueeFrom(graphics, boxX, boxWidth, start, span, scale);
@@ -1351,6 +1394,23 @@ public final class UiRender {
             marqueeDone();
             graphics.disableScissor();
         }
+    }
+
+    // WHY: строка плитки спрашивается каждый кадр, а getString собирает её заново. Кеш прямого
+    // WHY: отображения по ссылке компонента без аллокаций; смена языка сносит его, потому что
+    // WHY: переводимый компонент той же ссылкой читается уже другой строкой
+    private static String plainOf(Component value) {
+        Language language = Language.getInstance();
+        if (language != plainLanguage) {
+            plainLanguage = language;
+            Arrays.fill(PLAIN_KEYS, null);
+        }
+        int slot = System.identityHashCode(value) & (PLAIN_SLOTS - 1);
+        if (PLAIN_KEYS[slot] != value) {
+            PLAIN_KEYS[slot] = value;
+            PLAIN_TEXTS[slot] = value.getString();
+        }
+        return PLAIN_TEXTS[slot];
     }
 
     // WHY: порог хода берётся по настоящему вылету строки: округлённый вверх до пикселя, он при
@@ -1460,10 +1520,12 @@ public final class UiRender {
     }
 
     // WHY: перо ставит строку на целый пиксель ради чёткости, и медленное движение текста идёт
-    // WHY: ступенями по четверти единицы. Тому, что плывёт постоянно, привязка к сетке вредна
-    public static boolean floating(boolean enabled) {
-        boolean previous = floating;
-        floating = enabled;
+    // WHY: ступенями по четверти единицы. Свобода от сетки - доля: 1 держит строку в живой точке,
+    // WHY: 0 отдаёт её сетке. Это цель, а не место: снятая в конце хода доля раньше переносила буквы
+    // WHY: на полпикселя одним кадром, теперь к цели строку ведёт UiTextGlide за треть секунды
+    public static float floating(float share) {
+        float previous = looseness;
+        looseness = UiAnim.clamp01(share);
         return previous;
     }
 
@@ -1592,7 +1654,7 @@ public final class UiRender {
 
         float em = textPixels(graphics) * scale;
         graphics.pose().pushPose();
-        translate(graphics, x, y, scale);
+        boolean drifting = place(graphics, x, y, scale, glyphKey());
         UiFont.push(screenFace());
         beginText(graphics, false);
         if (upright(graphics.pose().last().pose())) {
@@ -1606,6 +1668,7 @@ public final class UiRender {
         } finally {
             endText(graphics);
             UiRestFrame.reclaim();
+            if (drifting) UiRestFrame.retract();
             UiFont.pop();
             graphics.pose().popPose();
         }
@@ -1637,6 +1700,16 @@ public final class UiRender {
         GlowGlyph.weigh(0.0f);
     }
 
+    // WHY: ключ строки - только её буквы: кегль в ключе заводил бы новую запись на каждом кадре
+    // WHY: роста, и растущая подпись снова шла бы ступенями
+    private static int glyphKey() {
+        int key = glyphs;
+        for (int i = 0; i < glyphs; i++) {
+            key = key * 31 + GLYPH_CODE[i];
+        }
+        return key;
+    }
+
     // WHY: буква растёт вокруг своей середины: рост от угла уводил бы её вправо вниз от соседей
     private static Matrix4f grown(Matrix4f pose, GlyphTone tone, int index, float centerX, float top) {
         float grow = tone == null ? 0.0f : tone.grow(index, glyphs);
@@ -1651,31 +1724,55 @@ public final class UiRender {
         return ((color >>> 24) & 0xFF) < OPAQUE_FALLBACK_ALPHA;
     }
 
-    private static void translate(GuiGraphics graphics, float x, float y, float scale) {
+    // WHY: начало строки встаёт на сетку покоя; строка, чьё место сдвинулось, и свободная доля
+    // WHY: (floating) отводят его к живой точке, а UiTextGlide возвращает на сетку плавно.
+    // WHY: Отвод заявляется ходом до масштаба строки, где единица позы ещё та же, что у вызывающего
+    private static boolean place(GuiGraphics graphics, float x, float y, float scale, int key) {
         Matrix4f matrix = graphics.pose().last().pose();
-        if (!floating && upright(matrix)) {
+        float moveX = 0.0f;
+        float moveY = 0.0f;
+        if (upright(matrix) && UiRestFrame.placeable(matrix)) {
             double gui = Math.max(1.0, Minecraft.getInstance().getWindow().getGuiScale());
-            x = UiRestFrame.settleX(x, matrix, gui);
-            y = UiRestFrame.settleY(y, matrix, gui);
+            UiTextGlide.follow(key, UiRestFrame.restPixelX(x, matrix, gui), UiRestFrame.restPixelY(y, matrix, gui),
+                    looseness);
+            moveX = (float) UiTextGlide.driftX() * UiRestFrame.unitsPerPixelX(matrix, gui);
+            moveY = (float) UiTextGlide.driftY() * UiRestFrame.unitsPerPixelY(matrix, gui);
+            x = UiRestFrame.settleX(x, matrix, gui) + moveX;
+            y = UiRestFrame.settleY(y, matrix, gui) + moveY;
         }
         graphics.pose().translate(x, y, 0.0f);
+        boolean drifting = moveX != 0.0f || moveY != 0.0f;
+        if (drifting) UiRestFrame.declare(graphics, moveX, moveY);
         graphics.pose().scale(scale, scale, 1.0f);
+        return drifting;
     }
 
     private static boolean upright(Matrix4f matrix) {
         return Math.abs(matrix.m01()) < 1.0E-4f && Math.abs(matrix.m10()) < 1.0E-4f && matrix.m00() > 1.0E-4f;
     }
 
-    // WHY: перо и ширина строки считаются в пикселях покоя: иначе растяжение хода сдвигало
-    // WHY: округление каждой буквы, и в начале и конце нажатия цифры прыгали друг относительно друга
     private static float textPixels(GuiGraphics graphics) {
-        return pixelsPerUnit(graphics) / UiRestFrame.stretchX();
+        return restPixels(graphics);
+    }
+
+    // WHY: перо и ширина строки считаются в пикселях покоя: иначе растяжение хода сдвигало
+    // WHY: округление каждой буквы, и в начале и конце нажатия цифры прыгали друг относительно друга.
+    // WHY: Частное живой посадки и растяжения хода в float шумит в седьмом знаке, а округление пера
+    // WHY: на ровной половине (трекинг 0.6 при посадке 2.5 даёт 1.5) щёлкало на пиксель через кадр,
+    // WHY: пока ход досыпал: ширина менялась, центрованная строка дрожала. Пиксели покоя стоят
+    // WHY: на сетке 1/1024 пикселя, до её середины шум не достаёт
+    public static float restPixels(GuiGraphics graphics) {
+        Matrix4f matrix = graphics.pose().last().pose();
+        double unit = Math.sqrt((double) matrix.m00() * matrix.m00() + (double) matrix.m01() * matrix.m01());
+        double gui = Math.max(1.0, Minecraft.getInstance().getWindow().getGuiScale());
+        double rest = unit * gui / UiRestFrame.stretchX();
+        return (float) (Math.round(rest * PIXEL_GRID) / PIXEL_GRID);
     }
 
     private static float snap(float value, float unit, float offset, double gui) {
         if (unit <= 1.0E-4f) return value;
         double pixel = (value * unit + offset) * gui;
-        return (float) ((Math.round(pixel) / gui - offset) / unit);
+        return (float) ((UiRestFrame.whole(pixel) / gui - offset) / unit);
     }
 
     private static void beginText(GuiGraphics graphics, boolean exact) {

@@ -5,6 +5,7 @@ import com.persiki84.minimap.client.MapStudioScreen;
 import com.persiki84.minimap.client.MapThing;
 import com.persiki84.shared.Names;
 import com.persiki84.shared.client.menu.MenuData;
+import com.persiki84.shared.client.menu.studio.StudioArtLines;
 import com.persiki84.shared.client.menu.studio.StudioMenu;
 import com.persiki84.shared.client.menu.studio.StudioNav;
 import com.persiki84.shared.client.menu.studio.StudioStack;
@@ -41,6 +42,7 @@ public final class QuarryStudioScreen extends MapStudioScreen {
     private static final int RESTING = 0xFF7A808C;
     private static final int ART = 40;
     private static final float LINE_SCALE = 0.72f;
+    private final StudioArtLines art = new StudioArtLines(1);
 
     private final QuarryInspector rows = new QuarryInspector(this);
     private final UiButton addButton;
@@ -263,8 +265,8 @@ public final class QuarryStudioScreen extends MapStudioScreen {
         UiRender.textTrackedFit(graphics, this.font, Names.block(id), left + width / 2.0f, top, 14.0f, width, 0.95f,
                 0.0f, UiTheme.alpha(UiAccent.text(), appear), false);
         Component detail = block != null ? blockState(block) : Component.literal(id);
-        UiRender.textTrackedFit(graphics, this.font, detail, left + width / 2.0f, top + 16.0f, 10.0f, width,
-                LINE_SCALE, 0.0f, UiTheme.alpha(UiAccent.textDim(), appear), false);
+        art.about(id, block != null ? 0 : 1).line(0, graphics, this.font, detail, left, top + 16.0f, 10.0f, width,
+                LINE_SCALE, UiTheme.alpha(UiAccent.textDim(), appear));
     }
 
     private static Component blockState(CompoundTag block) {

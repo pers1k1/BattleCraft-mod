@@ -6,6 +6,7 @@ import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiTheme;
@@ -107,14 +108,13 @@ public final class AnnounceHud {
         float eased = UiAnim.easeOut(alpha);
         float born = BORN_SCALE + (1.0f - BORN_SCALE) * UiAnim.easeOutBack(alpha);
 
-        graphics.pose().pushPose();
-        graphics.pose().translate(centerX, top + (1.0f - eased) * RISE, 0.0f);
-        graphics.pose().scale(born, born, 1.0f);
-        graphics.pose().translate(-centerX, -top, 0.0f);
+        // WHY: рост и подъём заявлены ходом: голым масштабом буквы стояли на сетке живого кадра,
+        // WHY: перо пересчитывалось под каждый кадр, и в хвосте появления текст доезжал рывком
+        UiRestFrame.push(graphics, centerX, top, born, born, 0.0f, (1.0f - eased) * RISE);
         try {
             paint(graphics, mc.font, centerX - boxWidth / 2.0f, top, eased);
         } finally {
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
         }
     }
 

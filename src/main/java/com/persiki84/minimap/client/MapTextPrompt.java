@@ -8,6 +8,7 @@ import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiTheme;
 import com.persiki84.zones.mark.MapMark;
@@ -83,14 +84,13 @@ public final class MapTextPrompt {
         float centerX = left + WIDTH / 2.0f;
         float bottom = top + total;
 
-        graphics.pose().pushPose();
-        graphics.pose().translate(centerX, bottom + (1.0f - eased) * RISE, 0.0f);
-        graphics.pose().scale(scale(eased), scale(eased), 1.0f);
-        graphics.pose().translate(-centerX, -bottom, 0.0f);
+        // WHY: рост и подъём заявлены ходом: голым масштабом буквы стояли на сетке живого кадра,
+        // WHY: перо пересчитывалось под каждый кадр, и в хвосте появления текст доезжал рывком
+        UiRestFrame.push(graphics, centerX, bottom, scale(eased), scale(eased), 0.0f, (1.0f - eased) * RISE);
         try {
             paint(graphics, font, total, shown);
         } finally {
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
         }
     }
 

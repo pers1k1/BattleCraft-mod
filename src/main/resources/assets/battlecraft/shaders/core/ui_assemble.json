@@ -15,6 +15,9 @@
     "samplers": [
         {
             "name": "Sampler0"
+        },
+        {
+            "name": "Sampler1"
         }
     ],
     "uniforms": [
@@ -128,6 +131,25 @@
         },
         {
             "name": "Arrival",
+            "type": "float",
+            "count": 1,
+            "values": [
+                1.0
+            ]
+        },
+        {
+            "name": "FrostSpan",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "FrostShare",
             "type": "float",
             "count": 1,
             "values": [

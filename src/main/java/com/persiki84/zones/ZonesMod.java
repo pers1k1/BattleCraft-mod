@@ -64,11 +64,21 @@ public class ZonesMod {
 
     private void commonSetup(final FMLCommonSetupEvent event) {
         PacketHandler.register();
+        event.enqueueWork(ZonesMod::registerMenuStates);
+    }
+
+    // WHY: общая и клиентская настройка модов идут параллельно, а MenuStates и MenuScreens держат
+    // WHY: обычные HashMap: регистрации уходят в очередь главного потока
+    private static void registerMenuStates() {
         MenuStates.register(ZONES_MENU_ID, 2, player -> new CompoundTag());
         MarkMenuState.register();
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
+        event.enqueueWork(ZonesMod::registerScreens);
+    }
+
+    private static void registerScreens() {
         MenuScreens.register(ZONES_MENU_ID, ZoneStudioScreen::new);
         MenuScreens.register(ShopStudioScreen.MENU_ID, ShopStudioScreen::new);
         MenuScreens.register(MarkMenuState.MENU_ID, MarkStudioScreen::new);

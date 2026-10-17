@@ -1,5 +1,6 @@
 package com.persiki84.battlecraft.network;
 
+import com.persiki84.battlecraft.craft.S2CCraftBansPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
@@ -8,7 +9,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.Optional;
 
 public class PacketHandler {
-    private static final String PROTOCOL_VERSION = "4";
+    private static final String PROTOCOL_VERSION = "5";
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation("battlecraft", "main"),
             () -> PROTOCOL_VERSION,
@@ -40,6 +41,18 @@ public class PacketHandler {
         registerAnnounceRequest();
         registerRadioTalk();
         registerRadioKey();
+        registerCraftBans();
+    }
+
+    private static void registerCraftBans() {
+        INSTANCE.registerMessage(
+                id(),
+                S2CCraftBansPacket.class,
+                S2CCraftBansPacket::encode,
+                S2CCraftBansPacket::decode,
+                S2CCraftBansPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT)
+        );
     }
 
     private static void registerRadioKey() {

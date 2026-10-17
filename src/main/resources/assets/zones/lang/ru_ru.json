@@ -433,5 +433,9 @@
   "zones.shop.error.bad_title": "Название должно быть от 1 до %s символов.",
   "zones.shop.success.renamed": "'%s' теперь называется «%s».",
   "zones.shop.success.resized": "Товар '%s' продаётся по %s шт.",
-  "zones.shop.success.copied": "Копия '%s' добавлена как '%s'."
+  "zones.shop.success.copied": "Копия '%s' добавлена как '%s'.",
+  "zones.shop.treasury.take.account": "Зачислить %s на счёт",
+  "zones.shop.treasury.take.account.hint": "В режиме «Счёт» валюта из казны идёт на ваш счёт, а не в инвентарь.",
+  "zones.shop.treasury.credit": "На счёт: %s",
+  "zones.shop.treasury.note.account": "Казну пополняет только доход точек. Взятая из неё валюта зачисляется на ваш счёт, место в инвентаре не нужно. Взятое видит вся команда."
 }

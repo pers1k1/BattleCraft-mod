@@ -14,5 +14,6 @@ public final class SellClientEvents {
     @SubscribeEvent
     public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         ClientSellData.clear();
+        PlayerHeads.forget();
     }
 }

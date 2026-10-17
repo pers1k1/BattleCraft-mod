@@ -6,6 +6,7 @@ import com.persiki84.minimap.client.MapThing;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.PaletteWindow;
+import com.persiki84.shared.client.menu.studio.StudioArtLines;
 import com.persiki84.shared.client.menu.studio.StudioMenu;
 import com.persiki84.shared.client.menu.studio.StudioNav;
 import com.persiki84.shared.client.menu.studio.StudioStack;
@@ -35,6 +36,8 @@ public final class MarkStudioScreen extends MapStudioScreen {
 
     private static final int ART = 40;
     private static final float LINE_SCALE = 0.72f;
+    private static final String CREATING = "creating";
+    private final StudioArtLines art = new StudioArtLines(1);
 
     private final MarkInspector rows = new MarkInspector(this);
     private final UiButton addButton;
@@ -282,8 +285,8 @@ public final class MarkStudioScreen extends MapStudioScreen {
         int tone = creating || entry == null ? UiAccent.text() : 0xFF000000 | entry.color();
         UiRender.textTrackedFit(graphics, this.font, title, left + width / 2.0f, top, 14.0f, width, 0.95f, 0.0f,
                 UiTheme.alpha(tone, appear), false);
-        UiRender.textTrackedFit(graphics, this.font, artDetail(entry), left + width / 2.0f, top + 16.0f, 10.0f, width,
-                LINE_SCALE, 0.0f, UiTheme.alpha(UiAccent.textDim(), appear), false);
+        art.about(creating ? CREATING : chosenId).line(0, graphics, this.font, artDetail(entry), left, top + 16.0f, 10.0f, width,
+                LINE_SCALE, UiTheme.alpha(UiAccent.textDim(), appear));
     }
 
     private Component artDetail(MarkEntry entry) {

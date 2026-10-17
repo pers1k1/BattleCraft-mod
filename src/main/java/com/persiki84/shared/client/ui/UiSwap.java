@@ -19,6 +19,19 @@ public final class UiSwap {
         return phase.to(1.0f, delta);
     }
 
+    // WHY: значение, которое показал другой путь (число по цифрам), принимается без хода: иначе
+    // WHY: следующая смена слова уехала бы от давно ушедшего значения
+    public void settle(Component now) {
+        if (now == current && shownText != null) return;
+        String text = now.getString();
+        current = now;
+        if (text.equals(shownText)) return;
+        shownText = text;
+        outgoing = null;
+        changedAt = 0L;
+        phase.snap(1.0f);
+    }
+
     public Component outgoing() {
         return phase.get() < SETTLED ? outgoing : null;
     }
@@ -32,6 +45,7 @@ public final class UiSwap {
     }
 
     private void track(Component now) {
+        if (now == current && shownText != null) return;
         String text = now.getString();
         if (text.equals(shownText)) {
             current = now;

@@ -16,6 +16,7 @@ import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiVital;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -44,6 +45,8 @@ public final class GogglesHud {
     private static final Smooth fill = new Smooth(14.0f);
     private static final Smooth previewFill = new Smooth(14.0f);
     private static final Smooth swap = new Smooth(1.0f, SWAP_SPEED);
+    private static final UiTicker chargeTicker = new UiTicker();
+    private static final UiTicker previewCharge = new UiTicker();
 
     private static int shownMode = Goggles.MODE_NONE;
     private static int leavingMode = Goggles.MODE_NONE;
@@ -79,7 +82,7 @@ public final class GogglesHud {
 
         HudLayout.push(graphics, box);
         try {
-            drawCard(graphics, mc, x, y, alpha * box.alpha(), delta, GogglesClient.battery(), fill);
+            drawCard(graphics, mc, x, y, alpha * box.alpha(), delta, GogglesClient.battery(), fill, chargeTicker);
         } finally {
             HudLayout.pop(graphics, box);
         }
@@ -91,7 +94,7 @@ public final class GogglesHud {
         try {
             HudLayout.sample(HudSlot.GOGGLES, WIDTH, HEIGHT);
             drawCard(graphics, Minecraft.getInstance(), box.x(), box.y(), alpha, UiFrame.delta(),
-                    SAMPLE_CHARGE, previewFill);
+                    SAMPLE_CHARGE, previewFill, previewCharge);
         } finally {
             shownMode = held;
         }
@@ -113,14 +116,14 @@ public final class GogglesHud {
     }
 
     private static void drawCard(GuiGraphics graphics, Minecraft mc, float x, float y, float alpha,
-                                 float delta, float charge, Smooth track) {
+                                 float delta, float charge, Smooth track, UiTicker counter) {
         boolean low = charge <= LOW_SHARE;
         float pulse = low ? UiAnim.pulse(900.0f, 0.65f, 1.0f) : 1.0f;
         int base = HudLayout.tint(HudSlot.GOGGLES, UiAccent.color());
         int accent = low ? UiTheme.mix(base, UiPalette.alert(), 0.7f) : base;
 
         UiVital.card(graphics, x, y, WIDTH, HEIGHT, UiMetrics.radius(HEIGHT), alpha);
-        drawCharge(graphics, mc, x, y, alpha, pulse, accent, charge);
+        drawCharge(graphics, mc, x, y, alpha, pulse, accent, charge, counter);
         drawMode(graphics, mc, x, y, alpha, delta);
 
         float trackY = y + HEIGHT - PADDING + 1.0f;
@@ -131,15 +134,13 @@ public final class GogglesHud {
     }
 
     private static void drawCharge(GuiGraphics graphics, Minecraft mc, float x, float y, float alpha,
-                                   float pulse, int accent, float charge) {
-        String value = String.valueOf(Math.round(charge * PERCENT));
+                                   float pulse, int accent, float charge, UiTicker counter) {
         float row = HEIGHT - PADDING - TRACK_HEIGHT;
+        counter.set(Math.round(charge * PERCENT));
+        counter.draw(graphics, mc.font, x + PADDING, UiRender.centerY(y + COUNTER_DROP, row, CHARGE_SCALE),
+                CHARGE_SCALE, accent, alpha * pulse);
 
-        UiRender.labelScaled(graphics, mc.font, value, x + PADDING,
-                UiRender.centerY(y + COUNTER_DROP, row, CHARGE_SCALE), CHARGE_SCALE,
-                UiTheme.alpha(accent, alpha * pulse));
-
-        float valueWidth = UiRender.widthLabel(mc.font, value) * CHARGE_SCALE;
+        float valueWidth = counter.steadyWidth(graphics, mc.font, CHARGE_SCALE);
         UiRender.labelScaled(graphics, mc.font, UNIT, x + PADDING + valueWidth + UNIT_GAP,
                 UiRender.centerY(y + COUNTER_DROP, row, UNIT_SCALE), UNIT_SCALE,
                 UiTheme.alpha(HudInk.textDim(), alpha));

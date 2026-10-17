@@ -1,5 +1,6 @@
 package com.persiki84.battlecraft.client.menu.hub;
 
+import com.persiki84.battlecraft.craft.CraftMenuState;
 import com.persiki84.battlecraft.menu.AnnounceMenuState;
 import com.persiki84.battlecraft.menu.ConfigMenuState;
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
@@ -26,6 +27,7 @@ enum HubSection {
             ModuleId.KILL_REWARD),
     SELL("battlecraft.menu.sell", ModuleMenuStates.SELL, "minecraft:gold_ingot", ModuleId.SELL),
     MODIFIERS("battlecraft.menu.modifiers", ModuleMenuStates.MODIFIERS, "minecraft:anvil", ModuleId.ITEM_MODIFIERS),
+    CRAFT("battlecraft.menu.craft", CraftMenuState.MENU_ID, "minecraft:crafting_table", null),
     IMMORTALITY("battlecraft.menu.immortality", ModuleMenuStates.IMMORTALITY, "minecraft:totem_of_undying",
             ModuleId.IMMORTALITY),
     KNOCKDOWN("battlecraft.menu.knockdown", ModuleMenuStates.KNOCKDOWN, "minecraft:bone", ModuleId.KNOCKDOWN),

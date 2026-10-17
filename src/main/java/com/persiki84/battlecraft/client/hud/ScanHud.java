@@ -13,6 +13,7 @@ import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiVital;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -35,7 +36,16 @@ public final class ScanHud {
     private static final float DONE_SPEED = 6.0f;
     private static final float GONE = 0.01f;
     private static final int PERCENT = 100;
-    private static final int SECONDS_PER_MINUTE = 60;
+    private static final int TALLY_BITS = 21;
+    private static final long TALLY_MASK = (1L << TALLY_BITS) - 1L;
+
+    private static final Component DONE_TITLE = Component.translatable("battlecraft.scan.done");
+    private static final Component RUNNING_TITLE = Component.translatable("battlecraft.scan.title");
+    private static final UiTicker.Format CHUNKS =
+            scanned -> Component.translatable("battlecraft.scan.chunks", scanned).getString();
+    private static final UiTicker.Format LEFT =
+            seconds -> Component.translatable("battlecraft.scan.left", UiTicker.CLOCK.text(seconds)).getString();
+    private static final UiTicker.Format TALLY = ScanHud::tallyText;
 
     private static final int SAMPLE_SCANNED = 1840;
     private static final int SAMPLE_TOTAL = 3598;
@@ -49,6 +59,10 @@ public final class ScanHud {
     private static final Smooth done = new Smooth(0.0f, DONE_SPEED);
     private static final Smooth previewFill = new Smooth(0.0f, FILL_SPEED);
     private static final Smooth previewDone = new Smooth(0.0f, DONE_SPEED);
+    private static final UiTicker tail = new UiTicker().align(UiTicker.RIGHT);
+    private static final UiTicker tally = new UiTicker();
+    private static final UiTicker previewTail = new UiTicker().align(UiTicker.RIGHT);
+    private static final UiTicker previewTally = new UiTicker();
 
     private ScanHud() {}
 
@@ -79,7 +93,7 @@ public final class ScanHud {
 
         HudLayout.push(graphics, box);
         try {
-            drawCard(graphics, mc, x, box.y(), alpha * box.alpha(), delta, live(), fill, done);
+            drawCard(graphics, mc, x, box.y(), alpha * box.alpha(), delta, live(), fill, done, tail, tally);
         } finally {
             HudLayout.pop(graphics, box);
         }
@@ -88,7 +102,7 @@ public final class ScanHud {
     public static void preview(GuiGraphics graphics, HudBox box, float alpha) {
         HudLayout.sample(HudSlot.SCAN, WIDTH, HEIGHT);
         drawCard(graphics, Minecraft.getInstance(), box.x(), box.y(), alpha, UiFrame.delta(),
-                sample(), previewFill, previewDone);
+                sample(), previewFill, previewDone, previewTail, previewTally);
     }
 
     private static Progress live() {
@@ -108,50 +122,61 @@ public final class ScanHud {
     }
 
     private static void drawCard(GuiGraphics graphics, Minecraft mc, float x, float y, float alpha,
-                                 float delta, Progress progress, Smooth track, Smooth finish) {
+                                 float delta, Progress progress, Smooth track, Smooth finish,
+                                 UiTicker tailTicker, UiTicker tallyTicker) {
         float settled = finish.to(progress.complete() ? 1.0f : 0.0f, delta);
         int accent = HudLayout.tint(HudSlot.SCAN, UiAccent.color());
 
         UiVital.card(graphics, x, y, WIDTH, HEIGHT, UiMetrics.radius(HEIGHT), alpha);
-        drawTitle(graphics, mc, x, y, alpha, progress, settled, accent);
-        drawTally(graphics, mc, x, y, alpha, progress);
+        drawTitle(graphics, mc, x, y, alpha, progress, settled, accent, tailTicker);
+        drawTally(graphics, mc, x, y, alpha, progress, tallyTicker);
         drawTrack(graphics, x, y, alpha, delta, progress, track, accent);
     }
 
     private static void drawTitle(GuiGraphics graphics, Minecraft mc, float x, float y, float alpha,
-                                  Progress progress, float settled, int accent) {
-        Component title = progress.complete()
-                ? Component.translatable("battlecraft.scan.done")
-                : Component.translatable("battlecraft.scan.title");
+                                  Progress progress, float settled, int accent, UiTicker tailTicker) {
+        Component title = progress.complete() ? DONE_TITLE : RUNNING_TITLE;
 
         UiRender.labelScaled(graphics, mc.font, title, x + PADDING, y + TITLE_TOP, TITLE_SCALE,
                 UiTheme.alpha(UiTheme.mix(HudInk.text(), accent, settled), alpha));
-        UiRender.textRight(graphics, mc.font, tail(progress), x + WIDTH - PADDING,
-                y + TITLE_TOP + 1.0f, COUNT_SCALE, UiTheme.alpha(HudInk.textDim(), alpha), false);
+        aimTail(tailTicker, progress);
+        tailTicker.draw(graphics, mc.font, x + WIDTH - PADDING, y + TITLE_TOP + 1.0f, COUNT_SCALE,
+                HudInk.textDim(), alpha);
     }
 
-    private static Component tail(Progress progress) {
+    private static void aimTail(UiTicker ticker, Progress progress) {
         if (progress.complete()) {
-            return Component.translatable("battlecraft.scan.chunks", progress.scanned());
+            ticker.set(progress.scanned(), CHUNKS);
+        } else if (progress.secondsLeft() < 0) {
+            ticker.set(Math.round(progress.share() * PERCENT), UiTicker.PERCENT);
+        } else {
+            ticker.set(progress.secondsLeft(), LEFT);
         }
-        if (progress.secondsLeft() < 0) {
-            return Component.literal(Math.round(progress.share() * PERCENT) + "%");
-        }
-        return Component.translatable("battlecraft.scan.left", clock(progress.secondsLeft()));
-    }
-
-    private static String clock(int seconds) {
-        return seconds / SECONDS_PER_MINUTE + ":" + String.format("%02d", seconds % SECONDS_PER_MINUTE);
     }
 
     private static void drawTally(GuiGraphics graphics, Minecraft mc, float x, float y, float alpha,
-                                  Progress progress) {
-        Component tally = Component.translatable("battlecraft.scan.tally",
-                progress.lamps(), progress.dripstones(), progress.glass());
-
-        UiRender.labelScaled(graphics, mc.font, tally, x + PADDING,
+                                  Progress progress, UiTicker tallyTicker) {
+        tallyTicker.set(packTally(progress.lamps(), progress.dripstones(), progress.glass()), TALLY);
+        tallyTicker.draw(graphics, mc.font, x + PADDING,
                 y + TITLE_TOP + mc.font.lineHeight * TITLE_SCALE + TALLY_DROP - 3.0f, TALLY_SCALE,
-                UiTheme.alpha(HudInk.textFaint(), alpha));
+                HudInk.textFaint(), alpha);
+    }
+
+    // WHY: три счётчика сводки едут одним тикером, упакованные по порядку строки: строка собирается
+    // WHY: только на смене одного из них, а не в кадре
+    private static long packTally(int lamps, int dripstones, int glass) {
+        return field(lamps) << (TALLY_BITS * 2) | field(dripstones) << TALLY_BITS | field(glass);
+    }
+
+    private static long field(int value) {
+        return Math.max(0L, Math.min(TALLY_MASK, value));
+    }
+
+    private static String tallyText(long packed) {
+        long lamps = packed >>> (TALLY_BITS * 2) & TALLY_MASK;
+        long dripstones = packed >>> TALLY_BITS & TALLY_MASK;
+        long glass = packed & TALLY_MASK;
+        return Component.translatable("battlecraft.scan.tally", lamps, dripstones, glass).getString();
     }
 
     private static void drawTrack(GuiGraphics graphics, float x, float y, float alpha, float delta,

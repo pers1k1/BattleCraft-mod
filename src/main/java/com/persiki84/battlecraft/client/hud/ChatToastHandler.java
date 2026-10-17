@@ -52,7 +52,7 @@ public final class ChatToastHandler {
             "capturepoints.income.received",
             "capturepoints.reward.paid",
             "capturepoints.reward.paid_share",
-            "killreward.kill_rewarded"
+            "killreward.kill_rewarded_prize"
     );
 
     private static final Set<String> MOD_NAMESPACES = Set.of(
@@ -137,12 +137,7 @@ public final class ChatToastHandler {
         String toastKey = toastKey(key, args, index);
         long endsAt = System.currentTimeMillis() + seconds * 1000L;
 
-        Supplier<Component> text = () -> {
-            Object[] ticking = args.clone();
-            ticking[index] = Math.max(0, (int) Math.ceil((endsAt - System.currentTimeMillis()) / 1000.0));
-            MutableComponent value = Component.translatable(key, ticking);
-            return style == Style.EMPTY ? value : value.setStyle(style);
-        };
+        Supplier<Component> text = new TickingText(key, args, index, style, endsAt);
 
         if (live) {
             ToastHud.pushLive(toastKey, text, endsAt, LIVE_HOLD_MS, true);
@@ -150,6 +145,38 @@ public final class ChatToastHandler {
             ToastHud.pushCountdown(toastKey, text, endsAt);
         }
         return true;
+    }
+
+    // WHY: уведомление спрашивает текст каждый кадр, а секунда в нём меняется раз в секунду: компонент
+    // WHY: собирается заново только на смене числа, и тогда же тикер уведомления двигает цифры
+    private static final class TickingText implements Supplier<Component> {
+        private final String key;
+        private final Object[] args;
+        private final int index;
+        private final Style style;
+        private final long endsAt;
+        private int shownSeconds = -1;
+        private Component shown;
+
+        private TickingText(String key, Object[] args, int index, Style style, long endsAt) {
+            this.key = key;
+            this.args = args.clone();
+            this.index = index;
+            this.style = style;
+            this.endsAt = endsAt;
+        }
+
+        @Override
+        public Component get() {
+            int seconds = Math.max(0, (int) Math.ceil((endsAt - System.currentTimeMillis()) / 1000.0));
+            if (seconds == shownSeconds && shown != null) return shown;
+
+            shownSeconds = seconds;
+            args[index] = seconds;
+            MutableComponent value = Component.translatable(key, args.clone());
+            shown = style == Style.EMPTY ? value : value.setStyle(style);
+            return shown;
+        }
     }
 
     private static String toastKey(String key, Object[] args, int index) {

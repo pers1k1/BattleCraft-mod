@@ -11,6 +11,7 @@ import com.persiki84.airdrop.entity.ModEntities;
 import com.persiki84.airdrop.loot.LootTables;
 import com.persiki84.airdrop.network.CacheBroadcast;
 import com.persiki84.airdrop.network.PacketHandler;
+import com.persiki84.airdrop.particle.AirDropParticles;
 import com.persiki84.airdrop.scheduler.AirDropScheduler;
 import com.persiki84.battlecraft.MatchEvent;
 import com.persiki84.battlecraft.modules.ModuleId;
@@ -37,6 +38,7 @@ public class AirDropMod {
 
         var modBus = FMLJavaModLoadingContext.get().getModEventBus();
         ModEntities.register(modBus);
+        AirDropParticles.register(modBus);
         modBus.addListener(this::commonSetup);
 
         MinecraftForge.EVENT_BUS.register(new AirDropScheduler());

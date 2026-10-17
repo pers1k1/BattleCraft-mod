@@ -91,11 +91,17 @@ public class BattleCraftMod {
         PacketHandler.register();
         ProjectileChunkLoader.register();
         MenuNetwork.register();
+        event.enqueueWork(BattleCraftMod::registerMenuStates);
+        LOGGER.info("BattleCraft Core Mod initialized!");
+    }
+
+    // WHY: общая настройка модов идёт параллельно, а MenuStates держит обычную HashMap: запись из
+    // WHY: нескольких модов разом рвёт её. В очереди главного потока регистрации идут по одной
+    private static void registerMenuStates() {
         BattleCraftMenuState.register();
         ModuleMenuStates.register();
         AnnounceMenuState.register();
         ConfigMenuState.register();
-        LOGGER.info("BattleCraft Core Mod initialized!");
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
@@ -105,7 +111,7 @@ public class BattleCraftMod {
 
     @SubscribeEvent
     public void onRegisterCommands(RegisterCommandsEvent event) {
-        BattleCraftCommands.register(event.getDispatcher());
+        BattleCraftCommands.register(event.getDispatcher(), event.getBuildContext());
     }
 
     @Mod.EventBusSubscriber(modid = MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
@@ -144,8 +150,7 @@ public class BattleCraftMod {
             MinecraftForge.EVENT_BUS.register(new KeyInputHandler());
             ParkourRules.listen();
             CrawlPenalty.listen();
-            MenuScreens.register(BattleCraftMenuState.MENU_ID, HubStudioScreen::new);
-            PanelScreens.register();
+            event.enqueueWork(ClientModEvents::registerScreens);
             ScreenDim.painter((graphics, width, height) ->
                     MenuBackground.shared().render(graphics, width, height));
             UiDress.wardrobe(ScreenDress.shared());
@@ -158,6 +163,12 @@ public class BattleCraftMod {
             DiscordRpcManager.getInstance().identify();
             DiscordRpcManager.getInstance().refresh();
             event.enqueueWork(ClientModEvents::widenChatLines);
+        }
+
+        // WHY: клиентская настройка модов идёт параллельно, а MenuScreens держит обычную HashMap
+        private static void registerScreens() {
+            MenuScreens.register(BattleCraftMenuState.MENU_ID, HubStudioScreen::new);
+            PanelScreens.register();
         }
 
         @SubscribeEvent

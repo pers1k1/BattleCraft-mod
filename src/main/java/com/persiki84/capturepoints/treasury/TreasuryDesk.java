@@ -2,6 +2,7 @@ package com.persiki84.capturepoints.treasury;
 
 import com.persiki84.capturepoints.capture.CapturePointManager;
 import com.persiki84.shared.ActionGate;
+import com.persiki84.shared.economy.Wallet;
 import com.persiki84.zones.shop.ShopTransactions;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -35,7 +36,8 @@ public final class TreasuryDesk {
         ItemStack held = TeamTreasury.peek(team, slot, item);
         int taken = TeamTreasury.take(player, team, slot, item, count);
         if (taken <= 0) {
-            deny(player, "capturepoints.treasury.error.full");
+            deny(player, Wallet.accounts() && Wallet.isCurrency(item)
+                    ? "capturepoints.treasury.error.account_full" : "capturepoints.treasury.error.full");
             TeamTreasury.syncTo(player);
             return;
         }
@@ -45,11 +47,14 @@ public final class TreasuryDesk {
     }
 
     // WHY: в творческом режиме инвентарь «принимает» всё и обнуляет стопку, даже когда места нет:
-    // WHY: казна списала бы предметы в никуда. Пустая строка значит, что отказ уже объявлен
+    // WHY: казна списала бы предметы в никуда. Валюта в режиме «Счёт» идёт на счёт, а не в инвентарь,
+    // WHY: поэтому её можно брать и в творческом. Пустая строка значит, что отказ уже объявлен
     private static String refusal(ServerPlayer player, int slot, ItemStack item) {
         String team = TeamTreasury.teamOf(player);
         if (team == null) return "capturepoints.treasury.error.no_team";
-        if (player.isCreative()) return "capturepoints.treasury.error.creative";
+        if (player.isCreative() && !(Wallet.accounts() && Wallet.isCurrency(item))) {
+            return "capturepoints.treasury.error.creative";
+        }
         if (!ShopTransactions.treasuryReady(player, team)) return "";
         return TeamTreasury.peek(team, slot, item).isEmpty() ? "capturepoints.treasury.error.gone" : null;
     }

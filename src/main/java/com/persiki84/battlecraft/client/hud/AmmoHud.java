@@ -13,6 +13,7 @@ import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiVital;
 import net.minecraft.client.Minecraft;
@@ -24,9 +25,6 @@ public final class AmmoHud {
     private static final float WIDTH = 84.0f;
     private static final float HEIGHT = 30.0f;
     private static final float PADDING = 8.0f;
-    private static int loadedValue = Integer.MIN_VALUE;
-    private static String loadedText;
-    private static float loadedWidth;
 
     private static final float LOADED_SCALE = 1.9f;
     private static final float SPARE_SCALE = 0.95f;
@@ -44,6 +42,10 @@ public final class AmmoHud {
 
     private static final Smooth fill = new Smooth(14.0f);
     private static final Smooth previewFill = new Smooth(14.0f);
+    private static final UiTicker.Format SPARE =
+            spare -> spare == GunBridge.SPARE_INFINITE ? "/ " + INFINITY : "/ " + spare;
+    private static final Counters counters = new Counters();
+    private static final Counters previewCounters = new Counters();
 
     private static int heldLoaded;
     private static int heldMagazine;
@@ -82,7 +84,7 @@ public final class AmmoHud {
 
         HudLayout.push(graphics, box);
         try {
-            drawCard(graphics, mc, x, y, alpha * box.alpha(), delta, fill);
+            drawCard(graphics, mc, x, y, alpha * box.alpha(), delta, fill, counters);
         } finally {
             HudLayout.pop(graphics, box);
         }
@@ -102,7 +104,7 @@ public final class AmmoHud {
         }
         try {
             HudLayout.sample(HudSlot.AMMO, WIDTH, HEIGHT);
-            drawCard(graphics, mc, box.x(), box.y(), alpha, UiFrame.delta(), previewFill);
+            drawCard(graphics, mc, box.x(), box.y(), alpha, UiFrame.delta(), previewFill, previewCounters);
         } finally {
             heldLoaded = loaded;
             heldMagazine = magazine;
@@ -140,7 +142,7 @@ public final class AmmoHud {
     }
 
     private static void drawCard(GuiGraphics graphics, Minecraft mc, float x, float y, float alpha,
-                                 float delta, Smooth track) {
+                                 float delta, Smooth track, Counters shown) {
         float ratio = heldMagazine > 0 ? UiAnim.clamp01(heldLoaded / (float) heldMagazine) : 0.0f;
         boolean low = heldLoaded <= 0 || ratio <= LOW_SHARE;
         float pulse = low ? UiAnim.pulse(900.0f, 0.65f, 1.0f) : 1.0f;
@@ -148,7 +150,7 @@ public final class AmmoHud {
         int accent = low ? UiTheme.mix(base, UiPalette.alert(), 0.7f) : base;
 
         UiVital.card(graphics, x, y, WIDTH, HEIGHT, UiMetrics.radius(HEIGHT), alpha);
-        drawCounters(graphics, mc, x, y, alpha, pulse, accent);
+        drawCounters(graphics, mc, x, y, alpha, pulse, accent, shown);
 
         float trackY = y + HEIGHT - PADDING + 1.0f;
         UiGlass.sunken(graphics, x + PADDING, trackY, WIDTH - PADDING * 2.0f, TRACK_HEIGHT, TRACK_HEIGHT / 2.0f, alpha);
@@ -157,40 +159,32 @@ public final class AmmoHud {
     }
 
     private static void drawCounters(GuiGraphics graphics, Minecraft mc, float x, float y,
-                                     float alpha, float pulse, int accent) {
-        cacheLoaded(mc);
-        UiRender.labelScaled(graphics, mc.font, loadedText, x + PADDING,
-                UiRender.centerY(y + COUNTER_DROP, HEIGHT - PADDING - TRACK_HEIGHT, LOADED_SCALE), LOADED_SCALE,
-                UiTheme.alpha(accent, alpha * pulse));
+                                     float alpha, float pulse, int accent, Counters shown) {
+        float row = HEIGHT - PADDING - TRACK_HEIGHT;
+        shown.loaded.set(heldLoaded);
+        shown.loaded.draw(graphics, mc.font, x + PADDING, UiRender.centerY(y + COUNTER_DROP, row, LOADED_SCALE),
+                LOADED_SCALE, accent, alpha * pulse);
 
-        String spare = spareLabel();
-        if (spare != null) {
-            float loadedWidth = loadedWidth() * LOADED_SCALE;
-            UiRender.labelScaled(graphics, mc.font, spare, x + PADDING + loadedWidth + 4.0f,
-                    UiRender.centerY(y + COUNTER_DROP, HEIGHT - PADDING - TRACK_HEIGHT, SPARE_SCALE), SPARE_SCALE,
-                    UiTheme.alpha(HudInk.textDim(), alpha));
+        if (heldSpare != GunBridge.SPARE_HIDDEN) {
+            float loadedWidth = shown.loaded.steadyWidth(graphics, mc.font, LOADED_SCALE);
+            shown.spare.set(heldSpare, SPARE);
+            shown.spare.draw(graphics, mc.font, x + PADDING + loadedWidth + 4.0f,
+                    UiRender.centerY(y + COUNTER_DROP, row, SPARE_SCALE), SPARE_SCALE, HudInk.textDim(), alpha);
         }
 
         if (!heldMode.isEmpty()) {
-            UiRender.labelRight(graphics, mc.font, heldMode, x + WIDTH - PADDING, y + PADDING * 0.6f, MODE_SCALE,
-                    UiTheme.alpha(HudInk.textFaint(), alpha));
+            shown.mode.set(heldMode);
+            shown.mode.draw(graphics, mc.font, x + WIDTH - PADDING, y + PADDING * 0.6f, MODE_SCALE,
+                    HudInk.textFaint(), alpha);
         }
     }
 
-    private static void cacheLoaded(Minecraft mc) {
-        if (heldLoaded == loadedValue && loadedText != null) return;
-
-        loadedValue = heldLoaded;
-        loadedText = String.valueOf(heldLoaded);
-        loadedWidth = UiRender.widthLabel(mc.font, loadedText);
-    }
-
-    private static float loadedWidth() {
-        return loadedWidth;
-    }
-
-    private static String spareLabel() {
-        if (heldSpare == GunBridge.SPARE_INFINITE) return "/ " + INFINITY;
-        return heldSpare < 0 ? null : "/ " + heldSpare;
+    // WHY: патроны в магазине меняются на каждом выстреле, запас и режим огня - на перезарядке и
+    // WHY: переключении: все три меняют только сменившиеся буквы. У образца в редакторе свой набор,
+    // WHY: иначе выход из редактора морфил бы образцовые числа в настоящие
+    private static final class Counters {
+        private final UiTicker loaded = new UiTicker();
+        private final UiTicker spare = new UiTicker();
+        private final UiTicker mode = new UiTicker().align(UiTicker.RIGHT);
     }
 }

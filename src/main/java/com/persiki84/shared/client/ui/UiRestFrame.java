@@ -13,6 +13,7 @@ public final class UiRestFrame {
     private static final int SLOT = 4;
     private static final float[] SAVED = new float[DEPTH * SLOT];
     private static final float FLAT = 1.0E-4f;
+    private static final double SNAP_BIAS = 0.0117;
 
     private static int depth;
     private static float stretchX = 1.0f;
@@ -52,6 +53,17 @@ public final class UiRestFrame {
         restore();
     }
 
+    // WHY: ход живёт в статике, а поза в GuiGraphics кадра. Пара push/pop, разорванная исключением
+    // WHY: или чужим обработчиком (Render.Pre без Render.Post), оставила бы растяжение на все
+    // WHY: следующие кадры, и любой текст вставал бы на чужую сетку. Кадр начинается с покоя
+    static void release() {
+        depth = 0;
+        stretchX = 1.0f;
+        stretchY = 1.0f;
+        shiftX = 0.0f;
+        shiftY = 0.0f;
+    }
+
     public static float stretchX() {
         return Math.abs(stretchX) > FLAT ? Math.abs(stretchX) : 1.0f;
     }
@@ -77,15 +89,49 @@ public final class UiRestFrame {
         return settle(value, matrix.m11(), matrix.m31(), stretchY, shiftY, gui);
     }
 
+    static boolean placeable(Matrix4f matrix) {
+        return Math.abs(matrix.m00()) > FLAT && Math.abs(matrix.m11()) > FLAT
+                && Math.abs(stretchX) > FLAT && Math.abs(stretchY) > FLAT;
+    }
+
+    static double restPixelX(float value, Matrix4f matrix, double gui) {
+        return restPixel(value, matrix.m00(), matrix.m30(), stretchX, shiftX, gui);
+    }
+
+    static double restPixelY(float value, Matrix4f matrix, double gui) {
+        return restPixel(value, matrix.m11(), matrix.m31(), stretchY, shiftY, gui);
+    }
+
+    static float unitsPerPixelX(Matrix4f matrix, double gui) {
+        return (float) (stretchX / (matrix.m00() * gui));
+    }
+
+    static float unitsPerPixelY(Matrix4f matrix, double gui) {
+        return (float) (stretchY / (matrix.m11() * gui));
+    }
+
     // WHY: ход в экранных координатах это растяжение и сдвиг по каждой оси, поэтому место покоя
     // WHY: снимается обратным ходом, ставится на целый пиксель и возвращается тем же ходом
     private static float settle(float value, float unit, float offset, float stretch, float shift, double gui) {
         if (Math.abs(unit) <= FLAT || Math.abs(stretch) <= FLAT) return value;
 
-        double live = (double) value * unit + offset;
-        double rest = (live - shift) / stretch;
-        double snapped = Math.round(rest * gui) / gui;
+        double snapped = whole(restPixel(value, unit, offset, stretch, shift, gui)) / gui;
         return (float) ((snapped * stretch + shift - offset) / unit);
+    }
+
+    private static double restPixel(float value, float unit, float offset, float stretch, float shift, double gui) {
+        double live = (double) value * unit + offset;
+        return (live - shift) / stretch * gui;
+    }
+
+    // WHY: место покоя снимается обратным ходом из float-позы, и в ходу оно гуляет на 1e-5..1e-3
+    // WHY: пикселя. Центрованная строка нечётной ширины стоит ровно на половине пикселя, и
+    // WHY: Math.round по такому шуму перекидывал её на соседний пиксель через кадр, пока ход
+    // WHY: досыпал: стенд Z:\tmp\smm_textflex дал дрожь в 11 % ходов значения строки выбора,
+    // WHY: по 24 кадра в каждом. Граница округления отодвинута от половины на долю, которой шум
+    // WHY: не достаёт, а половина всегда уходит вверх, в ходу и в покое
+    public static double whole(double pixel) {
+        return Math.floor(pixel + 0.5 + SNAP_BIAS);
     }
 
     // WHY: вложенный ход считается от уже сдвинутой позы, поэтому в экранных координатах он

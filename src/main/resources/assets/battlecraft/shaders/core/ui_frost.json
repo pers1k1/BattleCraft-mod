@@ -1,0 +1,56 @@
+{
+    "blend": {
+        "func": "add",
+        "srcrgb": "one",
+        "dstrgb": "zero",
+        "srcalpha": "one",
+        "dstalpha": "zero"
+    },
+    "vertex": "battlecraft:ui_frost",
+    "fragment": "battlecraft:ui_frost",
+    "attributes": [
+        "Position"
+    ],
+    "samplers": [
+        {
+            "name": "Sampler0"
+        }
+    ],
+    "uniforms": [
+        {
+            "name": "FrostSource",
+            "type": "float",
+            "count": 2,
+            "values": [
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "name": "FrostPass",
+            "type": "float",
+            "count": 1,
+            "values": [
+                0.0
+            ]
+        },
+        {
+            "name": "FrostStep",
+            "type": "float",
+            "count": 2,
+            "values": [
+                1.0,
+                0.0
+            ]
+        },
+        {
+            "name": "FrostSpread",
+            "type": "float",
+            "count": 2,
+            "values": [
+                1.0,
+                0.0
+            ]
+        }
+    ]
+}

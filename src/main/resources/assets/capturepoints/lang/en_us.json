@@ -251,5 +251,6 @@
   "capturepoints.menu.pick.reward": "CAPTURE REWARD",
   "capturepoints.menu.pick.income": "POINT INCOME",
   "capturepoints.menu.reward_item.hint": "Click to pick the item and the amount",
-  "capturepoints.menu.income_item.hint": "Click to pick the item and the amount"
+  "capturepoints.menu.income_item.hint": "Click to pick the item and the amount",
+  "capturepoints.treasury.error.account_full": "Your account is full."
 }

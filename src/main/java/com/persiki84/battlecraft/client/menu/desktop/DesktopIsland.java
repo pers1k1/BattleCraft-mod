@@ -77,8 +77,8 @@ public final class DesktopIsland {
         if (visible <= 0.01f) return;
 
         float scale = HIDDEN_SCALE + (1.0f - HIDDEN_SCALE) * UiAnim.clamp01(shown.get());
-        boolean outer = UiRender.floating(true);
-        UiRender.floating(outer || moving || !morph.resting());
+        float outer = UiRender.floating(1.0f);
+        UiRender.floating(moving || !morph.resting() ? 1.0f : outer);
         UiRestFrame.push(graphics, frame.centerX, frame.y + frame.height / 2.0f, scale, scale, 0.0f, 0.0f);
         try {
             paint(graphics, font, visible);

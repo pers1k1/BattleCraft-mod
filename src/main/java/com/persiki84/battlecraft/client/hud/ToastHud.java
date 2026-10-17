@@ -17,6 +17,7 @@ import com.persiki84.shared.client.ui.UiReveal;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiVital;
 import net.minecraft.client.Minecraft;
@@ -157,16 +158,40 @@ public final class ToastHud {
         float widest = WIDTH_MIN;
         for (Note note : notes) {
             if (now < note.expiresAt || note.frozen == null) {
-                note.frozen = note.text.get();
+                refreeze(note, note.text.get());
             }
-            note.lines = UiRender.split(graphics, mc.font, note.frozen, 1.0f, (int) textRoom());
-            note.height = PADDING * 2.0f + Math.max(1, note.lines.size()) * mc.font.lineHeight
-                    + BAR_GAP + BAR_HEIGHT;
-            note.width = fitWidth(graphics, mc, note);
+            relayout(graphics, mc, note);
+            note.width = note.ticking()
+                    ? clampWidth(HudMeasure.steady(graphics, note.ticker, mc.font, 1.0f, HudSlot.TOASTS))
+                    : note.linesWidth;
             note.alphaValue = note.alpha.update(now < note.expiresAt, delta);
             if (note.alphaValue > 0.01f) widest = Math.max(widest, note.width);
         }
         return widest;
+    }
+
+    // WHY: текст уведомления пересобирается и переносится только на смене компонента: отсчёт меняет
+    // WHY: его раз в секунду, а остальные стоят всю жизнь, и разбивка на строки в кадре была лишней
+    private static void refreeze(Note note, Component next) {
+        if (next == note.frozen) return;
+        note.frozen = next;
+        note.splitPixels = -1.0f;
+    }
+
+    // WHY: однострочное уведомление с ключом (отсчёт, серия, живое предупреждение) меняет число на
+    // WHY: месте, поэтому идёт тикером: сменившиеся цифры уходят и приходят, а не подменяются кадром
+    private static void relayout(GuiGraphics graphics, Minecraft mc, Note note) {
+        float pixels = UiRender.restPixels(graphics);
+        if (pixels == note.splitPixels) return;
+
+        note.splitPixels = pixels;
+        note.lines = UiRender.split(graphics, mc.font, note.frozen, 1.0f, (int) textRoom());
+        note.height = PADDING * 2.0f + Math.max(1, note.lines.size()) * mc.font.lineHeight
+                + BAR_GAP + BAR_HEIGHT;
+        note.linesWidth = fitWidth(graphics, mc, note);
+        note.plain = TickerText.plain(note.frozen);
+        note.ink = TickerText.ink(note.frozen);
+        if (note.ticking()) note.ticker.set(note.frozen.getString());
     }
 
     // WHY: коробка слота меряется самой широкой карточкой, а не общим потолком: с потолком
@@ -199,17 +224,16 @@ public final class ToastHud {
         Minecraft mc = Minecraft.getInstance();
         long now = System.currentTimeMillis();
         if (sample == null) {
-            sample = new Note("preview", () -> Component.translatable(SAMPLE_KEY), 0L, 0L, false);
+            Component text = Component.translatable(SAMPLE_KEY);
+            sample = new Note(null, () -> text, 0L, 0L, false);
+            sample.frozen = text;
         }
 
-        sample.frozen = Component.translatable(SAMPLE_KEY);
         sample.expiresAt = now + SAMPLE_LIFE;
         sample.barTo = sample.expiresAt;
         sample.bornAt = now;
-        sample.lines = UiRender.split(graphics, mc.font, sample.frozen, 1.0f, (int) textRoom());
-        sample.height = PADDING * 2.0f + Math.max(1, sample.lines.size()) * mc.font.lineHeight
-                + BAR_GAP + BAR_HEIGHT;
-        sample.width = fitWidth(graphics, mc, sample);
+        relayout(graphics, mc, sample);
+        sample.width = sample.linesWidth;
         sample.alphaValue = alpha;
         HudLayout.sample(HudSlot.TOASTS, sample.width, sample.height);
         sample.targetX = box.x();
@@ -253,9 +277,14 @@ public final class ToastHud {
 
         float textX = x + textInset();
         float textY = noteY + PADDING;
-        for (FormattedCharSequence line : note.lines) {
-            UiRender.textLine(graphics, mc.font, line, textX, textY, 1.0f, UiTheme.alpha(HudInk.text(), alpha), false);
-            textY += mc.font.lineHeight;
+        if (note.ticking()) {
+            note.ticker.draw(graphics, mc.font, textX, textY, 1.0f, TickerText.inkOr(note.ink, HudInk.text()), alpha);
+        } else {
+            for (FormattedCharSequence line : note.lines) {
+                UiRender.textLine(graphics, mc.font, line, textX, textY, 1.0f, UiTheme.alpha(HudInk.text(), alpha),
+                        false);
+                textY += mc.font.lineHeight;
+            }
         }
 
         countdown(graphics, note, now, delta, x, noteY, textX, alpha, accent);
@@ -282,7 +311,11 @@ public final class ToastHud {
         for (FormattedCharSequence line : note.lines) {
             widest = Math.max(widest, UiRender.measureLine(graphics, mc.font, line, 1.0f));
         }
-        return Math.max(WIDTH_MIN, Math.min(WIDTH, widest + textInset() + PADDING));
+        return clampWidth(widest);
+    }
+
+    private static float clampWidth(float textWidth) {
+        return Math.max(WIDTH_MIN, Math.min(WIDTH, textWidth + textInset() + PADDING));
     }
 
     private static void countdown(GuiGraphics graphics, Note note, long now, float delta,
@@ -305,8 +338,13 @@ public final class ToastHud {
         private final Toggle alpha = new Toggle(9.0f, 0L);
         private final Spring y = new Spring(0.36f, 0.9f);
         private final Smooth remaining = new Smooth(1.0f, 16.0f);
+        private final UiTicker ticker = new UiTicker().regular();
         private Supplier<Component> text;
         private Component frozen;
+        private float splitPixels = -1.0f;
+        private float linesWidth = WIDTH;
+        private int ink = TickerText.NO_INK;
+        private boolean plain;
         private long bornAt = System.currentTimeMillis();
         private long expiresAt;
         private long barTo;
@@ -323,6 +361,10 @@ public final class ToastHud {
             this.expiresAt = expiresAt;
             this.barTo = barTo;
             this.alert = alert;
+        }
+
+        private boolean ticking() {
+            return key != null && plain && lines.size() == 1;
         }
     }
 }

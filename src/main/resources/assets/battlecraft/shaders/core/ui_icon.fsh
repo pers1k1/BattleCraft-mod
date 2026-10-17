@@ -258,6 +258,18 @@ float motion(vec2 point, float stroke) {
     return min(ball, min(middle, min(upper, lower)));
 }
 
+// WHY: у валюты сервера свой знак, поэтому монета без символа денег: диск с вырезанными ободком и
+// WHY: ромбом читается монетой и на десяти пикселях, а вырез, а не наложение, держит форму одним цветом.
+// WHY: Расстояние до ромба считается до его грани x/a + y/b = 1, отсюда множитель ab / |(a, b)|
+float coin(vec2 point, float stroke) {
+    float disc = circle(point, vec2(0.0), 0.86);
+    float rim = ring(point, vec2(0.0), 0.62, stroke * 0.7);
+    vec2 emblem = vec2(0.27, 0.37);
+    vec2 folded = abs(point) / emblem;
+    float diamond = (folded.x + folded.y - 1.0) * emblem.x * emblem.y / length(emblem);
+    return max(disc, -min(rim, diamond));
+}
+
 float shapeOf(vec2 point, int kind, float stroke, float level) {
     if (kind == 0) return person(point);
     if (kind == 1) return globe(point, stroke);
@@ -282,7 +294,8 @@ float shapeOf(vec2 point, int kind, float stroke, float level) {
     if (kind == 20) return chevron(point, stroke);
     if (kind == 21) return calendar(point, stroke);
     if (kind == 22) return chat(point);
-    return motion(point, stroke);
+    if (kind == 23) return motion(point, stroke);
+    return coin(point, stroke);
 }
 
 // WHY: значки собраны из неявных форм и сглажены по fwidth, поэтому на любом размере у кромки

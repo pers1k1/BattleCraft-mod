@@ -9,6 +9,7 @@ import com.persiki84.shared.client.menu.HeadingRow;
 import com.persiki84.shared.client.menu.MenuRow;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.gunsmith.GunsmithScreen;
+import com.persiki84.shared.client.menu.studio.StudioArtLines;
 import com.persiki84.shared.client.menu.studio.StudioStack;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiButton;
@@ -41,6 +42,7 @@ final class LootInspector {
 
     private final AirDropStudioScreen screen;
     private final ItemTurntable turntable = new ItemTurntable();
+    private final StudioArtLines art = new StudioArtLines(2);
     private HeadingRow entryHeading;
     private NumberRow chanceRow;
     private NumberRow minRow;
@@ -286,8 +288,9 @@ final class LootInspector {
         if (current == null) return;
         UiRender.textTrackedFit(graphics, font(), Component.literal(current.table().name()), left + width / 2.0f, top,
                 14.0f, width, 0.95f, 0.0f, UiTheme.alpha(UiAccent.text(), appear), false);
-        line(graphics, usage(current), left, width, top + 16.0f, appear);
-        line(graphics, Component.translatable("studio.loot.art.entries", current.table().entries().size()),
+        art.about(current.table().name());
+        counted(graphics, 0, usage(current), left, width, top + 16.0f, appear);
+        counted(graphics, 1, Component.translatable("studio.loot.art.entries", current.table().entries().size()),
                 left, width, top + 27.0f, appear);
     }
 
@@ -305,10 +308,18 @@ final class LootInspector {
                 : stack.getHoverName();
         UiRender.textTrackedFit(graphics, font(), name, left + width / 2.0f, y, 12.0f, width, 0.85f, 0.0f,
                 UiTheme.alpha(UiAccent.text(), appear), false);
-        line(graphics, Component.translatable("airdrop.editor.real",
+        art.about(screen.tableName(), screen.entryIndex());
+        counted(graphics, 0, Component.translatable("airdrop.editor.real",
                 LootChance.shown(LootOdds.appears(screen.table(), screen.entryIndex()) * 100.0f)), left, width,
                 y + 15.0f, appear);
         line(graphics, Component.literal(entry.itemId().toString()), left, width, y + 26.0f, appear);
+    }
+
+    // WHY: число под артом перекатывается по цифрам, пока выбрана та же таблица или запись
+    private void counted(GuiGraphics graphics, int slot, Component text, float left, float width, float y,
+                         float appear) {
+        art.line(slot, graphics, font(), text, left, y, 10.0f, width, LINE_SCALE,
+                UiTheme.alpha(UiAccent.textDim(), appear));
     }
 
     private static void line(GuiGraphics graphics, Component text, float left, float width, float y, float appear) {

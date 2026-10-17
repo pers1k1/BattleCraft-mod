@@ -68,12 +68,14 @@ repositories {
     mavenCentral()
     maven { url 'https://maven.firstdark.dev/releases' }
     maven { url 'https://maven.maxhenkel.de/repository/public' }
+    maven { url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' }
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     compileOnly 'de.maxhenkel.voicechat:voicechat-api:2.6.20'
+    implementation fg.deobf('software.bernie.geckolib:geckolib-forge-1.20.1:4.8.4')
     minecraftLibrary fg.deobf('dev.firstdark.discordrpc:discord-rpc:1.0.4')
     implementation fg.deobf('dev.firstdark.discordrpc:discord-rpc:1.0.4')
     jarJar 'dev.firstdark.discordrpc:discord-rpc:[1.0.4, 2.0.0)'

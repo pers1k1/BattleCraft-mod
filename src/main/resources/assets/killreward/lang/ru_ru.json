@@ -20,7 +20,6 @@
   "killreward.info_teamkills": "Награда за союзников: ",
   "killreward.yes": "Да",
   "killreward.no": "Нет",
-  "killreward.kill_rewarded": "Убит %s, получено %sx %s",
   "killreward.repeat_kill": "За повторное убийство %s награды не будет ещё %s с",
   "killreward.menu.title": "НАГРАДА ЗА УБИЙСТВО",
   "killreward.menu.tab.reward": "Награда",
@@ -30,5 +29,6 @@
   "killreward.menu.team_kills": "За союзников",
   "killreward.unknown_item": "Нет такого предмета: %s",
   "killreward.menu.item.hint": "Щелчок открывает выбор предмета: инвентарь или все предметы, с количеством",
-  "killreward.menu.pick.title": "НАГРАДА ЗА УБИЙСТВО"
+  "killreward.menu.pick.title": "НАГРАДА ЗА УБИЙСТВО",
+  "killreward.kill_rewarded_prize": "Убит %s, получено %s"
 }

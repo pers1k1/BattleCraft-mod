@@ -251,5 +251,6 @@
   "capturepoints.menu.pick.reward": "НАГРАДА ЗА ЗАХВАТ",
   "capturepoints.menu.pick.income": "ДОХОД ТОЧКИ",
   "capturepoints.menu.reward_item.hint": "Щелчок открывает выбор предмета и количества",
-  "capturepoints.menu.income_item.hint": "Щелчок открывает выбор предмета и количества"
+  "capturepoints.menu.income_item.hint": "Щелчок открывает выбор предмета и количества",
+  "capturepoints.treasury.error.account_full": "Счёт полон: больше на него не положить."
 }

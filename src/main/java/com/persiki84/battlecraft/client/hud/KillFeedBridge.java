@@ -30,6 +30,8 @@ public final class KillFeedBridge {
     private static long lastStamp;
     private static int streak;
     private static long streakUntil;
+    private static int streakShownCount;
+    private static Component streakShown;
 
     private KillFeedBridge() {}
 
@@ -100,8 +102,14 @@ public final class KillFeedBridge {
         ToastHud.pushRenewing(STREAK_KEY, KillFeedBridge::streakText, STREAK_MS);
     }
 
+    // WHY: уведомление спрашивает текст серии каждый кадр, а компонент собирается только на смене
+    // WHY: счёта: тикер уведомления двигает цифру по смене строки, а не по новой ссылке
     private static Component streakText() {
-        return Component.translatable(STREAK_KEY, streak);
+        if (streakShown == null || streakShownCount != streak) {
+            streakShownCount = streak;
+            streakShown = Component.translatable(STREAK_KEY, streak);
+        }
+        return streakShown;
     }
 
     private static void bindSuperb() {

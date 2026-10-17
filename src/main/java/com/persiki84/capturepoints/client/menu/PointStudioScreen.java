@@ -8,6 +8,7 @@ import com.persiki84.minimap.client.MapThing;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.pick.ItemShelf;
+import com.persiki84.shared.client.menu.studio.StudioArtLines;
 import com.persiki84.shared.client.menu.studio.StudioMenu;
 import com.persiki84.shared.client.menu.studio.StudioNav;
 import com.persiki84.shared.client.menu.studio.StudioStack;
@@ -38,6 +39,8 @@ public final class PointStudioScreen extends MapStudioScreen {
     private static final int ART = 40;
     private static final int NEUTRAL = 0xFFC8CCD4;
     private static final float LINE_SCALE = 0.72f;
+    private static final String CREATING = "creating";
+    private final StudioArtLines art = new StudioArtLines(1);
 
     private final PointInspector rows = new PointInspector(this);
     private final UiButton addButton;
@@ -343,8 +346,8 @@ public final class PointStudioScreen extends MapStudioScreen {
         if (title == null) return;
         UiRender.textTrackedFit(graphics, this.font, title, left + width / 2.0f, top, 14.0f, width, 0.95f, 0.0f,
                 UiTheme.alpha(UiAccent.text(), appear), false);
-        UiRender.textTrackedFit(graphics, this.font, artDetail(), left + width / 2.0f, top + 16.0f, 10.0f, width,
-                LINE_SCALE, 0.0f, UiTheme.alpha(UiAccent.textDim(), appear), false);
+        art.about(creating ? CREATING : chosenKey).line(0, graphics, this.font, artDetail(), left, top + 16.0f, 10.0f, width,
+                LINE_SCALE, UiTheme.alpha(UiAccent.textDim(), appear));
     }
 
     private Component artTitle() {

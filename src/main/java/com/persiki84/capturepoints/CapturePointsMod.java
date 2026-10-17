@@ -63,12 +63,12 @@ public class CapturePointsMod {
 
     private void commonSetup(final FMLCommonSetupEvent event) {
         PacketHandler.register();
-        CapturePointMenuState.register();
+        event.enqueueWork(CapturePointMenuState::register);
         LOGGER.info("Capture Points Mod initialized!");
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
-        MenuScreens.register(CapturePointMenuState.MENU_ID, PointStudioScreen::new);
+        event.enqueueWork(() -> MenuScreens.register(CapturePointMenuState.MENU_ID, PointStudioScreen::new));
         LOGGER.info("Client setup complete");
     }
 

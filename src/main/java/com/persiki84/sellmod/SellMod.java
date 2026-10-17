@@ -1,7 +1,11 @@
 package com.persiki84.sellmod;
 
 import com.persiki84.sellmod.client.CurrencyHud;
+import com.persiki84.sellmod.money.MoneyEvents;
+import com.persiki84.sellmod.money.MoneyMenuState;
+import com.persiki84.sellmod.money.MoneySync;
 import com.persiki84.sellmod.network.PacketHandler;
+import com.persiki84.shared.economy.Wallet;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
 import net.minecraftforge.common.MinecraftForge;
@@ -20,6 +24,8 @@ public class SellMod {
     public SellMod() {
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new SellEvents());
+        MinecraftForge.EVENT_BUS.register(new MoneyEvents());
+        Wallet.bind(SellManager::getCurrencyItem, MoneySync.INSTANCE);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::setup);
         SellManager.init();
         SellManager.loadConfig();
@@ -27,6 +33,7 @@ public class SellMod {
 
     private void setup(FMLCommonSetupEvent event) {
         PacketHandler.register();
+        event.enqueueWork(MoneyMenuState::register);
         LOGGER.info("Sell Mod initialized!");
     }
 

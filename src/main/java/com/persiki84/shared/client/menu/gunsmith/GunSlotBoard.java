@@ -7,6 +7,7 @@ import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiTheme;
 import com.persiki84.shared.gunsmith.GunSlot;
 import com.persiki84.shared.gunsmith.GunSmith;
@@ -23,8 +24,15 @@ import java.util.function.Function;
 public final class GunSlotBoard {
     private static final float CARD = 24.0f;
     private static final float CARD_GAP = 3.0f;
-    private static final float TILE = 44.0f;
-    private static final float TILE_GAP = 5.0f;
+    private static final float BASE_TILE = 44.0f;
+    private static final float BASE_GAP = 5.0f;
+    private static final float ICON_TOP = 6.0f;
+    private static final float ICON_HALF = 8.0f;
+    private static final float LABEL_RISE = 16.0f;
+    private static final float LABEL_HEIGHT = 12.0f;
+    private static final float LABEL_INSET = 3.0f;
+    private static final float APPEAR_LIFT = 6.0f;
+    private static final float HOVER_RISE = 1.0f;
     private static final float SECTION_GAP = 8.0f;
     private static final float RADIUS = 6.0f;
     private static final float HOVER_SPEED = 16.0f;
@@ -34,8 +42,6 @@ public final class GunSlotBoard {
     private static final float LEVEL_SCALE = 1.1f;
     private static final float CARD_SCALE = 0.72f;
     private static final float GLIDE_SPEED = 15.0f;
-
-    public record Hover(String option, String label) {}
 
     private final List<Smooth> cardHover = new ArrayList<>();
     private final List<Smooth> tileHover = new ArrayList<>();
@@ -47,6 +53,10 @@ public final class GunSlotBoard {
     private float top;
     private float width;
     private float height;
+    private float tileSize = BASE_TILE;
+    private float gapSize = BASE_GAP;
+    private float unit = 1.0f;
+    private int columns = 1;
     private int chosen = -1;
     private int scroll;
 
@@ -55,6 +65,21 @@ public final class GunSlotBoard {
         top = boardTop;
         width = boardWidth;
         height = boardHeight;
+        fit();
+    }
+
+    // WHY: ряд плиток занимает всю ширину доски: число столбцов берётся от заводской плитки, а сама
+    // WHY: плитка растягивается на остаток, иначе справа висела полоса пустоты. Нутро растёт той же долей
+    private void fit() {
+        columns = Math.max(1, (int) ((width + BASE_GAP) / (BASE_TILE + BASE_GAP)));
+        float share = columns + (columns - 1) * BASE_GAP / BASE_TILE;
+        tileSize = width <= 0.0f ? BASE_TILE : UiMetrics.snap(width / share);
+        gapSize = columns > 1 ? Math.max(0.0f, (width - tileSize * columns) / (columns - 1)) : 0.0f;
+        unit = tileSize / BASE_TILE;
+    }
+
+    private float step() {
+        return tileSize + gapSize;
     }
 
     public int chosen() {
@@ -89,20 +114,16 @@ public final class GunSlotBoard {
         return top + index * (CARD + CARD_GAP);
     }
 
-    private int columns() {
-        return Math.max(1, (int) ((width + TILE_GAP) / (TILE + TILE_GAP)));
-    }
-
     private float tilesTop(int slots) {
         return cardY(slots) + SECTION_GAP;
     }
 
     private float tileX(int place) {
-        return left + (place % columns()) * (TILE + TILE_GAP);
+        return left + (place % columns) * step();
     }
 
     private float tileY(int place, int slots) {
-        return tilesTop(slots) + (place / columns() - glide.get()) * (TILE + TILE_GAP);
+        return tilesTop(slots) + (place / columns - glide.get()) * step();
     }
 
     public void render(GuiGraphics graphics, List<GunSlot> slots, Function<GunSlot, String> installed,
@@ -176,55 +197,85 @@ public final class GunSlotBoard {
     }
 
     private void clampScroll(int count, int slots) {
-        int rows = (count + columns() - 1) / columns();
-        int visible = Math.max(1, (int) ((top + height - tilesTop(slots) + TILE_GAP) / (TILE + TILE_GAP)));
+        int rows = (count + columns - 1) / columns;
+        int visible = Math.max(1, (int) ((top + height - tilesTop(slots) + gapSize) / step()));
         scroll = Math.max(0, Math.min(scroll, rows - visible));
     }
 
+    // WHY: плитка рисуется на своём месте покоя, а прокрутка, вход и подъём под курсором заявлены ходом
+    // WHY: от него: подпись варианта стоит на пиксельной сетке покоя и не идёт ступенями по пикселю
     private void paintTile(GuiGraphics graphics, String value, String label, boolean installed, int place, int slots,
                            float appear, int mouseX, int mouseY) {
         float x = tileX(place);
-        float y = tileY(place, slots) + (1.0f - appear) * 6.0f;
-        if (y + TILE < tilesTop(slots) - TILE_GAP || y > top + height) return;
-        boolean hovered = mouseX >= x && mouseX < x + TILE && mouseY >= y && mouseY < y + TILE
+        float restY = restY(place, slots);
+        float y = tileY(place, slots) + (1.0f - appear) * APPEAR_LIFT * unit;
+        if (y + tileSize < tilesTop(slots) - gapSize || y > top + height) return;
+        boolean hovered = mouseX >= x && mouseX < x + tileSize && mouseY >= y && mouseY < y + tileSize
                 && mouseY >= tilesTop(slots);
         float delta = UiFrame.delta();
         float focus = tileHover.get(place).to(hovered ? 1.0f : 0.0f, delta);
         float lit = tileLit.get(place).to(installed ? 1.0f : 0.0f, delta);
-        UiGlass.panel(graphics, x, y - focus, TILE, TILE, RADIUS, appear, 0.15f + focus * 0.45f + lit * 0.3f);
-        if (lit > 0.01f) {
-            UiRender.rim(graphics, x, y - focus, TILE, TILE, RADIUS, 1.3f, UiTheme.alpha(UiAccent.color(), 0.85f * lit));
+        UiRestFrame.shift(graphics, 0.0f, y - restY - focus * wholeRise(graphics));
+        try {
+            float radius = RADIUS * unit;
+            UiGlass.panel(graphics, x, restY, tileSize, tileSize, radius, appear, 0.15f + focus * 0.45f + lit * 0.3f);
+            if (lit > 0.01f) {
+                UiRender.rim(graphics, x, restY, tileSize, tileSize, radius, 1.3f,
+                        UiTheme.alpha(UiAccent.color(), 0.85f * lit));
+            }
+            paintTileBody(graphics, value, label, x, restY, lit);
+        } finally {
+            UiRestFrame.pop(graphics);
         }
-        paintTileBody(graphics, value, label, x, y - focus, lit);
+    }
+
+    private float restY(int place, int slots) {
+        return tilesTop(slots) + (place / columns - scroll) * step();
+    }
+
+    // WHY: подъём держится, пока плитка наведена, поэтому он встаёт на целый пиксель: на дробном
+    // WHY: подъёме подпись всё время наведения стояла бы на полупикселе и читалась мягче соседних
+    private float wholeRise(GuiGraphics graphics) {
+        float rise = HOVER_RISE * unit;
+        float pixels = UiRender.pixels(graphics) / UiRestFrame.stretchX();
+        return pixels <= 0.01f ? rise : Math.round(rise * pixels) / pixels;
     }
 
     // WHY: значок ставится матрицей, а не целыми координатами renderItem: на плавной прокрутке
     // WHY: целые координаты вели его ступенями, и он отставал от своей плитки
     private void paintTileBody(GuiGraphics graphics, String value, String label, float x, float y, float lit) {
         int ink = UiTheme.mix(UiAccent.text(), UiAccent.color(), lit);
+        float centerX = x + tileSize / 2.0f;
+        float textWidth = tileSize - LABEL_INSET * 2.0f * unit;
         if (value.isEmpty()) {
-            UiRender.textTrackedFit(graphics, font(), Component.translatable("gunsmith.empty"), x + TILE / 2.0f, y, TILE,
-                    TILE - 6.0f, NAME_SCALE, 0.0f, ink, false);
+            UiRender.textTrackedFit(graphics, font(), Component.translatable("gunsmith.empty"), centerX, y, tileSize,
+                    textWidth, NAME_SCALE * unit, 0.0f, ink, false);
             return;
         }
         ItemStack icon = GunSmith.preview(value);
         if (icon.isEmpty()) {
-            UiRender.textTrackedFit(graphics, font(), Component.literal(label), x + TILE / 2.0f, y, TILE,
-                    TILE - 6.0f, LEVEL_SCALE * 0.6f, 0.0f, ink, false);
+            UiRender.textTrackedFit(graphics, font(), Component.literal(label), centerX, y, tileSize,
+                    textWidth, LEVEL_SCALE * 0.6f * unit, 0.0f, ink, false);
             return;
         }
+        paintIcon(graphics, icon, centerX - ICON_HALF * unit, y + ICON_TOP * unit);
+        UiRender.textTrackedFit(graphics, font(), Component.literal(label), centerX, y + tileSize - LABEL_RISE * unit,
+                LABEL_HEIGHT * unit, textWidth, NAME_SCALE * unit, 0.0f, ink, false);
+    }
+
+    private void paintIcon(GuiGraphics graphics, ItemStack icon, float x, float y) {
         graphics.pose().pushPose();
-        graphics.pose().translate(x + TILE / 2.0f - 8.0f, y + 6.0f, 0.0f);
+        graphics.pose().translate(x, y, 0.0f);
+        graphics.pose().scale(unit, unit, 1.0f);
         try {
             graphics.renderItem(icon, 0, 0);
         } finally {
             graphics.pose().popPose();
         }
-        UiRender.textTrackedFit(graphics, font(), Component.literal(label), x + TILE / 2.0f, y + TILE - 16.0f, 12.0f,
-                TILE - 6.0f, NAME_SCALE, 0.0f, ink, false);
     }
 
-    public Hover hovered(double mouseX, double mouseY, List<GunSlot> slots) {
+    // WHY: под курсором ищется номер варианта, а не запись: опрос идёт каждый кадр ради подсказки
+    public String hoveredOption(double mouseX, double mouseY, List<GunSlot> slots) {
         if (chosen < 0 || chosen >= slots.size() || mouseY < tilesTop(slots.size())) return null;
 
         GunSlot slot = slots.get(chosen);
@@ -232,10 +283,8 @@ public final class GunSlotBoard {
         for (int place = 0; place < count; place++) {
             float x = tileX(place);
             float y = tileY(place, slots.size());
-            if (mouseX < x || mouseX >= x + TILE || mouseY < y || mouseY >= y + TILE) continue;
-            if (place == 0) return new Hover("", "");
-            GunSlot.GunOption option = slot.options().get(place - 1);
-            return new Hover(option.value(), option.label());
+            if (mouseX < x || mouseX >= x + tileSize || mouseY < y || mouseY >= y + tileSize) continue;
+            return place == 0 ? "" : slot.options().get(place - 1).value();
         }
         return null;
     }

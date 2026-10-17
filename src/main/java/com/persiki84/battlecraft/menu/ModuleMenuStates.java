@@ -11,6 +11,7 @@ import com.persiki84.quarrymod.data.QuarryBlockManager;
 import com.persiki84.quarrymod.data.QuarryBlockRule;
 import com.persiki84.sellmod.SellManager;
 import com.persiki84.battlecraft.compat.iff.IffDevice;
+import com.persiki84.battlecraft.craft.CraftMenuState;
 import com.persiki84.battlecraft.rules.GameRule;
 import com.persiki84.battlecraft.rules.GameRules;
 import com.persiki84.battlecraft.rules.MarkerRange;
@@ -68,6 +69,7 @@ public final class ModuleMenuStates {
         MenuStates.register(GAME_RULES, 2, player -> gameRules());
         MenuStates.register(TEAMS, 2, ModuleMenuStates::teams);
         MenuStates.register(MAP, 2, ModuleMenuStates::map);
+        MenuStates.register(CraftMenuState.MENU_ID, 2, CraftMenuState::snapshot);
     }
 
     private static CompoundTag teams(ServerPlayer player) {

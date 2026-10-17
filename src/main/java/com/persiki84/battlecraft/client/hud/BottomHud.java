@@ -18,6 +18,7 @@ import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiVital;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.AttackIndicatorStatus;
@@ -51,12 +52,16 @@ public final class BottomHud {
     private static final int CARD_WIDTH = 128;
     private static final float CARD_PADDING = UiMetrics.PAD;
     private static final float HEALTH_ROW = 19.0f;
-    private static int healthValue = Integer.MIN_VALUE;
-    private static int maxValue = Integer.MIN_VALUE;
-    private static Component healthLabel;
-    private static Component maxLabel;
-    private static float healthWidth;
-    private static float maxWidth;
+    private static final float FAST_NUMBER_SECONDS = 0.1f;
+    private static final UiTicker.Format OUT_OF = max -> "/" + max;
+    private static final UiTicker healthTicker = new UiTicker();
+    private static final UiTicker maxTicker = new UiTicker();
+    private static final UiTicker foodTicker = new UiTicker().align(UiTicker.CENTER);
+    private static final UiTicker mountTicker = new UiTicker().align(UiTicker.CENTER);
+    private static final UiTicker armorTicker = new UiTicker().align(UiTicker.CENTER);
+    private static final UiTicker airTicker = new UiTicker().align(UiTicker.CENTER).throttle(FAST_NUMBER_SECONDS);
+    private static final UiTicker staminaTicker =
+            new UiTicker().align(UiTicker.CENTER).throttle(FAST_NUMBER_SECONDS);
 
     private static final float HEALTH_SCALE = 1.9f;
     private static final float UNIT_SCALE = 0.8f;
@@ -342,8 +347,10 @@ public final class BottomHud {
             graphics.pose().popPose();
         }
 
-        graphics.renderItemDecorations(mc.font, stack, 0, 0);
+        graphics.renderItemDecorations(mc.font, stack, 0, 0, HotbarCounts.VANILLA_HIDDEN);
         graphics.pose().popPose();
+        HotbarCounts.draw(graphics, mc, HotbarCounts.cellOf(number), stack, centerX, y + CELL / 2.0f,
+                cellY - y, scale, alpha);
 
         if (number > 0 && presence > 0.85f && HudConfig.slotNumbers()) {
             int color = HudInk.text();
@@ -436,41 +443,19 @@ public final class BottomHud {
                                      float health, float max, float absorb, float alpha) {
         int lively = UiVital.tone(HudLayout.tint(HudSlot.STATUS, UiAccent.color()));
 
-        int shownHealth = Mth.ceil(health + absorb);
-        int shownMax = Mth.ceil(max);
-        cacheHealth(mc, shownHealth);
-        cacheMax(mc, shownMax);
+        healthTicker.set(Mth.ceil(health + absorb));
+        maxTicker.set(Mth.ceil(max), OUT_OF);
 
         float numberX = cardX + CARD_PADDING;
-        UiRender.labelScaled(graphics, mc.font, healthLabel, numberX,
-                UiRender.centerY(top, HEALTH_ROW, HEALTH_SCALE) - HEALTH_LIFT, HEALTH_SCALE,
-                UiTheme.alpha(lively, alpha));
+        healthTicker.draw(graphics, mc.font, numberX, UiRender.centerY(top, HEALTH_ROW, HEALTH_SCALE) - HEALTH_LIFT,
+                HEALTH_SCALE, lively, alpha);
 
-        float unitX = numberX + healthWidth * HEALTH_SCALE + 2.5f;
-        UiRender.labelScaled(graphics, mc.font, maxLabel, unitX,
-                UiRender.centerY(top, HEALTH_ROW * 0.86f, UNIT_SCALE), UNIT_SCALE,
-                UiTheme.alpha(HudInk.textDim(), alpha));
+        float unitX = numberX + healthTicker.steadyWidth(graphics, mc.font, HEALTH_SCALE) + 2.5f;
+        maxTicker.draw(graphics, mc.font, unitX, UiRender.centerY(top, HEALTH_ROW * 0.86f, UNIT_SCALE), UNIT_SCALE,
+                HudInk.textDim(), alpha);
 
-        float traceLeft = unitX + maxWidth * UNIT_SCALE + PULSE_GAP;
+        float traceLeft = unitX + maxTicker.steadyWidth(graphics, mc.font, UNIT_SCALE) + PULSE_GAP;
         renderPulse(graphics, traceLeft, top, cardX + CARD_WIDTH - CARD_PADDING - traceLeft, lively, alpha);
-    }
-
-    private static void cacheHealth(Minecraft mc, int shown) {
-        if (shown == healthValue && healthLabel != null) return;
-
-        healthValue = shown;
-        String text = String.valueOf(shown);
-        healthLabel = Component.literal(text);
-        healthWidth = UiRender.widthLabel(mc.font, text);
-    }
-
-    private static void cacheMax(Minecraft mc, int shown) {
-        if (shown == maxValue && maxLabel != null) return;
-
-        maxValue = shown;
-        String text = "/" + shown;
-        maxLabel = Component.literal(text);
-        maxWidth = UiRender.width(mc.font, text);
     }
 
     private static void renderPulse(GuiGraphics graphics, float x, float top, float width, int color, float alpha) {
@@ -497,14 +482,16 @@ public final class BottomHud {
         x += step;
         if (armorShown > 0.01f) {
             float value = armorFill.to(Math.min(1.0f, armor / 20.0f), delta);
+            if (armor > 0) armorTicker.set(armor);
             dial(graphics, mc, x, top, value, UiAccent.color(), alpha * armorShown, armorShown,
-                    UiRender::iconShield, String.valueOf(armor));
+                    UiRender::iconShield, armorTicker);
             x += step * armorShown;
         }
         if (airShown > 0.01f) {
             float value = airFill.to(air / (float) maxAir, delta);
+            airTicker.set(Mth.ceil(value * 100.0f), UiTicker.PERCENT);
             dial(graphics, mc, x, top, value, alarmTint(air / (float) maxAir, air <= 0), alpha * airShown, airShown,
-                    BottomHud::bubbleGlyph, Mth.ceil(value * 100.0f) + "%");
+                    BottomHud::bubbleGlyph, airTicker);
             x += step * airShown;
         }
         staminaDial(graphics, mc, x, top, alpha, delta, staminaShown);
@@ -514,14 +501,16 @@ public final class BottomHud {
                                   int food, Entity vehicle, float mountShown) {
         if (mountShown > 0.01f && vehicle instanceof LivingEntity mount) {
             float value = mountFill.to(mount.getHealth() / Math.max(1.0f, mount.getMaxHealth()), delta);
+            mountTicker.set(Mth.ceil(mount.getHealth()));
             dial(graphics, mc, x, top, value, UiAccent.color(), alpha * mountShown, mountShown,
-                    UiRender::iconHeart, String.valueOf(Mth.ceil(mount.getHealth())));
+                    UiRender::iconHeart, mountTicker);
         }
         if (mountShown >= 0.99f) return;
 
         float value = foodFill.to(food / 20.0f, delta);
+        foodTicker.set(food);
         dial(graphics, mc, x, top, value, alarmTint(food / 20.0f, food <= 0), alpha * (1.0f - mountShown),
-                1.0f - mountShown, UiRender::iconFood, String.valueOf(food));
+                1.0f - mountShown, UiRender::iconFood, foodTicker);
     }
 
     private static void staminaDial(GuiGraphics graphics, Minecraft mc, float x, float top, float alpha,
@@ -530,8 +519,8 @@ public final class BottomHud {
 
         float value = staminaFill.to(Mth.clamp(lastStamina.ratio(), 0.0f, 1.0f), delta);
         int tint = lastStamina.exhausted() ? UiTheme.mix(UiAccent.color(), UiPalette.alert(), 0.7f) : UiAccent.color();
-        dial(graphics, mc, x, top, value, tint, alpha * shown, shown, UiRender::iconBolt,
-                Mth.ceil(value * 100.0f) + "%");
+        staminaTicker.set(Mth.ceil(value * 100.0f), UiTicker.PERCENT);
+        dial(graphics, mc, x, top, value, tint, alpha * shown, shown, UiRender::iconBolt, staminaTicker);
     }
 
     private static float readStamina(float delta) {
@@ -552,7 +541,7 @@ public final class BottomHud {
     }
 
     private static void dial(GuiGraphics graphics, Minecraft mc, float x, float top, float value, int color,
-                             float alpha, float presence, Glyph glyph, String label) {
+                             float alpha, float presence, Glyph glyph, UiTicker label) {
         if (alpha <= 0.01f || presence <= 0.01f) return;
 
         float radius = DIAL_RADIUS * (0.72f + 0.28f * presence);
@@ -563,8 +552,8 @@ public final class BottomHud {
                 UiTheme.withAlpha(UiTheme.WHITE, 0.13f * alpha));
         UiRender.ring(graphics, centerX, centerY, radius, DIAL_THICKNESS, value, UiTheme.alpha(color, alpha));
         glyph.draw(graphics, centerX, centerY, DIAL_ICON, UiTheme.alpha(color, 0.92f * alpha));
-        UiRender.labelCentered(graphics, mc.font, label, centerX, top + DIAL_SIZE + DIAL_LABEL_GAP,
-                DIAL_LABEL_SCALE, UiTheme.alpha(HudInk.text(), alpha));
+        label.draw(graphics, mc.font, centerX, top + DIAL_SIZE + DIAL_LABEL_GAP, DIAL_LABEL_SCALE, HudInk.text(),
+                alpha);
     }
 
     private static int alarmTint(float ratio, boolean drained) {

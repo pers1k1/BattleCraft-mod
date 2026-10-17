@@ -8,10 +8,9 @@ import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlassStyle;
-import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiSound;
-import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiVital;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -19,7 +18,7 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.effect.MobEffectUtil;
+import net.minecraft.util.StringUtil;
 import net.minecraftforge.client.extensions.common.IClientMobEffectExtensions;
 import net.minecraftforge.client.gui.overlay.IGuiOverlay;
 
@@ -34,6 +33,9 @@ public final class EffectsHud {
     private static final int PER_ROW = 6;
     private static final int LABEL_BLOCK = 8;
     private static final int ROW_HEIGHT = CHIP + CHIP_GAP + 7;
+    private static final int TICKS_PER_SECOND = 20;
+    private static final UiTicker.Format DURATION =
+            seconds -> StringUtil.formatTickDuration((int) seconds * TICKS_PER_SECOND);
 
     private static final int SAMPLE_DURATION = 1200;
     private static final MobEffectInstance[] SAMPLES = {
@@ -184,8 +186,8 @@ public final class EffectsHud {
         }
 
         if (duration > 0) {
-            UiRender.labelCentered(graphics, mc.font, MobEffectUtil.formatDuration(instance, 1.0f),
-                    x + CHIP / 2.0f, y + CHIP + 1.0f, 0.7f, UiTheme.alpha(HudInk.text(), alpha));
+            chip.duration.set(duration / TICKS_PER_SECOND, DURATION);
+            chip.duration.draw(graphics, mc.font, x + CHIP / 2.0f, y + CHIP + 1.0f, 0.7f, HudInk.text(), alpha);
         }
     }
 
@@ -193,6 +195,7 @@ public final class EffectsHud {
         private final Smooth alpha = new Smooth(0.0f, 9.0f);
         private final Smooth x = new Smooth(13.0f);
         private final Smooth y = new Smooth(13.0f);
+        private final UiTicker duration = new UiTicker().align(UiTicker.CENTER);
         private MobEffectInstance instance;
         private boolean present;
         private float targetX;

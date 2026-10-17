@@ -2,6 +2,7 @@ package com.persiki84.battlecraft.client.menu.panel.loot;
 
 import com.persiki84.airdrop.loot.LootRoller;
 import com.persiki84.airdrop.loot.LootTable;
+import com.persiki84.shared.client.menu.TickerLine;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
@@ -38,11 +39,14 @@ public final class LootTrial {
     private boolean open;
     private long rolledAt;
     private int placed;
+    private Component foot = Component.empty();
+    private final TickerLine footLine = new TickerLine(0.5f);
     private float left;
     private float top;
 
     public void roll(LootTable table) {
         placed = LootRoller.fill(box, table, random);
+        foot = Component.translatable("airdrop.editor.trial.foot", placed);
         rolledAt = System.currentTimeMillis();
         open = true;
     }
@@ -80,16 +84,16 @@ public final class LootTrial {
         graphics.pose().pushPose();
         graphics.pose().translate(0.0f, 0.0f, 300.0f);
         try {
+            UiGlass.above(graphics, left, top, width(), height());
             UiGlass.window(graphics, left, top, width(), height(), RADIUS, alpha);
             UiGlass.layer(graphics);
             UiRender.textTrackedFit(graphics, Minecraft.getInstance().font, Component.translatable("airdrop.editor.trial"),
                     centerX, top + PAD * 0.5f, TITLE_HEIGHT, width() - PAD * 2.0f, 0.85f, 0.0f,
                     UiTheme.alpha(UiAccent.text(), alpha), false);
             paintSlots(graphics, alpha);
-            UiRender.textTrackedFit(graphics, Minecraft.getInstance().font,
-                    Component.translatable("airdrop.editor.trial.foot", placed), centerX,
-                    top + height() - PAD - FOOT_HEIGHT + 4.0f, FOOT_HEIGHT, width() - PAD * 2.0f, 0.65f, 0.0f,
-                    UiTheme.alpha(UiAccent.textDim(), alpha), false);
+            footLine.box(graphics, Minecraft.getInstance().font, foot, left + PAD,
+                    top + height() - PAD - FOOT_HEIGHT + 4.0f, FOOT_HEIGHT, width() - PAD * 2.0f, 0.65f,
+                    UiTheme.alpha(UiAccent.textDim(), alpha));
             graphics.flush();
         } finally {
             graphics.pose().popPose();

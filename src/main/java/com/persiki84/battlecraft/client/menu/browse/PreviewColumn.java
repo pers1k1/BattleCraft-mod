@@ -1,5 +1,6 @@
 package com.persiki84.battlecraft.client.menu.browse;
 
+import com.persiki84.shared.client.menu.TickerLine;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiRender;
 import net.minecraft.client.gui.Font;
@@ -59,6 +60,16 @@ final class PreviewColumn {
                 ROW_SCALE, ROW_TRACKING, UiAccent.textFaint());
         UiRender.textRight(graphics, font, value, left + width, y, ROW_SCALE,
                 UiAccent.textDim(), false);
+        y += ROW_HEIGHT;
+    }
+
+    // WHY: число, которое приходит заново на каждом опросе (игроки, задержка), перекатывается по цифрам
+    void fact(String label, Component value, TickerLine line) {
+        if (y + ROW_HEIGHT > top + height) return;
+
+        UiRender.textTrackedLeft(graphics, font, Component.translatable(label), left, y,
+                ROW_SCALE, ROW_TRACKING, UiAccent.textFaint());
+        line.at(graphics, font, value, left + width, y, ROW_SCALE, UiAccent.textDim());
         y += ROW_HEIGHT;
     }
 }

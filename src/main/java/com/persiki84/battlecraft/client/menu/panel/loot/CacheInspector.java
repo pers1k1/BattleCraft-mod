@@ -9,6 +9,7 @@ import com.persiki84.shared.client.menu.MenuRow;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.PickRow;
 import com.persiki84.shared.client.menu.ToggleRow;
+import com.persiki84.shared.client.menu.studio.StudioArtLines;
 import com.persiki84.shared.client.menu.studio.StudioStack;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiButton;
@@ -38,7 +39,10 @@ final class CacheInspector {
     private static final Component REMOVE = Component.translatable("airdrop.menu.action.remove");
 
     private final AirDropStudioScreen screen;
+    private static final String ALL_CACHES = "caches";
+
     private final ItemTurntable turntable = new ItemTurntable();
+    private final StudioArtLines art = new StudioArtLines(1);
     private final HeadingRow nodeHeading = heading("airdrop.menu.group.caches");
     private final HeadingRow cacheHeading = heading("airdrop.menu.group.cache");
     private final ToggleRow clearRow;
@@ -230,8 +234,8 @@ final class CacheInspector {
     void renderArt(GuiGraphics graphics, float left, float top, float width, float appear) {
         CacheTile cache = screen.cache();
         if (cache == null) {
-            UiRender.textTrackedFit(graphics, font(), stats(), left + width / 2.0f, top, 14.0f, width, 0.9f, 0.0f,
-                    UiTheme.alpha(UiAccent.text(), appear), false);
+            art.about(ALL_CACHES).line(0, graphics, font(), stats(), left, top, 14.0f, width, 0.9f,
+                    UiTheme.alpha(UiAccent.text(), appear));
             line(graphics, Component.translatable("studio.cache.art.how"), left, width, top + 16.0f, appear);
             line(graphics, Component.translatable("studio.cache.art.how2"), left, width, top + 27.0f, appear);
             return;

@@ -308,11 +308,13 @@ public abstract class GlassScreen extends Screen implements DimmedScreen, UiEmbe
 
     // WHY: подсказка рисуется здесь, а не поверх экрана: в этой позе она живёт в тех же координатах,
     // WHY: что и строки, и попадает в офскрин-стадию, то есть в проявление, горение и разворот в мир
+    // WHY: Глубина перед ней чистится, иначе значки предметов экрана протыкали её стекло
     private void paintScaled(GuiGraphics graphics, float partialTick, float shown) {
         applyEntrance(graphics, shown);
         try {
             renderContent(graphics, inputCaptured() ? OFF_SCREEN : pointerX,
                     inputCaptured() ? OFF_SCREEN : pointerY, partialTick);
+            MenuLayer.flatten(graphics);
             MenuHint.render(graphics);
             graphics.flush();
         } finally {

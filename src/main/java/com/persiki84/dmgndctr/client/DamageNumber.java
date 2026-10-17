@@ -1,6 +1,6 @@
 package com.persiki84.dmgndctr.client;
 
-import net.minecraft.network.chat.Component;
+import com.persiki84.shared.client.ui.UiTicker;
 
 import java.util.Locale;
 
@@ -17,12 +17,12 @@ public final class DamageNumber {
     float life;
     float sinceHit;
     float drift;
-    Component text = Component.empty();
     boolean alive;
     boolean onScreen;
     float screenX;
     float screenY;
     float distance;
+    final UiTicker label = new UiTicker().align(UiTicker.CENTER);
 
     void start(int id, double hitX, double hitY, double hitZ, float damage, boolean critical,
                float lifetime, float sideways) {
@@ -34,11 +34,13 @@ public final class DamageNumber {
         drift = sideways;
         alive = true;
         onScreen = false;
+        label.reset();
         merge(hitX, hitY, hitZ, damage, critical);
     }
 
     // WHY: добавленный удар перезапускает и жизнь, и толчок: цифра, которая растёт, обязана
-    // WHY: снова читаться как свежая, а не догорать со старым числом внутри
+    // WHY: снова читаться как свежая, а не догорать со старым числом внутри. Сложенная сумма
+    // WHY: меняется тикером: сменившиеся цифры уходят вверх, новые приходят снизу
     void merge(double hitX, double hitY, double hitZ, float damage, boolean critical) {
         x = hitX;
         y = hitY;
@@ -47,7 +49,7 @@ public final class DamageNumber {
         crit |= critical;
         age = 0.0f;
         sinceHit = 0.0f;
-        text = Component.literal(format(amount));
+        label.set(format(amount));
     }
 
     void advance(float delta) {
@@ -63,7 +65,7 @@ public final class DamageNumber {
     public float sinceHit() { return sinceHit; }
     public float drift() { return drift; }
     public boolean crit() { return crit; }
-    public Component text() { return text; }
+    public UiTicker label() { return label; }
     public boolean shown() { return alive && onScreen; }
     public float screenX() { return screenX; }
     public float screenY() { return screenY; }

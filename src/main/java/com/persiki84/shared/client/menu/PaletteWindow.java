@@ -12,6 +12,7 @@ import com.persiki84.shared.client.ui.UiGlassStyle;
 import com.persiki84.shared.client.ui.UiMotion;
 import com.persiki84.shared.client.ui.UiMotionSet;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiReveal;
 import com.persiki84.shared.client.ui.UiShards;
 import com.persiki84.shared.client.ui.UiShatter;
@@ -250,12 +251,11 @@ public final class PaletteWindow {
 
     private void paintStaged(GuiGraphics graphics, int mouseX, int mouseY, boolean staged) {
         float outerPresence = UiGlassStyle.scalePresence(staged ? presence() : 1.0f);
-        graphics.pose().pushPose();
-        graphics.pose().translate(0.0f, -CARRY_RISE * lift(), 0.0f);
+        UiRestFrame.shift(graphics, 0.0f, -CARRY_RISE * lift());
         try {
             paint(graphics, mouseX, mouseY);
         } finally {
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
             UiGlassStyle.restorePresence(outerPresence);
             UiBackdrop.plain();
             if (staged) {

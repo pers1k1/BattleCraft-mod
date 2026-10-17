@@ -5,7 +5,6 @@ import com.persiki84.airdrop.config.AirDropConfig;
 import com.persiki84.battlecraft.BattleCraftManager;
 import com.persiki84.minimap.MapManager;
 import net.minecraft.ChatFormatting;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -17,11 +16,14 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.SimpleMenuProvider;
-import net.minecraft.world.entity.AnimationState;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MoverType;
@@ -33,14 +35,31 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.world.ForgeChunkManager;
 import net.minecraftforge.network.NetworkHooks;
+import software.bernie.geckolib.animatable.GeoEntity;
+import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.animation.AnimationState;
+import software.bernie.geckolib.core.animation.RawAnimation;
+import software.bernie.geckolib.core.object.PlayState;
+import software.bernie.geckolib.util.GeckoLibUtil;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import static com.persiki84.airdrop.config.AirDropLimits.TICKS_PER_SECOND;
 
-public class AirDropEntity extends Entity {
-    private static final int SMOKE_PER_TICK = 2;
+public class AirDropEntity extends Entity implements GeoEntity {
+    private static final RawAnimation DEPLOY_AND_FLY = RawAnimation.begin().thenPlay("deploy").thenLoop("flying");
+    private static final RawAnimation STEADY = RawAnimation.begin().thenLoop("steady");
+    private static final RawAnimation CHUTE_LANDING = RawAnimation.begin().thenPlayAndHold("land");
+    private static final RawAnimation CHUTE_DOWN = RawAnimation.begin().thenPlayAndHold("landed");
+    private static final RawAnimation LID_OPENING = RawAnimation.begin().thenPlayAndHold("opening");
+    private static final RawAnimation LID_OPEN = RawAnimation.begin().thenPlayAndHold("opened");
+    private static final RawAnimation BEACON = RawAnimation.begin().thenLoop("beacon");
+    private static final RawAnimation LAMP_OFF = RawAnimation.begin().thenPlayAndHold("lamp_off");
+    private static final int CHUTE_BLEND_TICKS = 8;
+    private static final float CRUISE_FALL_SPEED = 0.15F;
     private static final double LEVELING_HEIGHT = 10.0;
     private static final int SUPPORT_CHECK_TICKS = 10;
     private static final long NEVER = -1L;
@@ -68,9 +87,14 @@ public class AirDropEntity extends Entity {
         }
     };
 
-    public final AnimationState flyingAnimationState = new AnimationState();
-    public final AnimationState openingAnimationState = new AnimationState();
-    private boolean clientPrevOpened;
+    private final AnimatableInstanceCache animations = GeckoLibUtil.createInstanceCache(this);
+    private boolean chuteSeen;
+    private boolean landedWhenSeen;
+    private boolean lidSeen;
+    private boolean openedWhenSeen;
+    private boolean effectsSeen;
+    private boolean landedLastTick;
+    private boolean deployed;
     private boolean warnedDespawn;
     private boolean matchSpawned;
     private boolean marked;
@@ -131,6 +155,7 @@ public class AirDropEntity extends Entity {
             return;
         }
         holdChunk();
+        announceDeploy();
         watchLoot();
         traceOnMap();
         if (!isLanded()) {
@@ -211,8 +236,28 @@ public class AirDropEntity extends Entity {
         if (blocked && (onGround() || verticalCollision)) {
             setDeltaMovement(Vec3.ZERO);
             setLanded(true);
-            if (landedAt == NEVER) landedAt = now();
+            if (landedAt == NEVER) {
+                landedAt = now();
+                play(SoundEvents.ZOMBIE_ATTACK_WOODEN_DOOR, 2.0F, 0.55F);
+                play(SoundEvents.GENERIC_BIG_FALL, 2.0F, 0.7F);
+                play(SoundEvents.WOOL_BREAK, 1.5F, 0.6F);
+            }
         }
+    }
+
+    // WHY: ящик, поднятый из сохранения уже на земле, раскрываться не должен: звук раскрытия
+    // WHY: принадлежит только первому тику живого сброса
+    private void announceDeploy() {
+        if (deployed) return;
+
+        deployed = true;
+        if (isLanded()) return;
+        play(SoundEvents.PHANTOM_FLAP, 3.0F, 0.55F);
+        play(SoundEvents.ARMOR_EQUIP_ELYTRA, 3.0F, 0.8F);
+    }
+
+    private void play(SoundEvent sound, float volume, float pitch) {
+        level().playSound(null, getX(), getY(), getZ(), sound, SoundSource.NEUTRAL, volume, pitch);
     }
 
     private void rest() {
@@ -265,25 +310,62 @@ public class AirDropEntity extends Entity {
         return level().getGameTime();
     }
 
+    // WHY: пыль поднимает только посадка, увиденная своими глазами: ящик, пришедший клиенту уже
+    // WHY: лежащим, не имеет права взрываться облаком при каждом входе в зону видимости
     private void clientTick() {
-        if (!isLanded()) {
-            if (!flyingAnimationState.isStarted()) flyingAnimationState.start(tickCount);
-        } else {
-            flyingAnimationState.stop();
-        }
-
-        boolean openedNow = isOpened();
-        if (openedNow && !clientPrevOpened) openingAnimationState.start(tickCount);
-        clientPrevOpened = openedNow;
-        if (!isLooted()) smoke();
+        boolean landed = isLanded();
+        if (effectsSeen && landed && !landedLastTick) AirDropEffects.raiseDust(this);
+        effectsSeen = true;
+        landedLastTick = landed;
+        if (!isLooted()) AirDropEffects.burnFlare(this, landed);
     }
 
-    private void smoke() {
-        for (int i = 0; i < SMOKE_PER_TICK; i++) {
-            double ox = (random.nextDouble() - 0.5) * 0.5;
-            double oz = (random.nextDouble() - 0.5) * 0.5;
-            level().addParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, getX() + ox, getY() + 1.3, getZ() + oz, 0.0, 0.07, 0.0);
+    @Override
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+        controllers.add(new AnimationController<>(this, "chute", CHUTE_BLEND_TICKS, this::chuteState));
+        controllers.add(new AnimationController<>(this, "lid", 0, this::lidState));
+        controllers.add(new AnimationController<>(this, "lamp", 0, this::lampState));
+    }
+
+    // WHY: тот, кто подошёл к уже севшему ящику, должен увидеть лежащий купол, а не повтор посадки
+    private PlayState chuteState(AnimationState<AirDropEntity> state) {
+        if (!chuteSeen) {
+            chuteSeen = true;
+            landedWhenSeen = isLanded();
         }
+        if (isLanded()) {
+            state.setControllerSpeed(1.0F);
+            return state.setAndContinue(landedWhenSeen ? CHUTE_DOWN : CHUTE_LANDING);
+        }
+        landedWhenSeen = false;
+        if (isLeveling()) {
+            state.setControllerSpeed(1.0F);
+            return state.setAndContinue(STEADY);
+        }
+        boolean cruising = state.isCurrentAnimationStage("flying");
+        state.setControllerSpeed(cruising ? Mth.clamp(getFallSpeed() / CRUISE_FALL_SPEED, 0.75F, 2.5F) : 1.0F);
+        return state.setAndContinue(DEPLOY_AND_FLY);
+    }
+
+    private PlayState lidState(AnimationState<AirDropEntity> state) {
+        if (!lidSeen) {
+            lidSeen = true;
+            openedWhenSeen = isOpened();
+        }
+        if (!isOpened()) {
+            openedWhenSeen = false;
+            return PlayState.STOP;
+        }
+        return state.setAndContinue(openedWhenSeen ? LID_OPEN : LID_OPENING);
+    }
+
+    private PlayState lampState(AnimationState<AirDropEntity> state) {
+        return state.setAndContinue(isLooted() ? LAMP_OFF : BEACON);
+    }
+
+    @Override
+    public AnimatableInstanceCache getAnimatableInstanceCache() {
+        return animations;
     }
 
     // WHY: выгрузка чанка не уничтожает ящик: метка на карте и тикет снимаются только тогда, когда
@@ -318,6 +400,7 @@ public class AirDropEntity extends Entity {
         if (tag.contains("FlyingAnimTicks")) setFlyingAnimTicks(tag.getInt("FlyingAnimTicks"));
         warnedDespawn = tag.getBoolean("WarnedDespawn");
         matchSpawned = tag.getBoolean("MatchSpawned");
+        deployed = tag.getBoolean("Deployed") || isLanded();
         landedAt = readStamp(tag);
         emptiedAt = tag.contains("EmptiedAt") ? tag.getLong("EmptiedAt") : NEVER;
         readInventory(tag.getList("Inv", Tag.TAG_COMPOUND));
@@ -348,6 +431,7 @@ public class AirDropEntity extends Entity {
         tag.putInt("FlyingAnimTicks", getFlyingAnimTicks());
         tag.putBoolean("WarnedDespawn", warnedDespawn);
         tag.putBoolean("MatchSpawned", matchSpawned);
+        tag.putBoolean("Deployed", deployed);
         if (landedAt != NEVER) tag.putLong("LandedAt", landedAt);
         if (emptiedAt != NEVER) tag.putLong("EmptiedAt", emptiedAt);
         tag.put("Inv", writeInventory());

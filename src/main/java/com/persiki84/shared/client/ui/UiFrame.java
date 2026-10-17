@@ -11,6 +11,7 @@ public final class UiFrame {
 
     public static void advance() {
         frame++;
+        UiRestFrame.release();
         long now = System.nanoTime();
         if (lastNanos == 0L) {
             lastNanos = now;

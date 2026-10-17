@@ -6,6 +6,7 @@ import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiSight;
 import com.persiki84.shared.client.ui.UiTagStack;
+import com.persiki84.shared.client.ui.UiTicker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.BlockGetter;
@@ -16,6 +17,7 @@ import org.joml.Vector4f;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public final class QuarryMarkers {
@@ -24,6 +26,12 @@ public final class QuarryMarkers {
     private static final float MARGIN = 48.0f;
     private static final float FOCUS_SPEED = 10.0f;
     private static final float PRESENCE_SPEED = 8.0f;
+    private static final UiTicker.Format TIMER = seconds -> Component.translatable("quarrymod.marker.timer",
+            seconds / 60L, String.format(Locale.ROOT, "%02d", seconds % 60L)).getString();
+    private static final UiTicker.Format READY =
+            unused -> Component.translatable("quarrymod.marker.ready").getString();
+    private static final UiTicker.Format MULTIPLIER =
+            multiplier -> Component.translatable("quarrymod.marker.multiplier", multiplier).getString();
 
     private static final Map<Long, Marker> known = new HashMap<>();
     private static final List<Marker> live = new ArrayList<>();
@@ -118,10 +126,8 @@ public final class QuarryMarkers {
         private final Smooth focus = new Smooth(0.0f, FOCUS_SPEED);
         private final Smooth presence = new Smooth(0.0f, PRESENCE_SPEED);
         private final UiTagStack.Slot stack = UiTagStack.slot();
+        private final UiTicker detail = new UiTicker();
         private Component name;
-        private Component detail = Component.empty();
-        private int labelledSeconds = -1;
-        private int labelledMultiplier = -1;
         private float screenX;
         private float screenY;
         private int color;
@@ -132,31 +138,17 @@ public final class QuarryMarkers {
             this.name = name;
         }
 
+        // WHY: отсчёт до возврата руды и множитель идут тикером: меняются только сменившиеся цифры, а
+        // WHY: строка собирается форматом только на смене числа, не в кадре
         private void relabel(ClientQuarryField.Cell cell) {
             name = Names.block(cell.ore());
             if (cell.excavated()) {
-                retime(cell.secondsLeft());
+                detail.set(cell.secondsLeft(), TIMER);
+            } else if (cell.multiplier() <= 1) {
+                detail.set(0L, READY);
             } else {
-                remultiply(cell.multiplier());
+                detail.set(cell.multiplier(), MULTIPLIER);
             }
-        }
-
-        private void retime(int seconds) {
-            if (seconds == labelledSeconds) return;
-
-            labelledSeconds = seconds;
-            labelledMultiplier = -1;
-            detail = Component.translatable("quarrymod.marker.timer", seconds / 60, String.format("%02d", seconds % 60));
-        }
-
-        private void remultiply(int multiplier) {
-            if (multiplier == labelledMultiplier) return;
-
-            labelledMultiplier = multiplier;
-            labelledSeconds = -1;
-            detail = multiplier <= 1
-                    ? Component.translatable("quarrymod.marker.ready")
-                    : Component.translatable("quarrymod.marker.multiplier", multiplier);
         }
 
         private Marker place(float x, float y, int away, int packedColor, boolean kept) {
@@ -183,7 +175,7 @@ public final class QuarryMarkers {
 
         public UiTagStack.Slot stack() { return stack; }
         public Component label() { return name; }
-        public Component detail() { return detail; }
+        public UiTicker detail() { return detail; }
         public float screenX() { return screenX; }
         public float screenY() { return screenY; }
         public int color() { return color; }

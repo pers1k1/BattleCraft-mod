@@ -20,7 +20,6 @@
   "killreward.info_teamkills": "Team kills: ",
   "killreward.yes": "Yes",
   "killreward.no": "No",
-  "killreward.kill_rewarded": "Killed %s, received %sx %s",
   "killreward.repeat_kill": "No reward for killing %s again for another %s s",
   "killreward.menu.title": "KILL REWARD",
   "killreward.menu.tab.reward": "Reward",
@@ -30,5 +29,6 @@
   "killreward.menu.team_kills": "Team kills",
   "killreward.unknown_item": "No such item: %s",
   "killreward.menu.item.hint": "Click to pick the item from your inventory or all items, with the amount",
-  "killreward.menu.pick.title": "KILL REWARD"
+  "killreward.menu.pick.title": "KILL REWARD",
+  "killreward.kill_rewarded_prize": "Killed %s, received %s"
 }

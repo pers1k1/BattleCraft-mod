@@ -3,6 +3,9 @@ package com.persiki84.zones.client.menu;
 import com.persiki84.capturepoints.client.ClientTreasury;
 import com.persiki84.capturepoints.network.TreasuryTakePacket;
 import com.persiki84.sellmod.client.ClientSellData;
+import com.persiki84.sellmod.client.CurrencyIcon;
+import com.persiki84.sellmod.client.MoneyText;
+import com.persiki84.sellmod.client.TransferScreen;
 import com.persiki84.shared.client.menu.GlassScreen;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.ui.UiFrame;
@@ -10,6 +13,7 @@ import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.menu.GlidingRow;
 import com.persiki84.shared.client.menu.ScrollHint;
 import com.persiki84.shared.client.menu.ScrollLanes;
+import com.persiki84.shared.client.menu.TickerLine;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.client.ui.UiGlass;
@@ -49,6 +53,8 @@ public class ShopScreen extends GlassScreen {
 
     private static final int SEARCH_WIDTH = 152;
     private static final int BALANCE_WIDTH = 116;
+    private static final int TRANSFER_WIDTH = 92;
+    private static final float BALANCE_ICON = 11.0f;
     private static final int SELL_WIDTH = 146;
     private static final int HEADER_ROW_HEIGHT = 20;
     private static final int HEADER_ROW_GAP = 8;
@@ -95,6 +101,9 @@ public class ShopScreen extends GlassScreen {
     private int shownBalance = -1;
     private int shownAvailable = Integer.MIN_VALUE;
     private ShopSchedule.State shownWindow;
+    private int shownVersion = -1;
+    private Component balanceText = Component.empty();
+    private final TickerLine balanceLine = new TickerLine(0.5f);
     private boolean refreshed;
     private boolean previewing;
     private Screen parent;
@@ -185,16 +194,29 @@ public class ShopScreen extends GlassScreen {
         shownPending = pendingValue();
         shownBalance = balanceValue();
         shownAvailable = availableValue();
+        shownVersion = ClientSellData.version();
+        balanceText = balanceLabel();
         if (previewing) {
             addViewerButton();
             return;
         }
+        addTransferButton();
 
         UiButton sell = new UiButton(sellLeft(), headerRowTop(), SELL_WIDTH, HEADER_ROW_HEIGHT,
                 sellLabel(), pressed -> sellAll());
         sell.hint("zones.shop.sell.hint");
         sell.active = shownPending > 0;
         addRenderableWidget(sell);
+    }
+
+    // WHY: перевод живёт рядом с балансом, к которому он относится: окно открывается поверх магазина
+    // WHY: и возвращает в него же, поэтому выбранный товар и раздел не теряются
+    private void addTransferButton() {
+        UiButton transfer = new UiButton(transferLeft(), headerRowTop(), TRANSFER_WIDTH, HEADER_ROW_HEIGHT,
+                Component.translatable("sellmod.transfer.button"), pressed -> TransferScreen.open(this));
+        transfer.hint("sellmod.transfer.button.hint");
+        transfer.active = ClientSellData.known();
+        addRenderableWidget(transfer);
     }
 
     // WHY: кнопка стоит на месте продажи: в просмотре продавать нечего, а смотреть витрину
@@ -233,7 +255,7 @@ public class ShopScreen extends GlassScreen {
     }
 
     private int headerRowWidth() {
-        return SEARCH_WIDTH + BALANCE_WIDTH + SELL_WIDTH + HEADER_ROW_GAP * 2;
+        return SEARCH_WIDTH + BALANCE_WIDTH + TRANSFER_WIDTH + SELL_WIDTH + HEADER_ROW_GAP * 3;
     }
 
     private int headerRowLeft() {
@@ -248,14 +270,19 @@ public class ShopScreen extends GlassScreen {
         return headerRowLeft() + SEARCH_WIDTH + HEADER_ROW_GAP;
     }
 
-    private int sellLeft() {
+    private int transferLeft() {
         return balanceLeft() + BALANCE_WIDTH + HEADER_ROW_GAP;
+    }
+
+    private int sellLeft() {
+        return transferLeft() + TRANSFER_WIDTH + HEADER_ROW_GAP;
     }
 
     @Override
     public void tick() {
         if (pendingValue() != shownPending || balanceValue() != shownBalance
-                || availableValue() != shownAvailable || windowValue() != shownWindow) {
+                || availableValue() != shownAvailable || windowValue() != shownWindow
+                || ClientSellData.version() != shownVersion) {
             rebuild();
             return;
         }
@@ -279,7 +306,7 @@ public class ShopScreen extends GlassScreen {
     private Component sellLabel() {
         int pending = pendingValue();
         if (pending <= 0) return Component.translatable("zones.shop.sell.empty");
-        return Component.translatable("zones.shop.sell", pending);
+        return Component.translatable("zones.shop.sell", MoneyText.digits(pending));
     }
 
     private int pendingValue() {
@@ -469,12 +496,14 @@ public class ShopScreen extends GlassScreen {
         if (!ShopClock.open(entry)) return ShopClock.label(entry);
         if (entry.soldOut()) return Component.translatable("zones.shop.sold_out");
         if (maxAffordable(entry) <= 0) {
-            return Component.translatable("zones.shop.too_expensive", entry.price() - balanceValue());
+            return Component.translatable("zones.shop.too_expensive",
+                    ClientSellData.amountText((long) entry.price() - balanceValue()));
         }
 
         int items = quantity * entry.bundle();
-        if (items <= 1) return Component.translatable("zones.shop.buy", entry.price());
-        return Component.translatable("zones.shop.buy.many", items, entry.price() * quantity);
+        if (items <= 1) return Component.translatable("zones.shop.buy", ClientSellData.amountText(entry.price()));
+        return Component.translatable("zones.shop.buy.many", items,
+                ClientSellData.amountText((long) entry.price() * quantity));
     }
 
     private void refreshBuyLabel() {
@@ -596,14 +625,22 @@ public class ShopScreen extends GlassScreen {
 
         UiGlass.panel(graphics, balanceLeft(), rowY, BALANCE_WIDTH, HEADER_ROW_HEIGHT,
                 UiMetrics.radius(HEADER_ROW_HEIGHT), 1.0f);
-        UiRender.textTrackedFit(graphics, this.font, balanceLabel(),
-                balanceLeft() + BALANCE_WIDTH / 2.0f, rowY, HEADER_ROW_HEIGHT,
-                BALANCE_WIDTH - UiMetrics.PAD_WIDE * 2.0f, BALANCE_SCALE, 0.0f, UiAccent.text(), false);
+        float iconLeft = balanceLeft() + UiMetrics.PAD;
+        CurrencyIcon.draw(graphics, iconLeft, rowY + (HEADER_ROW_HEIGHT - BALANCE_ICON) / 2.0f, BALANCE_ICON,
+                UiAccent.color(), 1.0f);
+        float textLeft = iconLeft + BALANCE_ICON + UiMetrics.GAP;
+        float room = balanceLeft() + BALANCE_WIDTH - UiMetrics.PAD - textLeft;
+        balanceLine.box(graphics, this.font, balanceText, textLeft, rowY, HEADER_ROW_HEIGHT, room, BALANCE_SCALE,
+                UiAccent.text());
     }
 
+    // WHY: значок уже называет валюту предметом, поэтому в «Предмете» рядом стоит одно число; у
+    // WHY: счёта значок общий, и рядом с суммой идёт имя валюты, которое задал оператор
     private Component balanceLabel() {
         if (minecraft == null || minecraft.player == null) return Component.empty();
-        return Component.translatable("zones.shop.balance", ClientSellData.balance(minecraft.player));
+        int balance = ClientSellData.balance(minecraft.player);
+        return ClientSellData.accounts() ? ClientSellData.amountText(balance)
+                : Component.literal(MoneyText.digits(balance));
     }
 
     private void renderGrid(GuiGraphics graphics, int gridLeft, int top, int height, int mouseX, int mouseY) {
@@ -772,11 +809,20 @@ public class ShopScreen extends GlassScreen {
         int x = previewLeft + (int) UiMetrics.PAD_WIDE;
         int y = top + panelHeight() - BUY_HEIGHT - (int) UiMetrics.PAD_WIDE;
         ItemStack stack = treasury.chosenStack();
-        UiButton take = new UiButton(x, y, width, BUY_HEIGHT, stack.isEmpty()
-                ? Component.translatable("zones.shop.treasury.pick")
-                : Component.translatable("zones.shop.treasury.take", stack.getCount()), pressed -> takeChosen());
+        UiButton take = new UiButton(x, y, width, BUY_HEIGHT, takeLabel(stack), pressed -> takeChosen());
         take.active = !stack.isEmpty();
+        if (TreasuryPane.creditsAccount(stack)) take.hint("zones.shop.treasury.take.account.hint");
         addRenderableWidget(take);
+    }
+
+    // WHY: в режиме «Счёт» валюта из казны зачисляется на счёт, а не кладётся в инвентарь, и кнопка
+    // WHY: говорит об этом сама: «Забрать 64» читалось бы как стопка предметов в руки
+    private static Component takeLabel(ItemStack stack) {
+        if (stack.isEmpty()) return Component.translatable("zones.shop.treasury.pick");
+        if (TreasuryPane.creditsAccount(stack)) {
+            return Component.translatable("zones.shop.treasury.take.account", ClientSellData.amountText(stack.getCount()));
+        }
+        return Component.translatable("zones.shop.treasury.take", stack.getCount());
     }
 
     // WHY: в заявке едет место и предмет: сервер сверяет, что там всё ещё эта стопка, и отдаёт её

@@ -6,10 +6,12 @@ import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
-import com.persiki84.shared.client.ui.UiMorphText;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
+import com.persiki84.shared.client.ui.UiTickerPool;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -52,6 +54,12 @@ public final class StudioNav {
 
     private record Nudge(String base, int delta, long at) {}
 
+    private static final class Count {
+        private Component source;
+        private String text = "";
+        private long number = -1L;
+    }
+
     public enum Drop { NONE, BEFORE, AFTER, INTO }
 
     public record Node(String key, Component label, Component count, int depth, boolean heading, boolean movable) {
@@ -70,7 +78,8 @@ public final class StudioNav {
     private final Smooth mark = new Smooth(0.0f, MARK_SPEED);
     private final Smooth markShown = new Smooth(0.0f, MARK_SPEED);
     private final Smooth carryLift = new Smooth(0.0f, LIFT_SPEED);
-    private final Map<String, UiMorphText> counts = new HashMap<>();
+    private final UiTickerPool counts = new UiTickerPool(UiTicker.RIGHT);
+    private final Map<String, Count> countTexts = new HashMap<>();
     private final Map<String, Nudge> nudges = new HashMap<>();
     private Settling settling;
     private final Map<String, Smooth> rowShift = new HashMap<>();
@@ -224,19 +233,41 @@ public final class StudioNav {
         nudges.put(key, new Nudge(node.count().getString(), carriedDelta + delta, System.currentTimeMillis()));
     }
 
-    private String countOf(Node node) {
-        String base = node.count().getString();
+    // WHY: строка числа снимается с компонента только на смене его ссылки: узлы пересобираются по
+    // WHY: снимку, а не в кадре, и неизменный счёт в кадре ничего не собирает
+    private Count countOf(Node node) {
+        Count count = countTexts.get(node.key());
+        if (count == null) {
+            count = new Count();
+            countTexts.put(node.key(), count);
+        }
+        if (count.source != node.count()) {
+            count.source = node.count();
+            count.text = node.count().getString();
+            count.number = parsed(count.text.trim());
+        }
+        return count;
+    }
+
+    private long nudged(Node node, Count count) {
         Nudge nudge = nudges.get(node.key());
-        if (nudge == null) return base;
-        if (!nudge.base().equals(base) || System.currentTimeMillis() - nudge.at() > NUDGE_MS) {
+        if (nudge == null || count.number < 0L) return count.number;
+        if (!nudge.base().equals(count.text) || System.currentTimeMillis() - nudge.at() > NUDGE_MS) {
             nudges.remove(node.key());
-            return base;
+            return count.number;
         }
-        try {
-            return String.valueOf(Math.max(0, Integer.parseInt(base.trim()) + nudge.delta()));
-        } catch (NumberFormatException notNumber) {
-            return base;
+        return Math.max(0L, count.number + nudge.delta());
+    }
+
+    private static long parsed(String text) {
+        if (text.isEmpty() || text.length() > 12) return -1L;
+        long value = 0L;
+        for (int index = 0; index < text.length(); index++) {
+            char symbol = text.charAt(index);
+            if (symbol < '0' || symbol > '9') return -1L;
+            value = value * 10L + (symbol - '0');
         }
+        return value;
     }
 
     public void hoverDrop(double mouseX, double mouseY, Predicate<Node> accepts) {
@@ -256,7 +287,6 @@ public final class StudioNav {
         shown = nodes;
         glide.to(0.0f, UiFrame.delta());
         trackRows();
-        advanceCounts();
         UiRender.clip(graphics, left, top, width, height);
         try {
             paintPill(graphics, selected);
@@ -285,21 +315,6 @@ public final class StudioNav {
         }
     }
 
-    // WHY: число раздела перекатывается по цифрам, как таймер острова, а не подменяется разом
-    private void advanceCounts() {
-        float delta = UiFrame.delta();
-        for (Node node : shown) {
-            String value = countOf(node);
-            if (value.isEmpty()) continue;
-            UiMorphText morph = counts.computeIfAbsent(node.key(), key -> {
-                UiMorphText made = new UiMorphText();
-                made.snap(value);
-                return made;
-            });
-            morph.set(value);
-            morph.advance(delta);
-        }
-    }
 
     // WHY: поднятая строка рисуется поверх всех окон, после пересъёмки интерфейса экраном
     public void renderLifted(GuiGraphics graphics) {
@@ -347,13 +362,29 @@ public final class StudioNav {
         float appear = UiAnim.easeOut((System.currentTimeMillis() - shownAt - index * STAGGER_MS) / APPEAR_MS);
         float slide = (1.0f - appear) * APPEAR_SLIDE;
         if (node.heading()) {
-            paintHeading(graphics, node, y, appear, slide);
+            UiRestFrame.declare(graphics, slide, y - restY(index));
+            try {
+                paintHeading(graphics, node, y, appear, slide);
+            } finally {
+                UiRestFrame.retract();
+            }
             return;
         }
         float focus = hover.computeIfAbsent(node.key(), key -> new Smooth(0.0f, HOVER_SPEED))
                 .to(over ? 1.0f : 0.0f, UiFrame.delta());
         float dim = carried != null && carried.key().equals(node.key()) ? 0.35f : 1.0f;
-        paintBody(graphics, node, y, appear * dim, focus, chosen, slide);
+        UiRestFrame.declare(graphics, slide, y - restY(index));
+        try {
+            paintBody(graphics, node, y, appear * dim, focus, chosen, slide);
+        } finally {
+            UiRestFrame.retract();
+        }
+    }
+
+    // WHY: место строки без прокрутки и переезда: оба едут экспонентой, и без заявки хода буквы
+    // WHY: шли бы за ними ступенями по пикселю с последним шагом в самом конце
+    private float restY(int index) {
+        return top + UiMetrics.PAD + (index - scroll) * ROW;
     }
 
     private void paintHeading(GuiGraphics graphics, Node node, float y, float appear, float slide) {
@@ -378,14 +409,24 @@ public final class StudioNav {
 
     private void paintText(GuiGraphics graphics, Node node, float x, float y, float w, float appear, boolean lit) {
         int tone = lit ? UiAccent.text() : UiAccent.textDim();
-        UiMorphText count = node.count().getString().isEmpty() ? null : counts.get(node.key());
-        float countWidth = count == null ? 0.0f : COUNT_WIDTH;
+        Count count = countOf(node);
+        float countWidth = count.text.isEmpty() ? 0.0f : COUNT_WIDTH;
         UiRender.textTrackedBox(graphics, font(), node.label(), x + UiMetrics.PAD, y, ROW,
                 w - UiMetrics.PAD * 2.0f - countWidth, LABEL_SCALE, 0.0f, UiTheme.alpha(tone, appear), false, 0.0f);
-        if (count != null) {
-            count.drawRight(graphics, font(), x + w - UiMetrics.PAD, UiRender.centerY(y, ROW, COUNT_SCALE),
-                    COUNT_SCALE, UiTheme.alpha(UiAccent.textFaint(), appear));
+        if (!count.text.isEmpty()) paintCount(graphics, node, count, x + w - UiMetrics.PAD, y, appear);
+    }
+
+    // WHY: число раздела перекатывается по цифрам, как таймер острова, а не подменяется разом
+    private void paintCount(GuiGraphics graphics, Node node, Count count, float right, float y, float appear) {
+        UiTicker ticker = counts.of(node.key());
+        long number = nudged(node, count);
+        if (number >= 0L) {
+            ticker.set(number);
+        } else {
+            ticker.set(count.text);
         }
+        ticker.draw(graphics, font(), right, UiRender.centerY(y, ROW, COUNT_SCALE), COUNT_SCALE,
+                UiAccent.textFaint(), appear);
     }
 
     private void paintMarker(GuiGraphics graphics) {
@@ -404,7 +445,8 @@ public final class StudioNav {
     private void paintCarried(GuiGraphics graphics) {
         float delta = UiFrame.delta();
         grabY *= (float) Math.exp(-GRAB_SPEED * delta);
-        paintRaised(graphics, carried, carryY - ROW / 2.0f + grabY, carryLift.to(1.0f, delta), 1.0f);
+        float y = carryY - ROW / 2.0f + grabY;
+        paintRaised(graphics, carried, y, y, carryLift.to(1.0f, delta), 1.0f);
     }
 
     // WHY: строка, вернувшаяся на своё место, отдаёт его списку, как только доехала. Брошенная на новое
@@ -417,7 +459,7 @@ public final class StudioNav {
             return;
         }
         float travel = UiAnim.easeOut(Math.min(1.0f, age / SETTLE_MS));
-        paintRaised(graphics, settling.node(), settledY(), settling.lift() * (1.0f - travel), 1.0f);
+        paintRaised(graphics, settling.node(), settledY(), settling.toY(), settling.lift() * (1.0f - travel), 1.0f);
     }
 
     private float settledY() {
@@ -425,21 +467,24 @@ public final class StudioNav {
         return settling.fromY() + (settling.toY() - settling.fromY()) * travel;
     }
 
-    private void paintRaised(GuiGraphics graphics, Node node, float y, float lift, float alpha) {
+    // WHY: подъём и доезд брошенной строки заявлены ходом от её места: текст стоит на сетке покоя и
+    // WHY: садится в строку списка без последнего шага в пиксель
+    private void paintRaised(GuiGraphics graphics, Node node, float y, float restY, float lift, float alpha) {
         float x = rowLeft(node);
         float w = left + width - UiMetrics.GAP - x;
         float scale = 1.0f + (CARRY_SCALE - 1.0f) * lift;
-        float centerY = y + ROW / 2.0f;
         graphics.pose().pushPose();
-        graphics.pose().translate(x + w / 2.0f, centerY, 60.0f);
-        graphics.pose().scale(scale, scale, 1.0f);
-        graphics.pose().translate(-(x + w / 2.0f), -centerY, 0.0f);
+        graphics.pose().translate(0.0f, 0.0f, 60.0f);
+        UiRestFrame.declare(graphics, 0.0f, y - restY);
+        UiRestFrame.push(graphics, x + w / 2.0f, y + ROW / 2.0f, scale, scale, 0.0f, 0.0f);
         try {
             UiGlass.hush(graphics, x, y + HUSH_DROP * lift, w, ROW - 1.0f, UiMetrics.radius(ROW - 1.0f),
                     HUSH_ALPHA * lift * alpha);
             UiGlass.panel(graphics, x, y, w, ROW - 1.0f, UiMetrics.radius(ROW - 1.0f), alpha, 0.7f * lift);
             paintText(graphics, node, x, y, w, alpha, true);
         } finally {
+            UiRestFrame.pop(graphics);
+            UiRestFrame.retract();
             graphics.pose().popPose();
         }
     }

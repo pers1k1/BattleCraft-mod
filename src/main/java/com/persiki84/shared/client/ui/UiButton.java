@@ -5,6 +5,7 @@ import com.persiki84.shared.client.menu.GlidingRow;
 import com.persiki84.shared.client.menu.MenuHint;
 import com.persiki84.shared.client.menu.RowAnchor;
 import com.persiki84.shared.client.menu.ScrollLanes;
+import com.persiki84.shared.client.menu.TickerLine;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.sounds.SoundManager;
@@ -28,6 +29,9 @@ public class UiButton extends AbstractButton implements GlidingRow, SelfPainted 
     private final Smooth swap = new Smooth(1.0f, SWAP_SPEED);
     private Component outgoing;
     private String shownLabel;
+    private Component trackedMessage;
+    private TickerLine digits = new TickerLine(UiTicker.CENTER, UiSkin.LABEL_TRACKING);
+    private boolean counting;
     private final RowAnchor anchor = new RowAnchor();
     private Component explanation;
     private int swatch;
@@ -68,6 +72,9 @@ public class UiButton extends AbstractButton implements GlidingRow, SelfPainted 
         swap.snap(older.swap.get());
         outgoing = older.outgoing;
         shownLabel = older.shownLabel;
+        trackedMessage = older.trackedMessage;
+        digits = older.digits;
+        counting = older.counting;
         held = older.held;
     }
 
@@ -157,11 +164,22 @@ public class UiButton extends AbstractButton implements GlidingRow, SelfPainted 
         UiSkin.button(graphics, this.getX(), this.getY(), this.width, this.height, this.getMessage(),
                 outgoing, swap.to(1.0f, delta), live.to(this.active ? 1.0f : 0.0f, delta),
                 hover.to(focused ? 1.0f : 0.0f, delta), press.to(held ? 1.0f : 0.0f, delta),
-                UiSkin.fit(graphics), swatch, lit);
+                UiSkin.fit(graphics), swatch, lit, counting ? digits : null);
     }
 
+    // WHY: подпись разворачивается в строку только при смене ссылки на компонент, а не в каждом кадре.
+    // WHY: Тикер цифр ведётся и пока подпись идёт сменой: иначе первая смена одних цифр после неё
+    // WHY: встала бы без хода, тикер не знал бы прошлого значения
     private void trackLabel() {
-        String now = this.getMessage().getString();
+        Component message = this.getMessage();
+        if (message != trackedMessage) {
+            trackedMessage = message;
+            retext(message.getString());
+        }
+        if (!counting) digits.follow(message);
+    }
+
+    private void retext(String now) {
         if (shownLabel == null) {
             shownLabel = now;
             return;
@@ -170,6 +188,12 @@ public class UiButton extends AbstractButton implements GlidingRow, SelfPainted 
 
         String previous = shownLabel;
         shownLabel = now;
+        counting = digitsOnly(previous, now);
+        if (counting) {
+            outgoing = null;
+            swap.snap(1.0f);
+            return;
+        }
         if (swap.get() < 0.999f) {
             outgoing = null;
             swap.snap(1.0f);
@@ -177,6 +201,27 @@ public class UiButton extends AbstractButton implements GlidingRow, SelfPainted 
         }
         outgoing = Component.literal(previous);
         swap.snap(0.0f);
+    }
+
+    // WHY: подписи равны, если выкинуть цифры и разделители разрядов: «Купить за 90» и «Купить за 1 200»
+    // WHY: это одна подпись с другим числом, а «Готов» и «Готов через 5» - разные
+    private static boolean digitsOnly(String before, String after) {
+        int i = 0;
+        int j = 0;
+        boolean digitBefore = false;
+        boolean digitAfter = false;
+        while (true) {
+            while (i < before.length() && numeric(before.charAt(i))) digitBefore |= Character.isDigit(before.charAt(i++));
+            while (j < after.length() && numeric(after.charAt(j))) digitAfter |= Character.isDigit(after.charAt(j++));
+            if (i >= before.length() || j >= after.length()) {
+                return i >= before.length() && j >= after.length() && digitBefore && digitAfter;
+            }
+            if (before.charAt(i++) != after.charAt(j++)) return false;
+        }
+    }
+
+    private static boolean numeric(char symbol) {
+        return Character.isDigit(symbol) || Character.isSpaceChar(symbol) || symbol == ',' || symbol == '.';
     }
 
     @Override

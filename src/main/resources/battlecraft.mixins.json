@@ -5,10 +5,15 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "battlecraft.refmap.json",
   "mixins": [
+    "BrewingRecipeRegistryMixin",
     "ClearInventoryCommandsMixin",
     "HopperBlockEntityMixin",
+    "KnowledgeBookItemMixin",
+    "RecipeManagerMixin",
     "SculkShriekerMixin",
-    "ServerLevelSoundMixin"
+    "ServerLevelSoundMixin",
+    "ServerPlayerRecipesMixin",
+    "ServerRecipeBookMixin"
   ],
   "client": [
     "AbstractSelectionListMixin",

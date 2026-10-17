@@ -19,9 +19,11 @@ import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiVital;
 import com.persiki84.battlecraft.client.ClientModules;
 import com.persiki84.battlecraft.client.hud.HudInk;
+import com.persiki84.battlecraft.client.hud.HudMeasure;
 import com.persiki84.battlecraft.client.hud.SharpHud;
 import com.persiki84.battlecraft.modules.ModuleId;
 import net.minecraft.client.Minecraft;
@@ -45,6 +47,24 @@ public final class KnockdownHud {
     private static final float PROMPT_PADDING = UiMetrics.PAD_WIDE;
     private static final float PROMPT_STEP = UiMetrics.MARGIN_WIDE;
     private static final float SECOND_GAP = UiMetrics.MARGIN_WIDE;
+    private static final float FAST_NUMBER_SECONDS = 0.1f;
+
+    private static final UiTicker.Format BLEEDING =
+            seconds -> Component.translatable("knockdown.hud.bleeding", seconds).getString();
+    private static final UiTicker.Format REVIVE_PROGRESS =
+            percent -> Component.translatable("knockdown.hud.revive_progress", percent).getString();
+    private static final UiTicker.Format INJECTOR =
+            unused -> Component.translatable("knockdown.hud.injector_using").getString();
+    private static final UiTicker.Format BEING_REVIVED =
+            unused -> Component.translatable("knockdown.hud.being_revived").getString();
+    private static final UiTicker.Format SURRENDER =
+            unused -> Component.translatable("knockdown.action.surrender").getString();
+
+    private static final UiTicker bleedTicker = new UiTicker().align(UiTicker.CENTER);
+    private static final UiTicker actionTicker = new UiTicker().align(UiTicker.CENTER);
+    private static final UiTicker reviveTicker =
+            new UiTicker().align(UiTicker.CENTER).throttle(FAST_NUMBER_SECONDS);
+    private static final UiTicker sampleTicker = new UiTicker().align(UiTicker.CENTER);
 
     private static final Smooth bleedProgress = new Smooth(12.0f);
     private static final Smooth actionProgress = new Smooth(14.0f);
@@ -54,7 +74,7 @@ public final class KnockdownHud {
     private static final Toggle targetToggle = new Toggle(9.0f, 150L);
 
     private static int heldBleedSeconds;
-    private static Component heldActionLabel;
+    private static UiTicker.Format heldAction;
     private static int heldRevivePercent;
     private static boolean heldTargetReviving;
 
@@ -98,15 +118,15 @@ public final class KnockdownHud {
         trackBleeding(cap, delta);
 
         float labelScale = UiRender.crisp(graphics, LABEL_SCALE);
-        Component bleeding = Component.translatable("knockdown.hud.bleeding", heldBleedSeconds);
-        float width = cardWidth(mc, bleeding, labelScale);
+        bleedTicker.set(heldBleedSeconds, BLEEDING);
+        float width = cardWidth(HudMeasure.steady(graphics, bleedTicker, mc.font, labelScale, HudSlot.KNOCKDOWN));
         float height = cardHeight(mc, labelScale);
         HudBox box = HudLayout.place(HudSlot.KNOCKDOWN, width, height, screenWidth, screenHeight);
 
         HudLayout.push(graphics, box);
         try {
             float pulse = UiAnim.pulse(900.0f, 0.55f, 1.0f);
-            card(graphics, mc, bleeding, bleedProgress.get(),
+            card(graphics, mc, bleedTicker, bleedProgress.get(),
                     UiTheme.mix(UiAccent.color(), UiPalette.alert(), 0.65f),
                     box.x(), box.y(), width, labelScale, alpha, alpha * pulse);
             renderAction(graphics, mc, cap, box, labelScale, alpha, delta);
@@ -125,17 +145,18 @@ public final class KnockdownHud {
 
     private static void renderAction(GuiGraphics graphics, Minecraft mc, KnockdownCapability cap, HudBox box,
                                      float labelScale, float alpha, float delta) {
-        Component label = actionLabel(cap);
+        UiTicker.Format label = actionLabel(cap);
         float shown = actionToggle.update(label != null, delta);
         if (label != null) {
-            heldActionLabel = label;
+            heldAction = label;
         }
 
-        if (shown > 0.01f && heldActionLabel != null) {
+        if (shown > 0.01f && heldAction != null) {
             float value = actionToggle.live() ? actionProgress.to(actionValue(cap), delta) : actionProgress.get();
-            float width = cardWidth(mc, heldActionLabel, labelScale);
+            actionTicker.set(0L, heldAction);
+            float width = cardWidth(actionTicker.steadyWidth(graphics, mc.font, labelScale));
             float height = cardHeight(mc, labelScale);
-            card(graphics, mc, heldActionLabel, value, UiAccent.color(),
+            card(graphics, mc, actionTicker, value, UiAccent.color(),
                     box.localCenterX() - width / 2.0f, box.y() - SECOND_GAP - height, width, labelScale, shown, shown);
             return;
         }
@@ -144,13 +165,9 @@ public final class KnockdownHud {
         renderPrompts(graphics, mc, box.localCenterX(), box.y() - SECOND_GAP, alpha);
     }
 
-    private static Component actionLabel(KnockdownCapability cap) {
-        if (cap.getReviveProgress() > 0) {
-            return Component.translatable(cap.isSelfReviving()
-                    ? "knockdown.hud.injector_using"
-                    : "knockdown.hud.being_revived");
-        }
-        if (cap.getSurrenderProgress() > 0) return Component.translatable("knockdown.action.surrender");
+    private static UiTicker.Format actionLabel(KnockdownCapability cap) {
+        if (cap.getReviveProgress() > 0) return cap.isSelfReviving() ? INJECTOR : BEING_REVIVED;
+        if (cap.getSurrenderProgress() > 0) return SURRENDER;
         return null;
     }
 
@@ -219,14 +236,14 @@ public final class KnockdownHud {
     private static void renderTargetCard(GuiGraphics graphics, Minecraft mc, float screenWidth,
                                          float screenHeight, float alpha) {
         float labelScale = UiRender.crisp(graphics, LABEL_SCALE);
-        Component label = Component.translatable("knockdown.hud.revive_progress", heldRevivePercent);
-        float width = cardWidth(mc, label, labelScale);
+        reviveTicker.set(heldRevivePercent, REVIVE_PROGRESS);
+        float width = cardWidth(HudMeasure.steady(graphics, reviveTicker, mc.font, labelScale, HudSlot.KNOCKDOWN));
         HudBox box = HudLayout.place(HudSlot.KNOCKDOWN, width, cardHeight(mc, labelScale),
                 screenWidth, screenHeight);
 
         HudLayout.push(graphics, box);
         try {
-            card(graphics, mc, label, targetProgress.get(), UiAccent.color(),
+            card(graphics, mc, reviveTicker, targetProgress.get(), UiAccent.color(),
                     box.x(), box.y(), width, labelScale, alpha, alpha);
         } finally {
             HudLayout.pop(graphics, box);
@@ -252,34 +269,32 @@ public final class KnockdownHud {
     public static void preview(GuiGraphics graphics, HudBox box, float alpha) {
         Minecraft mc = Minecraft.getInstance();
         float labelScale = UiRender.crisp(graphics, LABEL_SCALE);
-        Component bleeding = Component.translatable("knockdown.hud.bleeding", SAMPLE_SECONDS);
-        float width = cardWidth(mc, bleeding, labelScale);
+        sampleTicker.set(SAMPLE_SECONDS, BLEEDING);
+        float width = cardWidth(sampleTicker.steadyWidth(graphics, mc.font, labelScale));
 
         HudLayout.sample(HudSlot.KNOCKDOWN, width, cardHeight(mc, labelScale));
-        card(graphics, mc, bleeding, SAMPLE_PROGRESS,
+        card(graphics, mc, sampleTicker, SAMPLE_PROGRESS,
                 UiTheme.mix(UiAccent.color(), UiPalette.alert(), 0.65f),
                 box.x(), box.y(), width, labelScale, alpha, alpha);
     }
 
-    private static float cardWidth(Minecraft mc, Component label, float labelScale) {
-        return barWidth(mc, label, labelScale) + CARD_PADDING * 2.0f;
-    }
-
-    private static float barWidth(Minecraft mc, Component label, float labelScale) {
-        return Math.max(BAR_WIDTH, UiRender.width(mc.font, label) * labelScale + LABEL_ROOM);
+    private static float cardWidth(float labelWidth) {
+        return Math.max(BAR_WIDTH, labelWidth + LABEL_ROOM) + CARD_PADDING * 2.0f;
     }
 
     private static float cardHeight(Minecraft mc, float labelScale) {
         return mc.font.lineHeight * labelScale + BAR_HEIGHT + CARD_PADDING * 2.0f + CARD_GAP;
     }
 
-    private static void card(GuiGraphics graphics, Minecraft mc, Component label, float value, int color,
+    // WHY: подпись карточки идёт тикером: секунды кровотечения и проценты подъёма меняют только
+    // WHY: сменившиеся цифры, а смена действия (подъём, укол, сдача) перетекает по буквам
+    private static void card(GuiGraphics graphics, Minecraft mc, UiTicker label, float value, int color,
                              float cardX, float cardY, float cardWidth, float labelScale,
                              float alpha, float fillAlpha) {
         float cardHeight = cardHeight(mc, labelScale);
         UiVital.card(graphics, cardX, cardY, cardWidth, cardHeight, UiMetrics.radius(cardHeight), alpha);
-        UiRender.textCentered(graphics, mc.font, label, cardX + cardWidth / 2.0f, cardY + CARD_PADDING,
-                labelScale, UiTheme.alpha(HudInk.text(), alpha), false);
+        label.draw(graphics, mc.font, cardX + cardWidth / 2.0f, cardY + CARD_PADDING, labelScale, HudInk.text(),
+                alpha);
 
         float barX = cardX + CARD_PADDING;
         float barY = cardY + cardHeight - CARD_PADDING - BAR_HEIGHT;

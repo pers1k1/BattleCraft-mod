@@ -486,6 +486,12 @@ public final class AirDropStudioScreen extends StudioScreen {
     }
 
     @Override
+    protected String tickerKey(int index) {
+        List<? extends StudioTile> shown = tiles();
+        return index < shown.size() && shown.get(index) instanceof CacheTile ? tileKey(index) : null;
+    }
+
+    @Override
     protected List<StudioMenu.Action> bulkActions(List<Integer> indices) {
         int count = indices.size();
         if (tableName() == null) return cacheBulk(indices, count);

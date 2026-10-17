@@ -34,8 +34,6 @@ public final class IslandModel {
     private static boolean carded;
     private static int frames = -1;
     private static int latency = -1;
-    private static Component framesLabel = Component.empty();
-    private static Component latencyLabel = Component.empty();
     private static Component nick = Component.empty();
     private static String nickRaw = "";
 
@@ -43,17 +41,8 @@ public final class IslandModel {
 
     public static void pollStats() {
         Minecraft mc = Minecraft.getInstance();
-        int shownFrames = mc.getFps();
-        if (shownFrames != frames) {
-            frames = shownFrames;
-            framesLabel = Component.literal(String.valueOf(frames));
-        }
-
-        int shownLatency = ping(mc);
-        if (shownLatency != latency) {
-            latency = shownLatency;
-            latencyLabel = Component.literal(String.valueOf(latency));
-        }
+        frames = mc.getFps();
+        latency = ping(mc);
         rememberNick(mc);
     }
 
@@ -142,12 +131,12 @@ public final class IslandModel {
         return energy.get();
     }
 
-    public static Component frames() {
-        return framesLabel;
+    public static int frames() {
+        return Math.max(0, frames);
     }
 
-    public static Component latency() {
-        return latencyLabel;
+    public static int latency() {
+        return Math.max(0, latency);
     }
 
     public static Component nick() {

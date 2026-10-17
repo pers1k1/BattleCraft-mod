@@ -9,6 +9,9 @@ uniform float Mode;
 uniform vec2 Sweep;
 uniform vec2 Origin;
 uniform float Arrival;
+uniform sampler2D Sampler1;
+uniform vec4 FrostSpan;
+uniform float FrostShare;
 
 in vec2 stagePoint;
 
@@ -62,16 +65,13 @@ const vec2 FOCUS_TAPS[8] = vec2[8](
 // WHY: 0.61 входа. Уход с образца, (1-t)^4, терял 40 % непрозрачности на первом кадре и читался
 // WHY: рывком, поэтому он зеркален входу: непрозрачность (1-t^2)^2 и увеличение до 1.056 как t^2 стоят
 // WHY: на месте в первом кадре и гаснут без излома в последнем, а размытие растёт как t^1.4 до сигмы
-// WHY: 2.37 % ширины экрана, так что панель уходит расфокусом, а не просто прозрачностью
+// WHY: 2.37 % ширины экрана, так что панель уходит расфокусом, а не просто прозрачностью.
+// WHY: Сам гаусс считает UiFrost раздельными проходами на уменьшенной копии стадии: прежний диск из
+// WHY: сорока случайно повёрнутых отсчётов по полной стадии разбивал кэш текстур и ронял кадр
 const float FROST_OPEN_FADE = 0.61;
 const float FROST_OPEN_ZOOM = 0.135;
 const float FROST_OPEN_EASE = 2.0;
-const float FROST_CLOSE_DRIFT = 1.4;
 const float FROST_CLOSE_ZOOM = 0.056;
-const float FROST_CLOSE_SIGMA = 0.0237;
-const float FROST_SHARP = 0.35;
-const int FROST_TAPS = 40;
-const float GOLDEN_TURN = 2.3999632;
 
 const float LAND_START = 0.94;
 const float LAND_END = 1.00;
@@ -151,23 +151,27 @@ float coverageAt(vec2 point, float reach, float inward) {
     return found > 0.0 || enclosed > 0.0 ? grown : found;
 }
 
-float hardCover(vec2 uv) {
-    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0;
-    return min(1.0, sqrt(texture(Sampler0, uv).a) * COVER_STEPS);
+// WHY: покрытие и цвет тапа берутся из одного чтения: раньше их было два на тап, тридцать четыре на
+// WHY: пиксель, и наводка стоила 0.95 мс на 2560x1440. Тап за кадром пуст, как и прежде: покрытие
+// WHY: там ноль, а цвет умножается на него
+vec4 focusTap(vec2 at) {
+    if (at.x < 0.0 || at.x > 1.0 || at.y < 0.0 || at.y > 1.0) return vec4(0.0);
+    vec4 found = texture(Sampler0, at);
+    return vec4(found.rgb, min(1.0, sqrt(found.a) * COVER_STEPS));
 }
 
 // WHY: цвет усредняется с весом покрытия, иначе пустые тапы за кромкой панели тянут её в чёрное
 vec4 focusAt(vec2 centre, vec2 step) {
-    float cover = hardCover(centre);
-    vec3 tint = texture(Sampler0, centre).rgb * cover;
+    vec4 middle = focusTap(centre);
+    float cover = middle.a;
+    vec3 tint = middle.rgb * cover;
     float weight = 1.0;
     for (int ring = 1; ring <= FOCUS_RINGS; ring++) {
         vec2 reach = step * (float(ring) / float(FOCUS_RINGS));
         for (int tap = 0; tap < 8; tap++) {
-            vec2 at = centre + FOCUS_TAPS[tap] * reach;
-            float found = hardCover(at);
-            tint += texture(Sampler0, at).rgb * found;
-            cover += found;
+            vec4 found = focusTap(centre + FOCUS_TAPS[tap] * reach);
+            tint += found.rgb * found.a;
+            cover += found.a;
             weight += 1.0;
         }
     }
@@ -201,11 +205,6 @@ float frostZoom(float t, bool leaving) {
     return frostOpenZoom(t);
 }
 
-float frostSigma(float t, bool leaving) {
-    if (!leaving) return 0.0;
-    return FROST_CLOSE_SIGMA * ScreenSize.x * pow(t, FROST_CLOSE_DRIFT);
-}
-
 float coverOf(float alpha) {
     return min(1.0, sqrt(alpha) * COVER_STEPS);
 }
@@ -215,37 +214,68 @@ vec4 stageAt(vec2 uv) {
     return texture(Sampler0, uv);
 }
 
-// WHY: отсчёты лежат спиралью по золотому углу, а их удаление от центра взято из обратной функции
-// WHY: распределения Рэлея: равные веса тогда складываются в гаусс с той же сигмой, что снята с кадров.
-// WHY: Цвет усредняется с весом покрытия, иначе пустые отсчёты за кромкой тянут панель в чёрное
-vec4 frostSoft(vec2 centre, float sigma) {
-    vec4 middle = stageAt(centre);
-    float cover = coverOf(middle.a);
-    vec3 tint = middle.rgb * cover;
-    float turn = hash(gl_FragCoord.xy) * 6.2831853;
-    for (int tap = 0; tap < FROST_TAPS; tap++) {
-        float share = (float(tap) + 0.5) / float(FROST_TAPS);
-        float reach = sigma * sqrt(-2.0 * log(1.0 - share));
-        float angle = turn + float(tap) * GOLDEN_TURN;
-        vec4 found = stageAt(centre + vec2(cos(angle), sin(angle)) * reach / ScreenSize);
-        float covered = coverOf(found.a);
-        tint += found.rgb * covered;
-        cover += covered;
+// WHY: UiFrost отдаёт уже размытые цвет с покрытием, умноженные друг на друга, то есть ровно то,
+// WHY: во что складывался прежний диск: среднее цвета с весом покрытия, умноженное на долю покрытия.
+// WHY: FrostSpan.xy переводит координату стадии в тексели уменьшенного уровня, FrostSpan.zw - его
+// WHY: размер. Всё за уровнем читается нулём: цель больше уровня, и там лежит остаток чужого прохода,
+// WHY: а у края экрана ноль даёт ту же половину покрытия на самой кромке, что гаусс полуплоскости
+vec4 frostTexel(ivec2 texel) {
+    if (texel.x < 0 || texel.y < 0 || texel.x >= int(FrostSpan.z) || texel.y >= int(FrostSpan.w)) {
+        return vec4(0.0);
     }
-    return vec4(cover > 0.0 ? tint / cover : vec3(0.0), cover / float(FROST_TAPS + 1));
+    return texelFetch(Sampler1, texel, 0);
 }
+
+vec4 frostBlurred(vec2 seen) {
+    vec2 point = seen * FrostSpan.xy - 0.5;
+    vec2 cell = floor(point);
+    vec2 share = point - cell;
+    ivec2 corner = ivec2(cell);
+    vec4 lower = mix(frostTexel(corner), frostTexel(corner + ivec2(1, 0)), share.x);
+    vec4 upper = mix(frostTexel(corner + ivec2(0, 1)), frostTexel(corner + ivec2(1, 1)), share.x);
+    return mix(lower, upper, share.y);
+}
+
+vec4 frostDecoded(vec2 seen) {
+    vec4 found = stageAt(seen);
+    float cover = coverOf(found.a);
+    return vec4(found.rgb * cover, cover);
+}
+
+// WHY: резкая половина смеси обязана быть той же величиной, которую размывал прежний диск, без креста:
+// WHY: крест добавил бы кромке пиксель, которого у размытой половины нет. И это среднее по пикселю,
+// WHY: а не один отсчёт: граница покрытия у билинейного чтения лежит ровно на центрах текселей, и
+// WHY: отсчёт в центре пикселя попадал бы на саму ступень. Четыре отсчёта в центрах четвертей дают
+// WHY: точный интеграл по пикселю, ящик с дисперсией 1/12
+vec4 frostSharp(vec2 seen) {
+    vec2 quarter = 0.25 / ScreenSize;
+    vec4 sum = frostDecoded(seen + vec2(-quarter.x, -quarter.y));
+    sum += frostDecoded(seen + vec2(quarter.x, -quarter.y));
+    sum += frostDecoded(seen + vec2(-quarter.x, quarter.y));
+    sum += frostDecoded(seen + vec2(quarter.x, quarter.y));
+    return sum * 0.25;
+}
+
+// WHY: самый мелкий уровень, половина кадра, сам по себе размывает на сигму в пиксель, а первые кадры
+// WHY: ухода просят меньше. Там размытое смешивается с резким в доле FrostShare, подобранной по
+// WHY: дисперсии: у малой сигмы гаусс это сама картинка плюс поправка, пропорциональная квадрату сигмы
+vec4 frostSoftened(vec2 seen) {
+    vec4 soft = frostBlurred(seen);
+    return FrostShare < 1.0 ? mix(frostSharp(seen), soft, FrostShare) : soft;
+}
+
 
 // WHY: масштаб считается сэмплингом стадии вокруг центра панели, а не позой отрисовки: так он один
 // WHY: на все пути (экран, окно палитры, титульный экран, ванильные настройки, уход в мировой позе)
 vec4 frost(vec2 uv, bool leaving) {
     float t = clamp(Phase, 0.0, 1.0);
     vec2 seen = Origin + (uv - Origin) / frostZoom(t, leaving);
-    float sigma = frostSigma(t, leaving);
+    if (leaving && FrostSpan.x > 0.0) return frostSoftened(seen) * frostOpacity(t, true);
+
     float exact = coverOf(coverageAt(seen * ScreenSize, COVER_REACH, leaving ? 1.0 : 0.0));
-    vec4 soft = sigma < FROST_SHARP ? vec4(stageAt(seen).rgb, exact) : frostSoft(seen, sigma);
     float land = leaving ? 0.0 : smoothstep(LAND_START, LAND_END, Phase);
-    float alpha = mix(soft.a * frostOpacity(t, leaving), 1.0, land);
-    vec3 tone = soft.a > 0.0 ? soft.rgb : texture(Sampler0, uv).rgb;
+    float alpha = mix(exact * frostOpacity(t, leaving), 1.0, land);
+    vec3 tone = exact > 0.0 ? stageAt(seen).rgb : texture(Sampler0, uv).rgb;
     return vec4(tone * alpha, alpha);
 }
 

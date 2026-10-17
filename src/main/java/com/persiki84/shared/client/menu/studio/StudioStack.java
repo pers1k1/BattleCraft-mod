@@ -106,6 +106,17 @@ public final class StudioStack {
         return true;
     }
 
+    // WHY: строка, к которой привёл поиск, доезжает до середины колонки прокруткой, а не появляется
+    // WHY: на месте: так видно, откуда она взялась. Позиции новых строк ставит следующая раскладка
+    public boolean center(AbstractWidget widget) {
+        if (!placed.contains(widget)) return false;
+        int target = clamp(widget.getY() - top + scroll - (bottom - top - widget.getHeight()) / 2);
+        if (target == scroll) return false;
+        glide.snap(glide.get() + target - scroll);
+        scroll = target;
+        return true;
+    }
+
     private int clamp(int value) {
         return Math.max(0, Math.min(value, Math.max(0, content - (bottom - top))));
     }

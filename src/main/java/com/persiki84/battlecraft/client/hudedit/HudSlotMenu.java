@@ -14,6 +14,7 @@ import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiGlassStyle;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.Minecraft;
@@ -388,12 +389,11 @@ public final class HudSlotMenu {
         graphics.pose().translate(left, top, 0.0f);
         graphics.pose().scale(squeeze, squeeze, 1.0f);
         graphics.pose().translate(-left, -top, 0.0f);
-        graphics.pose().translate(originX, originY, 0.0f);
-        graphics.pose().scale(scale(shown), scale(shown), 1.0f);
-        graphics.pose().translate(-originX, -originY, 0.0f);
+        UiRestFrame.push(graphics, originX, originY, scale(shown), scale(shown), 0.0f, 0.0f);
         try {
             paint(graphics, shown);
         } finally {
+            UiRestFrame.pop(graphics);
             graphics.pose().popPose();
         }
     }
@@ -415,7 +415,8 @@ public final class HudSlotMenu {
     }
 
     // WHY: строки въезжают лесенкой, но их места не двигаются: попадание мыши считается по
-    // WHY: своим координатам строки, сдвиг живёт только в отрисовке
+    // WHY: своим координатам строки, сдвиг живёт только в отрисовке. Рост окна и въезд строк заявлены
+    // WHY: ходом: голой позой подписи стояли на сетке живого кадра и в хвосте въезда доезжали рывком
     private static float cascade(int row, float shown) {
         float held = Math.min(ROW_STAGGER_CAP, row * ROW_STAGGER);
         return UiAnim.clamp01((shown - held) / (1.0f - held));
@@ -434,12 +435,11 @@ public final class HudSlotMenu {
     private static void paintRow(GuiGraphics graphics, int kind, float y, float shown) {
         if (shown <= 0.004f) return;
 
-        graphics.pose().pushPose();
-        graphics.pose().translate(ROW_SLIDE * (1.0f - shown), 0.0f, 0.0f);
+        UiRestFrame.shift(graphics, ROW_SLIDE * (1.0f - shown), 0.0f);
         try {
             paintBody(graphics, kind, y, shown);
         } finally {
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
         }
     }
 

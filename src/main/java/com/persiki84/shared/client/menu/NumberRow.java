@@ -6,10 +6,10 @@ import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiRender;
-import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -24,8 +24,6 @@ public class NumberRow extends MenuRow {
     private static final float VALUE_WIDTH = 54.0f;
     private static final float SIGN = 6.0f;
     private static final float SIGN_THICKNESS = 1.6f;
-    private static final float ROLL_LIFT = 5.0f;
-    private static final float ROLL_SPEED = 19.0f;
     private static final float PRESS_SPEED = 26.0f;
     private static final long FIRST_REPEAT_MS = 340L;
     private static final long FAST_REPEAT_MS = 28L;
@@ -42,13 +40,12 @@ public class NumberRow extends MenuRow {
     private final int step;
 
     private final Pending pending = new Pending();
-    private final Smooth roll = new Smooth(1.0f, ROLL_SPEED);
+    private final UiTicker.Format format = raw -> display((int) raw);
     private final Smooth minusPress = new Smooth(0.0f, PRESS_SPEED);
     private final Smooth plusPress = new Smooth(0.0f, PRESS_SPEED);
 
-    private int shown = Integer.MIN_VALUE;
-    private int previous = Integer.MIN_VALUE;
-    private int direction;
+    private UiTicker ticker = new UiTicker().align(UiTicker.CENTER);
+    private boolean floored;
     private int holding;
     private long holdStart;
     private long lastRepeat;
@@ -112,7 +109,6 @@ public class NumberRow extends MenuRow {
     @Override
     protected void renderValue(GuiGraphics graphics, int mouseX, int mouseY, float focus) {
         advanceHold();
-        trackValue();
 
         float top = getY() + (height - STEPPER) / 2.0f;
         float delta = UiFrame.delta();
@@ -125,7 +121,7 @@ public class NumberRow extends MenuRow {
             renderTyping(graphics);
             return;
         }
-        renderRolling(graphics, delta);
+        renderNumber(graphics);
     }
 
     @Override
@@ -134,12 +130,10 @@ public class NumberRow extends MenuRow {
         if (!(previous instanceof NumberRow older)) return;
 
         pending.take(older.pending);
-        roll.take(older.roll);
+        ticker = older.ticker;
+        floored = older.floored;
         minusPress.take(older.minusPress);
         plusPress.take(older.plusPress);
-        shown = older.shown;
-        this.previous = older.previous;
-        direction = older.direction;
         holding = older.holding;
         holdStart = older.holdStart;
         lastRepeat = older.lastRepeat;
@@ -149,50 +143,25 @@ public class NumberRow extends MenuRow {
         return pending.resolve(value.getAsInt());
     }
 
-    private void trackValue() {
+    // WHY: число на шаге стрелками и на приходе снимка меняется по цифрам, как таймер острова, а
+    // WHY: подпись нижнего предела и только что набранное встают сразу: их игрок уже видит как есть
+    private void renderNumber(GuiGraphics graphics) {
         int current = currentValue();
-        if (shown == Integer.MIN_VALUE) {
-            shown = current;
-            previous = current;
-            return;
-        }
-        if (current == shown) return;
-
-        direction = current > shown ? 1 : -1;
-        previous = shown;
-        shown = current;
-        roll.snap(0.0f);
-    }
-
-    private void renderRolling(GuiGraphics graphics, float delta) {
-        float progress = UiAnim.easeOut(roll.to(1.0f, delta));
         float centerX = valueCenter();
         int tint = this.active ? UiAccent.text() : UiAccent.textFaint();
-
-        if (floorLabel != null && shown == minimum) {
+        if (floorLabel != null && current == minimum) {
+            floored = true;
             UiRender.textTrackedFit(graphics, font(), floorLabel, centerX, getY(), height,
                     VALUE_WIDTH, LABEL_SCALE, 0.0f, tint, false);
             return;
         }
-
-        if (progress < 0.999f && previous != shown) {
-            rolled(graphics, display(previous), centerX, -direction * ROLL_LIFT * progress,
-                    UiTheme.alpha(tint, 1.0f - progress));
+        if (floored) {
+            floored = false;
+            ticker.snap(current, format);
+        } else {
+            ticker.set(current, format);
         }
-        rolled(graphics, display(shown), centerX, direction * ROLL_LIFT * (1.0f - progress),
-                UiTheme.alpha(tint, progress));
-    }
-
-    // WHY: прокрутка числа заявлена ходом от места покоя, иначе цифры шли ступенями по пикселю
-    // WHY: и в конце хода вставали на место последним рывком
-    private void rolled(GuiGraphics graphics, String text, float centerX, float lift, int color) {
-        UiRestFrame.shift(graphics, 0.0f, lift);
-        try {
-            UiRender.textCentered(graphics, font(), text, centerX,
-                    UiRender.centerY(getY(), height, LABEL_SCALE), LABEL_SCALE, color, false);
-        } finally {
-            UiRestFrame.pop(graphics);
-        }
+        ticker.draw(graphics, font(), centerX, UiRender.centerY(getY(), height, LABEL_SCALE), LABEL_SCALE, tint);
     }
 
     // WHY: мигающий курсор не входит в ширину набранного: вместе с ним строка центровалась
@@ -375,6 +344,7 @@ public class NumberRow extends MenuRow {
         } catch (NumberFormatException ignored) {
             UiSound.chip(false);
         }
+        ticker.snap(currentValue(), format);
     }
 
     private int parse(String entered) {

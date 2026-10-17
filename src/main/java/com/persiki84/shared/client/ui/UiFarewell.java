@@ -89,7 +89,10 @@ public final class UiFarewell {
     }
 
     public static void render(GuiGraphics graphics, float width, float height, float partialTick) {
-        if (living == 0) return;
+        if (living == 0) {
+            UiFrost.tidy();
+            return;
+        }
 
         age();
         order();

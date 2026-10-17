@@ -1,5 +1,7 @@
 package com.persiki84.capturepoints.capture;
 
+import com.persiki84.shared.economy.Wallet;
+import com.persiki84.shared.economy.WalletEntryKind;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -96,14 +98,13 @@ public final class CaptureRewards {
             return;
         }
 
-        deliver(player, payout);
+        deliver(player, payout, point.getName());
         player.sendSystemMessage(message(point, payout, entry, total, split));
     }
 
     private static Component message(CapturePoint point, ItemStack payout, CaptureLedger.Entry entry,
                                      float total, RewardSplit split) {
-        Component prize = Component.literal(payout.getCount() + "x " + payout.getHoverName().getString())
-                .withStyle(ChatFormatting.GOLD);
+        Component prize = Wallet.prize(payout).copy().withStyle(ChatFormatting.GOLD);
         Component where = Component.literal(point.getName()).withStyle(ChatFormatting.YELLOW);
 
         if (split != RewardSplit.MERIT) {
@@ -123,14 +124,17 @@ public final class CaptureRewards {
         if (owed == null) return;
 
         for (ItemStack stack : owed) {
-            deliver(player, stack);
+            deliver(player, stack, "");
         }
     }
 
-    private static void deliver(ServerPlayer player, ItemStack stack) {
-        ItemStack given = stack.copy();
-        if (!player.getInventory().add(given)) {
-            player.drop(given, false);
+    // WHY: награда валютным предметом в режиме «Счёт» ложится на счёт; не влезшее в инвентарь падает
+    // WHY: стопками предельного размера, как падало и раньше
+    private static void deliver(ServerPlayer player, ItemStack stack, String pointName) {
+        ItemStack rest = Wallet.hand(player, stack, WalletEntryKind.CAPTURE, pointName);
+        int perStack = Math.max(1, rest.getMaxStackSize());
+        while (!rest.isEmpty()) {
+            player.drop(rest.split(perStack), false);
         }
     }
 

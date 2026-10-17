@@ -1,6 +1,8 @@
 package com.persiki84.battlecraft.client.menu.browse;
 
 import com.mojang.logging.LogUtils;
+import com.persiki84.shared.client.menu.CountedText;
+import com.persiki84.shared.client.menu.TickerLine;
 import com.persiki84.shared.client.ui.UiButton;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
@@ -31,6 +33,11 @@ public final class ServerBrowseScreen extends BrowseScreen {
 
     private final List<LanServer> lan = new ArrayList<>();
     private final ServerStatusPinger pinger = new ServerStatusPinger();
+    private final TickerLine playersFact = new TickerLine(1.0f);
+    private final TickerLine pingFact = new TickerLine(1.0f);
+    private final CountedText playersText = new CountedText();
+    private final CountedText pingText = new CountedText();
+    private ServerCard factsFor;
     private ServerList servers;
     private LanServerDetection.LanServerList beacon;
     private LanServerDetection.LanServerDetector listener;
@@ -285,22 +292,25 @@ public final class ServerBrowseScreen extends BrowseScreen {
         PreviewColumn column = new PreviewColumn(graphics, this.font, left, top, width, height);
         column.head(card, Component.literal(data.name));
         column.fact("battlecraft.servers.address", Component.literal(data.ip));
-        column.fact("battlecraft.servers.players", counts(card));
-        column.fact("battlecraft.servers.ping", delay(card));
+        if (card != factsFor) {
+            factsFor = card;
+            playersFact.forget();
+            pingFact.forget();
+        }
+        column.fact("battlecraft.servers.players", counts(card), playersFact);
+        column.fact("battlecraft.servers.ping", delay(card), pingFact);
         column.fact("battlecraft.servers.version", data.version);
     }
 
-    private static Component counts(ServerCard card) {
+    private Component counts(ServerCard card) {
         ServerData data = card.data();
-        if (!card.answered() || data.players == null) {
-            return Component.translatable("battlecraft.servers.pinging");
-        }
-        return Component.literal(data.players.online() + "/" + data.players.max());
+        if (!card.answered() || data.players == null) return playersText.of("battlecraft.servers.pinging");
+        return playersText.ratio(data.players.online(), data.players.max());
     }
 
-    private static Component delay(ServerCard card) {
-        if (!card.answered()) return Component.translatable("battlecraft.servers.pinging");
-        if (card.data().ping < 0L) return Component.translatable("battlecraft.servers.offline");
-        return Component.translatable("battlecraft.servers.ms", card.data().ping);
+    private Component delay(ServerCard card) {
+        if (!card.answered()) return pingText.of("battlecraft.servers.pinging");
+        if (card.data().ping < 0L) return pingText.of("battlecraft.servers.offline");
+        return pingText.of("battlecraft.servers.ms", card.data().ping);
     }
 }

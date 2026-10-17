@@ -1,15 +1,19 @@
 package com.persiki84.zones.client.menu;
 
+import com.persiki84.sellmod.client.CurrencyIcon;
+import com.persiki84.sellmod.client.MoneyText;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
-import com.persiki84.shared.client.ui.UiMorphText;
 import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
+import com.persiki84.shared.client.ui.UiTickerPool;
 import com.persiki84.zones.shop.ShopEntry;
 import com.persiki84.zones.shop.ShopSchedule;
 import net.minecraft.client.Minecraft;
@@ -49,7 +53,6 @@ public final class ShopGrid {
     private static final float PRICE_SCALE = 0.75f;
     private static final float SECTION_SCALE = 0.6f;
     private static final float CHOSEN_RIM = 1.2f;
-    private static final int SECONDS_PER_MINUTE = 60;
     private static final float APPEAR_MS = 200.0f;
     private static final float APPEAR_LIFT = 5.0f;
     private static final float STAGGER_MS = 16.0f;
@@ -69,10 +72,16 @@ public final class ShopGrid {
     private static final float SWITCH_SHIFT = 34.0f;
 
     private static final float SLIDE_SPEED = 17.0f;
+    private static final float PRICE_ICON = 8.0f;
+    private static final float PRICE_ICON_GAP = 2.0f;
+    private static final float PRICE_ICON_SPEED = 9.0f;
+
+    private static final UiTicker.Format MONEY = MoneyText::digits;
 
     private final Map<String, Slide> slides = new HashMap<>();
     private final Map<String, Smooth> shades = new HashMap<>();
-    private final Map<String, UiMorphText> footers = new HashMap<>();
+    private final UiTickerPool footers = new UiTickerPool(UiTicker.CENTER);
+    private final Map<String, ShopPriceFace> priceFaces = new HashMap<>();
     private final List<Smooth> hover = new ArrayList<>();
     private final Smooth glide = new Smooth(0.0f, GLIDE_SPEED);
     private final Smooth thumb = new Smooth(0.0f, THUMB_SPEED);
@@ -303,10 +312,13 @@ public final class ShopGrid {
         float focus = hover.get(index + columns()).to(hovered ? 1.0f : 0.0f, UiFrame.delta());
         float y = rawY - focus * HOVER_LIFT;
 
-        graphics.pose().pushPose();
-        squash(graphics, index, x, y);
-        paintTile(graphics, found, x, y, appear, focus, showSection);
-        graphics.pose().popPose();
+        float scale = squash(index);
+        UiRestFrame.push(graphics, x + TILE_SIZE / 2.0f, y + TILE_SIZE / 2.0f, scale, scale, 0.0f, 0.0f);
+        try {
+            paintTile(graphics, found, x, y, appear, focus, showSection);
+        } finally {
+            UiRestFrame.pop(graphics);
+        }
     }
 
     // WHY: место плитки едет сглаживанием, а не прыгает: соседи расступаются перед переносимой,
@@ -319,19 +331,15 @@ public final class ShopGrid {
         return slide;
     }
 
-    private void squash(GuiGraphics graphics, int index, float x, float y) {
-        if (index != pressedIndex) return;
+    private float squash(int index) {
+        if (index != pressedIndex) return 1.0f;
 
         float age = (System.currentTimeMillis() - pressedAt) / PRESS_MS;
         if (age >= 1.0f) {
             pressedIndex = -1;
-            return;
+            return 1.0f;
         }
-
-        float scale = 1.0f - PRESS_SQUASH * (1.0f - UiAnim.easeOut(age));
-        graphics.pose().translate(x + TILE_SIZE / 2.0f, y + TILE_SIZE / 2.0f, 0.0f);
-        graphics.pose().scale(scale, scale, 1.0f);
-        graphics.pose().translate(-x - TILE_SIZE / 2.0f, -y - TILE_SIZE / 2.0f, 0.0f);
+        return 1.0f - PRESS_SQUASH * (1.0f - UiAnim.easeOut(age));
     }
 
     private void paintTile(GuiGraphics graphics, ShopView.Found found, float x, float y,
@@ -423,27 +431,36 @@ public final class ShopGrid {
         }
     }
 
+    // WHY: открытая цена это число со значком валюты: слово «Цена» на плитке шириной в 60 точек
+    // WHY: съедало место у самой цифры. Значок уходит и приходит долей, когда товар закрывается или
+    // WHY: кончается, а подпись в это время перекатывается в отсчёт. Кегль подписи считается с местом
+    // WHY: под значок всегда: от едущей доли он менялся бы каждый кадр и сбрасывал замер тикера
     private void renderPrice(GuiGraphics graphics, String key, ShopEntry entry, float x, float y, float taken,
                              float focus) {
         float plateWidth = TILE_SIZE - UiMetrics.GAP * 2.0f;
-        float plateX = x + UiMetrics.GAP;
         float plateY = y + TILE_SIZE - PRICE_HEIGHT - PRICE_BOTTOM;
-
-        UiGlass.sunken(graphics, plateX, plateY, plateWidth, PRICE_HEIGHT,
+        UiGlass.sunken(graphics, x + UiMetrics.GAP, plateY, plateWidth, PRICE_HEIGHT,
                 UiMetrics.radius(PRICE_HEIGHT), 0.9f);
-        String text = footer(entry).getString();
-        UiMorphText morph = footers.computeIfAbsent(key, unused -> {
-            UiMorphText made = new UiMorphText();
-            made.snap(text);
-            return made;
-        });
-        morph.set(text);
-        morph.advance(UiFrame.delta());
-        float scale = Math.min(PRICE_SCALE, PRICE_SCALE * (plateWidth - UiMetrics.GAP)
-                / Math.max(1.0f, morph.measure(graphics, font(), PRICE_SCALE)));
-        float width = morph.measure(graphics, font(), scale);
-        morph.draw(graphics, font(), x + (TILE_SIZE - width) / 2.0f, UiRender.centerY(plateY, PRICE_HEIGHT, scale),
-                scale, priceColor(entry, taken, focus));
+
+        boolean priced = ShopClock.open(entry) && !entry.soldOut();
+        ShopPriceFace face = priceFace(key, priced);
+        float iconShare = UiAnim.easeOut(face.icon.to(priced ? 1.0f : 0.0f, UiFrame.delta()));
+        UiTicker footer = footers.of(key);
+        if (priced) {
+            footer.set(entry.price(), MONEY);
+        } else {
+            footer.set(face.shut(entry));
+        }
+        float iconRoom = (PRICE_ICON + PRICE_ICON_GAP) * iconShare;
+        float natural = face.natural(graphics, font(), footer, PRICE_SCALE);
+        float room = plateWidth - UiMetrics.GAP - PRICE_ICON - PRICE_ICON_GAP;
+        float scale = Math.min(PRICE_SCALE, PRICE_SCALE * room / Math.max(1.0f, natural));
+        float width = scale == PRICE_SCALE ? natural : footer.width(graphics, font(), scale);
+        float start = x + (TILE_SIZE - width - iconRoom) / 2.0f;
+        int color = priceColor(entry, taken, focus);
+        CurrencyIcon.draw(graphics, start, plateY + (PRICE_HEIGHT - PRICE_ICON) / 2.0f, PRICE_ICON, color, iconShare);
+        footer.draw(graphics, font(), start + iconRoom + width / 2.0f, UiRender.centerY(plateY, PRICE_HEIGHT, scale),
+                scale, color);
     }
 
     private static int priceColor(ShopEntry entry, float taken, float focus) {
@@ -452,15 +469,14 @@ public final class ShopGrid {
         return UiTheme.mix(UiAccent.text(), UiAccent.color(), Math.max(taken, focus));
     }
 
-    // WHY: подпись плитки перекатывается по цифрам, как таймер острова: отсчёт до открытия, завоза
-    // WHY: и смена цены меняют только изменившиеся знаки
-    private static Component footer(ShopEntry entry) {
-        if (!ShopClock.open(entry)) return ShopClock.label(entry);
-        if (!entry.soldOut()) return Component.translatable("zones.shop.price", entry.price());
-
-        int waiting = entry.remainingSeconds(System.currentTimeMillis());
-        if (waiting <= 0) return Component.translatable("zones.shop.sold_out");
-        return Component.translatable("zones.shop.restock.short", clock(waiting));
+    // WHY: значок новой плитки встаёт сразу в своё состояние: иначе при открытии витрины значки всех
+    // WHY: закрытых товаров разом уезжали бы из полного вида
+    private ShopPriceFace priceFace(String key, boolean priced) {
+        ShopPriceFace face = priceFaces.get(key);
+        if (face != null) return face;
+        face = new ShopPriceFace(priced, PRICE_ICON_SPEED);
+        priceFaces.put(key, face);
+        return face;
     }
 
     private void renderScrollbar(GuiGraphics graphics, int total) {
@@ -522,11 +538,6 @@ public final class ShopGrid {
     private int clamp(int value, int total) {
         int limit = Math.max(0, rowsOf(total) - rows()) * columns();
         return Math.max(0, Math.min(value / columns() * columns(), limit));
-    }
-
-    private static String clock(int seconds) {
-        int rest = seconds % SECONDS_PER_MINUTE;
-        return seconds / SECONDS_PER_MINUTE + ":" + (rest < 10 ? "0" : "") + rest;
     }
 
     private static Font font() {

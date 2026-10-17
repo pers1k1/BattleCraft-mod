@@ -31,7 +31,7 @@ public final class ShopEntry {
     public ShopEntry(String id, ItemStack stack, int price, String description) {
         this.id = id;
         this.stack = stack;
-        this.price = price;
+        this.price = Math.max(0, price);
         this.description = description;
     }
 
@@ -60,7 +60,9 @@ public final class ShopEntry {
         closesAfter = windowValid(open, close) ? close : 0;
     }
 
-    public void setPrice(int price) { this.price = price; }
+    // WHY: отрицательная цена из правленого руками shop.json прошла бы покупку бесплатно и списала бы
+    // WHY: минус: цена не бывает меньше нуля нигде, ни в файле, ни в пакете
+    public void setPrice(int price) { this.price = Math.max(0, price); }
     public void setDescription(String description) { this.description = description; }
 
     public int bundle() { return Math.max(1, stack.getCount()); }

@@ -9,6 +9,7 @@ import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiVital;
 import com.persiki84.shared.zone.ZoneArea;
 import net.minecraft.client.Minecraft;
@@ -28,7 +29,13 @@ public final class CaptureReturnHud {
     private static final float BAR_SPEED = 9.0f;
     private static final long EXTEND_SLACK_MS = 350L;
 
+    private static final Component TITLE = Component.translatable("capturepoints.hud.return_title");
+    private static final UiTicker.Format SUBTITLE = seconds -> Component.translatable(
+            "capturepoints.hud.return_subtitle",
+            Component.translatable("capturepoints.hud.return_seconds", seconds)).getString();
+
     private static final Toggle visibility = new Toggle(FADE_SPEED, FADE_MS);
+    private static final UiTicker subtitle = new UiTicker().align(UiTicker.CENTER);
     private static final Smooth barFill = new Smooth(1.0f, BAR_SPEED);
 
     private static long endsAt;
@@ -102,14 +109,11 @@ public final class CaptureReturnHud {
     }
 
     private static void paint(GuiGraphics graphics, Minecraft mc, float x, float y, float alpha, float delta) {
-        UiRender.textCentered(graphics, mc.font, Component.translatable("capturepoints.hud.return_title"),
-                x + CARD_WIDTH / 2.0f, y + PADDING - 2.0f, TITLE_SCALE,
+        UiRender.textCentered(graphics, mc.font, TITLE, x + CARD_WIDTH / 2.0f, y + PADDING - 2.0f, TITLE_SCALE,
                 UiTheme.alpha(UiPalette.alert(), alpha), false);
 
-        UiRender.textCentered(graphics, mc.font,
-                Component.translatable("capturepoints.hud.return_subtitle", timer()),
-                x + CARD_WIDTH / 2.0f, y + PADDING + 8.0f, TIMER_SCALE,
-                UiTheme.alpha(HudInk.text(), alpha), false);
+        subtitle.set(shownSeconds, SUBTITLE);
+        subtitle.draw(graphics, mc.font, x + CARD_WIDTH / 2.0f, y + PADDING + 8.0f, TIMER_SCALE, HudInk.text(), alpha);
 
         float barX = x + PADDING;
         float barY = y + CARD_HEIGHT - PADDING + 1.0f;
@@ -117,9 +121,5 @@ public final class CaptureReturnHud {
         UiGlass.sunken(graphics, barX, barY, barWidth, BAR_HEIGHT, BAR_HEIGHT / 2.0f, alpha);
         UiGlass.progress(graphics, barX, barY, barWidth, BAR_HEIGHT,
                 barFill.to(shownValue, delta), UiPalette.alert(), alpha);
-    }
-
-    private static Component timer() {
-        return Component.translatable("capturepoints.hud.return_seconds", shownSeconds);
     }
 }

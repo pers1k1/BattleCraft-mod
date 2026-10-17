@@ -4,7 +4,6 @@ import com.persiki84.battlecraft.BattleCraftManager;
 import com.persiki84.battlecraft.client.ClientGameData;
 import com.persiki84.battlecraft.client.hud.HudInk;
 import com.persiki84.minimap.client.MapRenderUtil;
-import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.Toggle;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiMetrics;
@@ -14,6 +13,7 @@ import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.battlecraft.client.custom.HudLayout;
 import com.persiki84.battlecraft.client.custom.HudSlot;
 import com.persiki84.shared.client.ui.UiVital;
@@ -38,8 +38,8 @@ public final class ObjectiveHud {
     private static final float BANNER_TRACKING = 1.2f;
 
     private static final Toggle barToggle = new Toggle(9.0f, 150L);
-    private static final Smooth mineFill = new Smooth(10.0f);
-    private static final Smooth theirsFill = new Smooth(10.0f);
+    private static final Board board = new Board();
+    private static final Board sampleBoard = new Board();
 
     private static boolean finalOpen;
     private static long bannerAt;
@@ -50,14 +50,14 @@ public final class ObjectiveHud {
     private static int heldMine;
     private static int heldTheirs;
     private static final int SAMPLE_POINTS = 3;
-    private static final String SAMPLE_CLOCK = "4:35";
+    private static final long SAMPLE_SECONDS = 275L;
     private static final int SAMPLE_MINE = 2;
     private static final int SAMPLE_THEIRS = 1;
 
     private static int heldTotal;
     private static int heldMineColor;
     private static int heldTheirsColor;
-    private static String heldClock = "0:00";
+    private static long heldSeconds;
 
     private ObjectiveHud() {}
 
@@ -97,7 +97,7 @@ public final class ObjectiveHud {
         }
         if (barToggle.cleared() && !active) {
             heldTotal = 0;
-            heldClock = "0:00";
+            heldSeconds = 0L;
         }
         if (alpha <= 0.01f || heldTotal <= 0) return 0.0f;
 
@@ -106,17 +106,19 @@ public final class ObjectiveHud {
         float y = top - (1.0f - UiAnim.easeOut(alpha)) * 6.0f;
 
         UiVital.card(graphics, x, y, width, BAR_HEIGHT, UiMetrics.radius(BAR_HEIGHT), alpha);
-        renderScoreboard(graphics, mc, x, y, width, alpha, delta);
+        renderScoreboard(graphics, mc, x, y, width, alpha, board);
 
         return y + BAR_HEIGHT;
     }
 
     public static void preview(GuiGraphics graphics, float centerX, float top, float alpha, float delta) {
         int total = heldTotal;
-        String clock = heldClock;
+        long seconds = heldSeconds;
+        int mine = heldMine;
+        int theirs = heldTheirs;
         if (total <= 0) {
             heldTotal = SAMPLE_POINTS;
-            heldClock = SAMPLE_CLOCK;
+            heldSeconds = SAMPLE_SECONDS;
             heldMine = SAMPLE_MINE;
             heldTheirs = SAMPLE_THEIRS;
         }
@@ -125,10 +127,12 @@ public final class ObjectiveHud {
             float x = centerX - width / 2.0f;
             HudLayout.sample(HudSlot.OBJECTIVE, width, BAR_HEIGHT);
             UiVital.card(graphics, x, top, width, BAR_HEIGHT, UiMetrics.radius(BAR_HEIGHT), alpha);
-            renderScoreboard(graphics, mc(), x, top, width, alpha, delta);
+            renderScoreboard(graphics, mc(), x, top, width, alpha, sampleBoard);
         } finally {
             heldTotal = total;
-            heldClock = clock;
+            heldSeconds = seconds;
+            heldMine = mine;
+            heldTheirs = theirs;
         }
     }
 
@@ -137,21 +141,18 @@ public final class ObjectiveHud {
     }
 
     private static void renderScoreboard(GuiGraphics graphics, Minecraft mc, float x, float y, float width,
-                                         float alpha, float delta) {
-        float mine = mineFill.to(heldMine, delta);
-        float theirs = theirsFill.to(heldTheirs, delta);
+                                         float alpha, Board shown) {
         float scoreY = UiRender.centerY(y, BAR_HEIGHT, SCORE_SCALE);
+        shown.mine.set(heldMine);
+        shown.clock.set(heldSeconds, UiTicker.CLOCK);
+        shown.theirs.set(heldTheirs);
 
         UiRender.dot(graphics, x + 6.5f, y + BAR_HEIGHT / 2.0f, DOT_RADIUS, UiTheme.alpha(mineColor(), alpha));
-        UiRender.labelCentered(graphics, mc.font, String.valueOf(Math.round(mine)),
-                x + SCORE_WIDTH - 2.5f, scoreY, SCORE_SCALE, UiTheme.alpha(HudInk.text(), alpha));
-
-        UiRender.labelCentered(graphics, mc.font, heldClock, x + width / 2.0f,
-                UiRender.centerY(y, BAR_HEIGHT, CLOCK_SCALE), CLOCK_SCALE,
-                UiTheme.alpha(HudInk.text(), alpha));
-
-        UiRender.labelCentered(graphics, mc.font, String.valueOf(Math.round(theirs)),
-                x + width - SCORE_WIDTH + 2.5f, scoreY, SCORE_SCALE, UiTheme.alpha(HudInk.text(), alpha));
+        shown.mine.draw(graphics, mc.font, x + SCORE_WIDTH - 2.5f, scoreY, SCORE_SCALE, HudInk.text(), alpha);
+        shown.clock.draw(graphics, mc.font, x + width / 2.0f, UiRender.centerY(y, BAR_HEIGHT, CLOCK_SCALE),
+                CLOCK_SCALE, HudInk.text(), alpha);
+        shown.theirs.draw(graphics, mc.font, x + width - SCORE_WIDTH + 2.5f, scoreY, SCORE_SCALE, HudInk.text(),
+                alpha);
         UiRender.dot(graphics, x + width - 6.5f, y + BAR_HEIGHT / 2.0f, DOT_RADIUS,
                 UiTheme.alpha(theirsColor(), alpha));
     }
@@ -218,8 +219,7 @@ public final class ObjectiveHud {
         heldMineColor = MapRenderUtil.getTeamColor(team);
         heldTheirsColor = enemy == null ? UiAccent.color() : MapRenderUtil.getTeamColor(enemy);
 
-        long seconds = ClientGameData.getMatchElapsedMillis() / 1000L;
-        heldClock = seconds / 60 + ":" + String.format("%02d", seconds % 60);
+        heldSeconds = ClientGameData.getMatchElapsedMillis() / 1000L;
     }
 
     private static void trackFinal() {
@@ -234,5 +234,13 @@ public final class ObjectiveHud {
             bannerAt = System.currentTimeMillis();
             UiSound.alert();
         }
+    }
+
+    // WHY: счёт точек и часы матча меняют только сменившиеся цифры, как таймер острова: часы идут
+    // WHY: только вперёд, поэтому новая цифра у них всегда снизу. У образца в редакторе свой набор
+    private static final class Board {
+        private final UiTicker mine = new UiTicker().align(UiTicker.CENTER);
+        private final UiTicker clock = new UiTicker().align(UiTicker.CENTER).rising();
+        private final UiTicker theirs = new UiTicker().align(UiTicker.CENTER);
     }
 }

@@ -1,5 +1,6 @@
 package com.persiki84.shared.client.ui;
 
+import com.persiki84.shared.client.menu.TickerLine;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -72,6 +73,15 @@ public final class UiSkin {
     public static void button(GuiGraphics graphics, float x, float y, float width, float height,
                               Component label, Component outgoing, float swap, float live, float focus,
                               float pressed, float labelScale, int swatch, boolean lit) {
+        button(graphics, x, y, width, height, label, outgoing, swap, live, focus, pressed, labelScale, swatch, lit,
+                null);
+    }
+
+    // WHY: подпись, у которой между сменами поменялись только цифры (цена, остаток, отсчёт), ведёт
+    // WHY: counter: стоящие буквы остаются на месте, а сменившиеся цифры перекатываются
+    public static void button(GuiGraphics graphics, float x, float y, float width, float height,
+                              Component label, Component outgoing, float swap, float live, float focus,
+                              float pressed, float labelScale, int swatch, boolean lit, TickerLine counter) {
         float squash = Math.max(-REBOUND_LIMIT, Math.min(1.0f, pressed)) * PRESS_SQUASH;
         float w = width * (1.0f - squash);
         float h = height * (1.0f - squash);
@@ -83,24 +93,32 @@ public final class UiSkin {
         UiRestFrame.push(graphics, x + width / 2.0f, y + height / 2.0f, 1.0f - squash, 1.0f - squash, 0.0f, -rise);
         try {
             float textLive = lit ? 1.0f : live;
-            if (outgoing != null && swap < 0.999f) {
-                sliding(graphics, outgoing, x, y, width, height, -swap * LABEL_SWAP_LIFT, textLive, focus,
-                        labelScale, 1.0f - swap);
+            if (counter != null && width > height * ICON_RATIO) {
+                counter.box(graphics, Minecraft.getInstance().font, label, x + LABEL_PADDING, y, height,
+                        width - LABEL_PADDING * 2.0f, labelScale, labelColor(textLive, focus, 1.0f));
+            } else {
+                labels(graphics, label, outgoing, swap, x, y, width, height, textLive, focus, labelScale);
             }
-            sliding(graphics, label, x, y, width, height, (1.0f - swap) * LABEL_SWAP_LIFT, textLive, focus,
-                    labelScale, swap);
         } finally {
             UiRestFrame.pop(graphics);
         }
         swatch(graphics, bx, by, w, h, 1.0f - squash, swatch);
     }
 
+    private static void labels(GuiGraphics graphics, Component label, Component outgoing, float swap, float x, float y,
+                               float width, float height, float live, float focus, float scale) {
+        if (outgoing != null && swap < 0.999f) {
+            sliding(graphics, outgoing, x, y, width, height, -swap * LABEL_SWAP_LIFT, live, focus, scale, 1.0f - swap);
+        }
+        sliding(graphics, label, x, y, width, height, (1.0f - swap) * LABEL_SWAP_LIFT, live, focus, scale, swap);
+    }
+
     // WHY: подъём под курсором кончается на целом пикселе: подпись едет за стеклом ходом и
     // WHY: в наведённой кнопке обязана встать на сетку, иначе она стояла бы мягче соседних.
     // WHY: Пиксели берутся по сетке покоя: по живым округление щёлкало посреди въезда экрана и кнопка прыгала
     private static float wholeLift(GuiGraphics graphics) {
-        float pixels = UiRender.pixels(graphics) / UiRestFrame.stretchX();
-        return pixels <= 0.01f ? HOVER_LIFT : Math.round(HOVER_LIFT * pixels) / pixels;
+        float pixels = UiRender.restPixels(graphics);
+        return pixels <= 0.01f ? HOVER_LIFT : (float) UiRestFrame.whole(HOVER_LIFT * pixels) / pixels;
     }
 
     // WHY: сжатие, подъём и смена подписи заявлены ходом от места покоя: иначе буквы и цифры
@@ -220,13 +238,17 @@ public final class UiSkin {
     private static void label(GuiGraphics graphics, Component label, float x, float y, float width, float height,
                               float live, float focus, float scale, float alpha) {
         if (label == null || label.getString().isEmpty() || alpha <= 0.004f) return;
-        int lit = UiTheme.mix(UiAccent.text(), UiTheme.WHITE, focus);
-        int tone = live >= 0.999f ? lit : UiTheme.mix(UiAccent.textFaint(), lit, live);
-        int color = alpha >= 0.999f ? tone : UiTheme.alpha(tone, alpha);
+        int color = labelColor(live, focus, alpha);
         float box = width - LABEL_PADDING * 2.0f;
         Component shown = width <= height * ICON_RATIO ? shortened(graphics, label, box, scale) : label;
         UiRender.textTrackedFit(graphics, Minecraft.getInstance().font, shown, x + width / 2.0f, y, height,
                 box, scale, LABEL_TRACKING, color, true);
+    }
+
+    private static int labelColor(float live, float focus, float alpha) {
+        int lit = UiTheme.mix(UiAccent.text(), UiTheme.WHITE, focus);
+        int tone = live >= 0.999f ? lit : UiTheme.mix(UiAccent.textFaint(), lit, live);
+        return alpha >= 0.999f ? tone : UiTheme.alpha(tone, alpha);
     }
 
     private static Component shortened(GuiGraphics graphics, Component label, float box, float scale) {

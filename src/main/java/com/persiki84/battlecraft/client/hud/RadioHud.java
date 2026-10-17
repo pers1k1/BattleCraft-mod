@@ -18,6 +18,7 @@ import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiVital;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -53,6 +54,8 @@ public final class RadioHud {
     private static final String OWN_KEY = "battlecraft.radio.own";
 
     private static final Component OWN_LABEL = Component.translatable(OWN_KEY);
+    private static final long TAPE_LIMIT_TENTHS = 5999L;
+    private static final UiTicker.Format TAPE_CLOCK = RadioHud::tapeClock;
     private static final Component SAMPLE_LABEL = Component.translatable(SAMPLE_KEY);
 
     private static final Card own = new Card();
@@ -211,8 +214,9 @@ public final class RadioHud {
                     UiTheme.alpha(tone == Tone.OWN ? accent : HudInk.text(), alpha), true, 0.0f);
         }
 
-        UiRender.labelRight(graphics, mc.font, card.clock(tape.spokenFor(now)), x + WIDTH - PAD,
-                y + NAME_TOP, TIME_SCALE, UiTheme.alpha(HudInk.textDim(), alpha));
+        card.time.set(Math.min(TAPE_LIMIT_TENTHS, tape.spokenFor(now) / 100L), TAPE_CLOCK);
+        card.timeWidth = card.time.steadyWidth(graphics, mc.font, TIME_SCALE);
+        card.time.draw(graphics, mc.font, x + WIDTH - PAD, y + NAME_TOP, TIME_SCALE, HudInk.textDim(), alpha);
     }
 
     // WHY: помехи растут с расстоянием, и без шкалы это читается как поломка звука: три деления
@@ -228,6 +232,14 @@ public final class RadioHud {
             UiRender.panel(graphics, left + index * step, y + NAME_TOP + 5.5f - tall, step - 1.0f, tall,
                     0.4f, UiTheme.alpha(lit ? accent : HudInk.textFaint(), alpha * (lit ? 0.9f : 0.4f)));
         }
+    }
+
+    // WHY: время передачи идёт десятыми, то есть меняется десять раз в секунду: тикер сам сжимает ход
+    // WHY: под этот темп, а новая цифра всегда приходит снизу, потому что эфир идёт только вперёд
+    private static String tapeClock(long tenths) {
+        long seconds = tenths / 10L;
+        long rest = seconds % 60L;
+        return seconds / 60L + (rest < 10L ? ":0" : ":") + rest + "." + tenths % 10L;
     }
 
     private enum Tone {
@@ -247,12 +259,10 @@ public final class RadioHud {
         private final Spring y = new Spring(0.34f, 0.92f);
         private final Smooth signal = new Smooth(8.0f);
         private final VoiceCipher cipher = new VoiceCipher();
-        private final StringBuilder clock = new StringBuilder(8);
+        private final UiTicker time = new UiTicker().align(UiTicker.RIGHT).rising();
 
         private Component nameText = Component.empty();
-        private String time = "0:00.0";
         private UUID named;
-        private int tenths = -1;
         private float timeWidth;
         private float alphaValue;
         private float targetX;
@@ -280,25 +290,10 @@ public final class RadioHud {
             return tone == Tone.OWN ? OWN_LABEL : nameText;
         }
 
-        private String clock(long spokenMs) {
-            int now = (int) Math.min(5999L, spokenMs / 100L);
-            if (now == tenths) return time;
-
-            tenths = now;
-            int seconds = now / 10;
-            clock.setLength(0);
-            clock.append(seconds / 60).append(':');
-            if (seconds % 60 < 10) clock.append('0');
-            clock.append(seconds % 60).append('.').append(now % 10);
-            time = clock.toString();
-            timeWidth = UiRender.widthLabel(Minecraft.getInstance().font, time) * TIME_SCALE;
-            return time;
-        }
-
         private void forget() {
             named = null;
             nameText = Component.empty();
-            tenths = -1;
+            time.reset();
             heardAt = 0L;
             cipher.forget();
         }

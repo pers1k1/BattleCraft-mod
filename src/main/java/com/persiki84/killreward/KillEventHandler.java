@@ -4,8 +4,11 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.scores.Team;
+import com.persiki84.shared.economy.Wallet;
+import com.persiki84.shared.economy.WalletEntryKind;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
@@ -44,33 +47,25 @@ public class KillEventHandler {
         return !killerTeam.getName().equals(victimTeam.getName());
     }
 
-    // WHY: награда больше стака одним предметом уходила клиенту байтом количества и терялась:
-    // WHY: выдаётся стаками предельного размера, остаток падает под ноги
-    private static void hand(ServerPlayer player, net.minecraft.world.item.Item item, int amount) {
-        int left = amount;
-        while (left > 0) {
-            ItemStack stack = new ItemStack(item, Math.min(left, item.getMaxStackSize()));
-            left -= stack.getCount();
-            if (!player.getInventory().add(stack)) player.drop(stack, false);
-        }
-    }
-
+    // WHY: награда идёт через кошелёк: валютный предмет в режиме «Счёт» ложится на счёт, всё прочее
+    // WHY: в инвентарь. Не влезшее падает под ноги стопками предельного размера: пакет слота пишет
+    // WHY: количество байтом, и одна куча больше стака у клиента показалась бы неверно
     private void giveReward(ServerPlayer player, String victimName) {
-        var item = KillRewardMod.getRewardItem();
-        if (item != null) {
-            String itemName = item.getDescription().getString();
-            hand(player, item, KillRewardMod.rewardAmount);
+        Item item = KillRewardMod.getRewardItem();
+        if (item == null) return;
 
-            player.sendSystemMessage(
-                    Component.translatable("killreward.kill_rewarded", victimName,
-                            KillRewardMod.rewardAmount, itemName).withStyle(ChatFormatting.GREEN)
-            );
-
-            KillRewardMod.LOGGER.info("KillReward: Игрок {} получил {}x {}",
-                    player.getName().getString(), KillRewardMod.rewardAmount, itemName);
-
-            String record = KillRewardMod.rewardAmount + "x " + itemName;
-            KillRewardMod.lastRewards.put(player.getUUID(), record);
+        ItemStack reward = new ItemStack(item, KillRewardMod.rewardAmount);
+        ItemStack rest = Wallet.hand(player, reward, WalletEntryKind.KILL, victimName);
+        int perStack = Math.max(1, rest.getMaxStackSize());
+        while (!rest.isEmpty()) {
+            player.drop(rest.split(perStack), false);
         }
+
+        Component prize = Wallet.prize(reward);
+        player.sendSystemMessage(Component.translatable("killreward.kill_rewarded_prize", victimName, prize)
+                .withStyle(ChatFormatting.GREEN));
+        KillRewardMod.LOGGER.info("KillReward: {} got {}x {}", player.getName().getString(),
+                reward.getCount(), item.getDescriptionId());
+        KillRewardMod.lastRewards.put(player.getUUID(), prize);
     }
 }

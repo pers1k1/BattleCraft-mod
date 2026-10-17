@@ -4,6 +4,8 @@ import com.persiki84.capturepoints.capture.CapturePointManager;
 import com.persiki84.capturepoints.capture.IncomePayout;
 import com.persiki84.capturepoints.network.PacketHandler;
 import com.persiki84.capturepoints.network.TreasurySyncPacket;
+import com.persiki84.shared.economy.Wallet;
+import com.persiki84.shared.economy.WalletEntryKind;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -76,7 +78,8 @@ public final class TeamTreasury {
 
     // WHY: стопка берётся по месту, и сервер сверяет, что там всё ещё тот предмет: двое из команды
     // WHY: жмут разом, первый уносит стопку, и второй иначе забрал бы соседнюю. В руки идёт ровно то,
-    // WHY: что влезло в инвентарь, остаток остаётся в казне: брошенное под ноги подобрал бы враг
+    // WHY: что влезло в инвентарь, остаток остаётся в казне: брошенное под ноги подобрал бы враг.
+    // WHY: Валюта в режиме «Счёт» уходит на счёт через кошелёк, а не в инвентарь
     public static int take(ServerPlayer player, String team, int slot, ItemStack expected, int count) {
         List<ItemStack> vault = vaults.get(team);
         if (vault == null || slot < 0 || slot >= vault.size() || count <= 0) return 0;
@@ -85,9 +88,8 @@ public final class TeamTreasury {
         if (!ItemStack.isSameItemSameTags(held, expected)) return 0;
 
         ItemStack piece = held.copyWithCount(Math.min(count, held.getCount()));
-        int wanted = piece.getCount();
-        player.getInventory().add(piece);
-        int taken = wanted - piece.getCount();
+        ItemStack rest = Wallet.hand(player, piece, WalletEntryKind.TREASURY, team);
+        int taken = piece.getCount() - rest.getCount();
         held.shrink(taken);
         if (held.isEmpty()) vault.remove(slot);
         return taken;

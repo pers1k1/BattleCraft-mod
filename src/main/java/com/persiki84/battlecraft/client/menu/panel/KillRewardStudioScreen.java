@@ -7,6 +7,7 @@ import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.ToggleRow;
 import com.persiki84.shared.client.menu.pick.ItemShelf;
+import com.persiki84.shared.client.menu.studio.StudioArtLines;
 import com.persiki84.shared.client.menu.studio.StudioMenu;
 import com.persiki84.shared.client.menu.studio.StudioNav;
 import com.persiki84.shared.client.menu.studio.StudioScreen;
@@ -40,6 +41,7 @@ public final class KillRewardStudioScreen extends StudioScreen {
     private static final int ART = 110;
     private static final float TURNTABLE_HEIGHT = 70.0f;
     private static final float LINE_SCALE = 0.72f;
+    private final StudioArtLines art = new StudioArtLines(1);
 
     private final ItemTurntable turntable = new ItemTurntable();
     private final UiButton shelfButton;
@@ -231,9 +233,8 @@ public final class KillRewardStudioScreen extends StudioScreen {
         float y = top + TURNTABLE_HEIGHT + 4.0f;
         UiRender.textTrackedFit(graphics, this.font, tile.name(), left + width / 2.0f, y, 12.0f, width, 0.85f, 0.0f,
                 UiTheme.alpha(UiAccent.text(), appear), false);
-        UiRender.textTrackedFit(graphics, this.font, Component.translatable("studio.kill.art",
-                state().getInt("rewardAmount")), left + width / 2.0f, y + 15.0f, 10.0f, width, LINE_SCALE, 0.0f,
-                UiTheme.alpha(UiAccent.textDim(), appear), false);
+        art.line(0, graphics, this.font, Component.translatable("studio.kill.art", state().getInt("rewardAmount")),
+                left, y + 15.0f, 10.0f, width, LINE_SCALE, UiTheme.alpha(UiAccent.textDim(), appear));
     }
 
     @Override

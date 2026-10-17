@@ -9,6 +9,7 @@ import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.MenuRow;
 import com.persiki84.shared.client.menu.PickRow;
+import com.persiki84.shared.client.menu.studio.StudioArtLines;
 import com.persiki84.shared.client.menu.studio.StudioMenu;
 import com.persiki84.shared.client.menu.studio.StudioNav;
 import com.persiki84.shared.client.menu.studio.StudioScreen;
@@ -46,6 +47,7 @@ public final class TeamsStudioScreen extends StudioScreen {
     private static final int MAX_NAME = 32;
     private static final int ART = 40;
     private static final float LINE_SCALE = 0.72f;
+    private final StudioArtLines art = new StudioArtLines(1);
     private static final String[] SUGGESTED = {"red", "blue", "green", "yellow"};
     private static final Pattern WORD = Pattern.compile("[A-Za-z0-9_.+-]+");
     private static final ChatFormatting[] COLORS = {ChatFormatting.WHITE, ChatFormatting.RED, ChatFormatting.BLUE,
@@ -337,9 +339,9 @@ public final class TeamsStudioScreen extends StudioScreen {
         int tone = rgb == null ? UiAccent.text() : 0xFF000000 | rgb;
         UiRender.textTrackedFit(graphics, this.font, Component.literal(team.getName()), left + width / 2.0f, top, 14.0f,
                 width, 0.95f, 0.0f, UiTheme.alpha(tone, appear), false);
-        UiRender.textTrackedFit(graphics, this.font, Component.translatable("battlecraft.teams.players",
-                team.getPlayers().size()), left + width / 2.0f, top + 16.0f, 10.0f, width, LINE_SCALE, 0.0f,
-                UiTheme.alpha(UiAccent.textDim(), appear), false);
+        art.about(chosen).line(0, graphics, this.font, Component.translatable("battlecraft.teams.players",
+                team.getPlayers().size()), left, top + 16.0f, 10.0f, width, LINE_SCALE,
+                UiTheme.alpha(UiAccent.textDim(), appear));
     }
 
     @Override

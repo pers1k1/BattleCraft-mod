@@ -2,11 +2,14 @@ package com.persiki84.shared.client.menu.gunsmith;
 
 import com.persiki84.shared.client.menu.GlassScreen;
 import com.persiki84.shared.client.menu.MenuFeedback;
+import com.persiki84.shared.client.menu.MenuLayer;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiButton;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiTicker;
+import com.persiki84.shared.client.ui.UiTickerPool;
 import com.persiki84.shared.client.ui.UiTitle;
 import com.persiki84.shared.gunsmith.GunSlot;
 import com.persiki84.shared.gunsmith.GunSmith;
@@ -54,6 +57,8 @@ public final class GunsmithScreen extends GlassScreen {
     private ItemStack describedGun = ItemStack.EMPTY;
     private List<GunSlot> slots = List.of();
     private List<GunStat> stats = List.of();
+    private final UiTickerPool statValues = new UiTickerPool(UiTicker.RIGHT);
+    private int statsFor = -1;
 
     private record Wanted(String option, long at) {}
 
@@ -170,6 +175,8 @@ public final class GunsmithScreen extends GlassScreen {
     private void describe(ItemStack gun) {
         if (gun == describedGun) return;
         describedGun = gun;
+        if (picked != statsFor) statValues.clear();
+        statsFor = picked;
         slots = gun.isEmpty() ? List.of() : GunSmith.slots(gun);
         stats = gun.isEmpty() ? List.of() : GunSmith.stats(gun);
     }
@@ -199,6 +206,7 @@ public final class GunsmithScreen extends GlassScreen {
         renderWidgets(graphics, mouseX, mouseY, partialTick);
         renderGunIcons(graphics);
         MenuFeedback.render(graphics, this.width / 2.0f, top + height + GAP);
+        MenuLayer.flatten(graphics);
         renderTooltip(graphics, mouseX, mouseY);
     }
 
@@ -216,10 +224,17 @@ public final class GunsmithScreen extends GlassScreen {
             if (y + 10.0f > bottom) break;
             UiRender.textScaled(graphics, this.font, Component.translatable(stat.label()), left, y, STAT_SCALE,
                     UiAccent.textDim(), false);
-            UiRender.textRight(graphics, this.font, Component.literal(stat.value()), left + width, y, STAT_SCALE,
-                    UiAccent.text(), false);
+            paintStatValue(graphics, stat, left + width, y);
             y += 10.0f;
         }
+    }
+
+    // WHY: значение характеристики того же ствола (обвес поставлен или снят) перекатывается по цифрам;
+    // WHY: у другого ствола свои числа встают сразу
+    private void paintStatValue(GuiGraphics graphics, GunStat stat, float right, float y) {
+        UiTicker value = statValues.of(stat.label());
+        value.set(stat.value());
+        value.draw(graphics, this.font, right, y, STAT_SCALE, UiAccent.text());
     }
 
     private void renderGunIcons(GuiGraphics graphics) {
@@ -233,13 +248,17 @@ public final class GunsmithScreen extends GlassScreen {
         }
     }
 
+    // WHY: имя варианта уже стоит на плитке, и наведение его не повторяет: подсказка говорит только
+    // WHY: о том, что обвес меняет, а без таких строк её нет вовсе
     private void renderTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
-        GunSlotBoard.Hover hover = board.hovered(mouseX, mouseY, slots);
-        if (hover == null || hover.option().isEmpty()) return;
+        String option = board.hoveredOption(mouseX, mouseY, slots);
+        if (option == null || option.isEmpty()) return;
+
+        List<String> notes = GunSmith.notes(option);
+        if (notes.isEmpty()) return;
 
         List<FormattedCharSequence> lines = new ArrayList<>();
-        lines.add(Component.literal(hover.label()).getVisualOrderText());
-        for (String note : GunSmith.notes(hover.option())) {
+        for (String note : notes) {
             lines.add(Component.literal(note).getVisualOrderText());
         }
         graphics.pose().pushPose();
@@ -283,15 +302,15 @@ public final class GunsmithScreen extends GlassScreen {
             board.choose(slotIndex == board.chosen() ? -1 : slotIndex);
             return;
         }
-        GunSlotBoard.Hover hover = board.hovered(x, y, slots);
-        if (hover == null) return;
+        String option = board.hoveredOption(x, y, slots);
+        if (option == null) return;
 
         GunSlot slot = slots.get(board.chosen());
-        wanted.put(slot.id(), new Wanted(hover.option(), System.currentTimeMillis()));
-        if (hover.option().isEmpty()) {
+        wanted.put(slot.id(), new Wanted(option, System.currentTimeMillis()));
+        if (option.isEmpty()) {
             bench.detach(picked, slot.id());
         } else {
-            bench.attach(picked, hover.option());
+            bench.attach(picked, option);
         }
     }
 

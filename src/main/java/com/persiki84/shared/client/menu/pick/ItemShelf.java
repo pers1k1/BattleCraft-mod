@@ -24,14 +24,17 @@ import java.util.Locale;
 import java.util.Set;
 
 public final class ItemShelf {
-    public static final int CELL = 20;
     public static final int OFFHAND = 40;
 
     private static final int COLUMNS = 9;
+    private static final int INVENTORY_ROWS = 5;
     private static final int[] INVENTORY_ORDER = inventoryOrder();
+    private static final float BASE_CELL = 20.0f;
     private static final float CELL_RADIUS = 4.0f;
+    private static final float CELL_INSET = 1.0f;
+    private static final float ICON_INSET = 2.0f;
     private static final float HOVER_SPEED = 18.0f;
-    private static final int HOTBAR_GAP = 4;
+    private static final float HOTBAR_GAP = 4.0f;
 
     public record Pick(int slot, ItemStack stack) {
         public boolean fromInventory() {
@@ -48,6 +51,8 @@ public final class ItemShelf {
     private float top;
     private float width;
     private float height;
+    private float cell = BASE_CELL;
+    private float unit = 1.0f;
     private int scroll;
     private ItemStack marked = ItemStack.EMPTY;
 
@@ -56,6 +61,17 @@ public final class ItemShelf {
         top = pickerTop;
         width = pickerWidth;
         height = pickerHeight;
+        fit();
+    }
+
+    // WHY: ячейки растягиваются на всю ширину полки, а не стоят по двадцать единиц посередине с пустыми
+    // WHY: полями по краям. Потолок по высоте держит инвентарь целиком: его не прокручивают
+    private void fit() {
+        float acrossWidth = width / COLUMNS;
+        float hotbarShare = 2.0f * HOTBAR_GAP / BASE_CELL;
+        float acrossHeight = (height - UiMetrics.GAP) / (INVENTORY_ROWS + hotbarShare);
+        cell = Math.max(1.0f, Math.min(acrossWidth, Math.max(BASE_CELL, acrossHeight)));
+        unit = cell / BASE_CELL;
     }
 
     public boolean showsInventory() {
@@ -131,7 +147,7 @@ public final class ItemShelf {
     }
 
     private int visibleRows() {
-        return Math.max(1, (int) (height / CELL));
+        return Math.max(1, (int) (height / cell));
     }
 
     public boolean over(double mouseX, double mouseY) {
@@ -139,14 +155,20 @@ public final class ItemShelf {
     }
 
     public Pick pick(double mouseX, double mouseY) {
+        int place = placeAt(mouseX, mouseY);
+        return place < 0 ? null : pickAt(place);
+    }
+
+    private int placeAt(double mouseX, double mouseY) {
+        if (!over(mouseX, mouseY)) return -1;
+
         int count = inventory ? INVENTORY_ORDER.length : found.size();
         for (int place = 0; place < count; place++) {
             float x = cellX(place);
             float y = cellY(place);
-            if (mouseX < x || mouseX >= x + CELL || mouseY < y || mouseY >= y + CELL) continue;
-            return pickAt(place);
+            if (mouseX >= x && mouseX < x + cell && mouseY >= y && mouseY < y + cell) return place;
         }
-        return null;
+        return -1;
     }
 
     private Pick pickAt(int place) {
@@ -164,8 +186,8 @@ public final class ItemShelf {
             int count = inventory ? INVENTORY_ORDER.length : found.size();
             float lag = inventory ? 0.0f : scrollGlide.to(scroll, UiFrame.delta()) - scroll;
             for (int place = 0; place < count; place++) {
-                float y = cellY(place) - lag * CELL;
-                if (y + CELL < top || y > top + height) continue;
+                float y = cellY(place) - lag * cell;
+                if (y + cell < top || y > top + height) continue;
                 paintCell(graphics, stackAt(place), cellX(place), y, mouseX, mouseY);
             }
             graphics.flush();
@@ -181,16 +203,19 @@ public final class ItemShelf {
     }
 
     private void paintCell(GuiGraphics graphics, ItemStack stack, float x, float y, int mouseX, int mouseY) {
-        boolean hovered = !stack.isEmpty() && mouseX >= x && mouseX < x + CELL && mouseY >= y && mouseY < y + CELL;
-        UiGlass.sunken(graphics, x + 1.0f, y + 1.0f, CELL - 2.0f, CELL - 2.0f, CELL_RADIUS, hovered ? 1.0f : 0.7f);
+        boolean hovered = !stack.isEmpty() && mouseX >= x && mouseX < x + cell && mouseY >= y && mouseY < y + cell;
+        float inset = CELL_INSET * unit;
+        float size = cell - inset * 2.0f;
+        float radius = CELL_RADIUS * unit;
+        UiGlass.sunken(graphics, x + inset, y + inset, size, size, radius, hovered ? 1.0f : 0.7f);
         if (hovered || (!stack.isEmpty() && stack == marked)) {
-            UiRender.rim(graphics, x + 1.0f, y + 1.0f, CELL - 2.0f, CELL - 2.0f, CELL_RADIUS, 1.0f,
-                    UiTheme.alpha(UiAccent.color(), 0.8f));
+            UiRender.rim(graphics, x + inset, y + inset, size, size, radius, 1.0f, UiTheme.alpha(UiAccent.color(), 0.8f));
         }
         if (stack.isEmpty()) return;
 
         graphics.pose().pushPose();
-        graphics.pose().translate(x + 2.0f, y + 2.0f, 0.0f);
+        graphics.pose().translate(x + ICON_INSET * unit, y + ICON_INSET * unit, 0.0f);
+        graphics.pose().scale(unit, unit, 1.0f);
         try {
             graphics.renderItem(stack, 0, 0);
             graphics.renderItemDecorations(Minecraft.getInstance().font, stack, 0, 0);
@@ -199,23 +224,26 @@ public final class ItemShelf {
         }
     }
 
+    // WHY: подсказка спрашивает предмет каждый кадр, поэтому без записи выбора: только ячейка и её стак
     public ItemStack hovered(double mouseX, double mouseY) {
-        Pick pick = pick(mouseX, mouseY);
-        return pick == null ? ItemStack.EMPTY : pick.stack();
+        int place = placeAt(mouseX, mouseY);
+        return place < 0 ? ItemStack.EMPTY : stackAt(place);
     }
 
     private float gridLeft() {
-        return left + (width - COLUMNS * CELL) / 2.0f;
+        return left + (width - COLUMNS * cell) / 2.0f;
     }
 
     private float cellX(int place) {
-        return gridLeft() + (place % COLUMNS) * CELL;
+        return gridLeft() + (place % COLUMNS) * cell;
     }
 
     private float cellY(int place) {
         int row = place / COLUMNS;
-        if (inventory) return top + UiMetrics.GAP + row * CELL + (row >= 3 ? HOTBAR_GAP : 0) + (row >= 4 ? HOTBAR_GAP : 0);
-        return top + (row - scroll) * CELL;
+        if (!inventory) return top + (row - scroll) * cell;
+
+        float hotbar = HOTBAR_GAP * unit;
+        return top + UiMetrics.GAP + row * cell + (row >= 3 ? hotbar : 0.0f) + (row >= 4 ? hotbar : 0.0f);
     }
 
     private static Inventory player() {

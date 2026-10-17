@@ -3,6 +3,8 @@ package com.persiki84.zones.shop;
 import com.persiki84.knockdown.cap.KnockdownCapability;
 import com.persiki84.knockdown.cap.KnockdownProvider;
 import com.persiki84.sellmod.SellManager;
+import com.persiki84.shared.economy.Wallet;
+import com.persiki84.shared.economy.WalletEntryKind;
 import com.persiki84.shared.ActionGate;
 import com.persiki84.zones.Zone;
 import com.persiki84.zones.ZonesMod;
@@ -14,10 +16,8 @@ import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.scores.Team;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.List;
 
 public final class ShopTransactions {
     private static final int MAX_ITEMS_PER_PURCHASE = 64;
@@ -90,14 +90,14 @@ public final class ShopTransactions {
             return;
         }
 
-        int balance = countCurrency(player);
+        long balance = Wallet.balance(player);
         int units = affordableUnits(entry, pool, amount, balance);
         if (units <= 0) {
-            deny(player, "zones.shop.error.not_enough", entry.price() - balance);
+            deny(player, "zones.shop.error.not_enough", Wallet.amountText(entry.price() - balance));
             return;
         }
 
-        checkout(player, entry, entry.take(pool, units, System.currentTimeMillis()));
+        checkout(player, entry, pool, units);
     }
 
     // WHY: окно продажи сверяется по часам сервера: закрытая на клиенте плитка это лишь вид, а пакет
@@ -122,14 +122,25 @@ public final class ShopTransactions {
         return entry.access().visibleTo(name);
     }
 
-    private static void checkout(ServerPlayer player, ShopEntry entry, int units) {
-        int cost = entry.price() * units;
-        takeCurrency(player, cost);
-        for (int given = 0; given < units; given++) {
+    // WHY: деньги списываются раньше склада: отказ кошелька не оставляет склад обворованным, а цена
+    // WHY: на количество считается в long, потому что цену оператор задаёт без верхней границы
+    private static void checkout(ServerPlayer player, ShopEntry entry, String pool, int units) {
+        long cost = (long) entry.price() * units;
+        int items = units * entry.bundle();
+        String name = entry.stack().getHoverName().getString();
+        if (!Wallet.charge(player, cost, WalletEntryKind.BUY, name, items)) {
+            deny(player, "zones.shop.error.not_enough", Wallet.amountText(cost - Wallet.balance(player)));
+            return;
+        }
+        int taken = entry.take(pool, units, System.currentTimeMillis());
+        if (taken < units) {
+            Wallet.credit(player, (long) entry.price() * (units - taken), WalletEntryKind.BUY, name, 0);
+        }
+        for (int given = 0; given < taken; given++) {
             givePurchase(player, entry.stack().copy());
         }
 
-        announce(player, entry, units, cost);
+        announce(player, entry, taken, (long) entry.price() * taken);
         if (!entry.limited()) return;
 
         // WHY: покупка меняет на диске только остаток склада, поэтому у безлимитного товара нечего
@@ -138,19 +149,20 @@ public final class ShopTransactions {
         ZonesMod.syncShopAfterPurchase(player, entry.scope());
     }
 
-    private static int affordableUnits(ShopEntry entry, String pool, int amount, int balance) {
+    private static int affordableUnits(ShopEntry entry, String pool, int amount, long balance) {
         int ceiling = Math.max(1, MAX_ITEMS_PER_PURCHASE / entry.bundle());
         int wanted = Math.max(1, Math.min(amount, ceiling));
         if (entry.limited()) wanted = Math.min(wanted, entry.availableIn(pool));
         if (entry.price() <= 0) return wanted;
-        return Math.min(wanted, balance / entry.price());
+        return (int) Math.min(wanted, balance / entry.price());
     }
 
-    private static void announce(ServerPlayer player, ShopEntry entry, int units, int cost) {
+    private static void announce(ServerPlayer player, ShopEntry entry, int units, long cost) {
         int items = units * entry.bundle();
+        Component price = Wallet.amountText(cost);
         Component message = items > 1
-                ? Component.translatable("zones.shop.bought.many", entry.stack().getHoverName(), items, cost)
-                : Component.translatable("zones.shop.bought", entry.stack().getHoverName(), cost);
+                ? Component.translatable("zones.shop.bought.many", entry.stack().getHoverName(), items, price)
+                : Component.translatable("zones.shop.bought", entry.stack().getHoverName(), price);
         player.sendSystemMessage(message.copy().withStyle(ChatFormatting.GREEN));
     }
 
@@ -164,45 +176,16 @@ public final class ShopTransactions {
         }
 
         player.sendSystemMessage(Component.translatable("zones.shop.sold",
-                result.totalItemsSold, result.totalCurrencyEarned).withStyle(ChatFormatting.GREEN));
+                result.totalItemsSold, Wallet.amountText(result.totalCurrencyEarned)).withStyle(ChatFormatting.GREEN));
     }
 
-    private static int countCurrency(ServerPlayer player) {
-        Item currency = SellManager.getCurrencyItem();
-        int total = count(player.getInventory().items, currency);
-        return total + count(player.getInventory().offhand, currency);
-    }
-
-    private static int count(List<ItemStack> slots, Item currency) {
-        int total = 0;
-        for (ItemStack stack : slots) {
-            if (stack.is(currency)) total += stack.getCount();
-        }
-        return total;
-    }
-
-    private static void takeCurrency(ServerPlayer player, int amount) {
-        Item currency = SellManager.getCurrencyItem();
-        int remaining = take(player.getInventory().items, currency, amount);
-        take(player.getInventory().offhand, currency, remaining);
-    }
-
-    private static int take(List<ItemStack> slots, Item currency, int amount) {
-        int remaining = amount;
-        for (ItemStack stack : slots) {
-            if (remaining <= 0) break;
-            if (!stack.is(currency)) continue;
-
-            int taken = Math.min(remaining, stack.getCount());
-            stack.shrink(taken);
-            remaining -= taken;
-        }
-        return remaining;
-    }
-
+    // WHY: связка бывает больше предела стопки (64 жемчуга при пределе 16), и не влезшее падает под
+    // WHY: ноги стопками предельного размера: пакет слота пишет количество байтом
     private static void givePurchase(ServerPlayer player, ItemStack purchase) {
-        if (!player.getInventory().add(purchase)) {
-            player.spawnAtLocation(purchase);
+        player.getInventory().add(purchase);
+        int perStack = Math.max(1, purchase.getMaxStackSize());
+        while (!purchase.isEmpty()) {
+            player.drop(purchase.split(perStack), false);
         }
     }
 

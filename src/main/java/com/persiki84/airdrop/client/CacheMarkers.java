@@ -5,6 +5,7 @@ import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiSight;
 import com.persiki84.shared.client.ui.UiTagStack;
+import com.persiki84.shared.client.ui.UiTicker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.BlockGetter;
@@ -15,6 +16,7 @@ import org.joml.Vector4f;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public final class CacheMarkers {
@@ -23,6 +25,14 @@ public final class CacheMarkers {
     private static final float MARGIN = 48.0f;
     private static final float FOCUS_SPEED = 10.0f;
     private static final float PRESENCE_SPEED = 8.0f;
+    private static final UiTicker.Format LOCKED =
+            unused -> Component.translatable("airdrop.cache.marker.locked").getString();
+    private static final UiTicker.Format FULL =
+            unused -> Component.translatable("airdrop.cache.marker.full").getString();
+    private static final UiTicker.Format EMPTY =
+            unused -> Component.translatable("airdrop.cache.marker.empty").getString();
+    private static final UiTicker.Format REFILL = seconds -> Component.translatable("airdrop.cache.marker.refill",
+            seconds / 60L, String.format(Locale.ROOT, "%02d", seconds % 60L)).getString();
 
     private static final Map<Long, Marker> known = new HashMap<>();
     private static final List<Marker> live = new ArrayList<>();
@@ -85,8 +95,8 @@ public final class CacheMarkers {
         private final Smooth focus = new Smooth(0.0f, FOCUS_SPEED);
         private final Smooth presence = new Smooth(0.0f, PRESENCE_SPEED);
         private final UiTagStack.Slot stack = UiTagStack.slot();
+        private final UiTicker detail = new UiTicker();
         private Component name = Component.empty();
-        private Component detail = Component.empty();
         private int labelledState = Integer.MIN_VALUE;
         private float screenX;
         private float screenY;
@@ -102,7 +112,7 @@ public final class CacheMarkers {
 
             labelledState = state;
             name = Component.translatable("airdrop.cache.marker", Component.translatable(cell.tier().label()));
-            detail = detailOf(cell);
+            aimDetail(cell);
         }
 
         private static int stateOf(ClientCacheField.Cell cell) {
@@ -111,13 +121,18 @@ public final class CacheMarkers {
             return cell.waiting() ? cell.secondsLeft() : -1;
         }
 
-        private static Component detailOf(ClientCacheField.Cell cell) {
-            if (!ClientCacheField.running()) return Component.translatable("airdrop.cache.marker.locked");
-            if (!cell.empty()) return Component.translatable("airdrop.cache.marker.full");
-            if (!cell.waiting()) return Component.translatable("airdrop.cache.marker.empty");
-
-            int seconds = cell.secondsLeft();
-            return Component.translatable("airdrop.cache.marker.refill", seconds / 60, String.format("%02d", seconds % 60));
+        // WHY: отсчёт до пополнения идёт тикером: каждую секунду меняется одна-две цифры, а не вся
+        // WHY: подпись; смена состояния (пусто, полон, ждёт) перетекает той же сменой по буквам
+        private void aimDetail(ClientCacheField.Cell cell) {
+            if (!ClientCacheField.running()) {
+                detail.set(0L, LOCKED);
+            } else if (!cell.empty()) {
+                detail.set(0L, FULL);
+            } else if (!cell.waiting()) {
+                detail.set(0L, EMPTY);
+            } else {
+                detail.set(cell.secondsLeft(), REFILL);
+            }
         }
 
         private Marker place(float x, float y, int away, int packedColor, boolean kept) {
@@ -144,7 +159,7 @@ public final class CacheMarkers {
 
         public UiTagStack.Slot stack() { return stack; }
         public Component label() { return name; }
-        public Component detail() { return detail; }
+        public UiTicker detail() { return detail; }
         public float screenX() { return screenX; }
         public float screenY() { return screenY; }
         public int color() { return color; }

@@ -19,6 +19,7 @@ import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiTitle;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -328,7 +329,8 @@ public abstract class BrowseScreen extends GlassScreen implements Ambient {
     }
 
     // WHY: предпросмотр меняет содержимое вместе с выбором, и без проявления строки менялись кадром
-    // WHY: под едущей меткой; альфа идёт через модулятор цвета, его уважают и текст, и стекло
+    // WHY: под едущей меткой; альфа идёт через модулятор цвета, его уважают и текст, и стекло.
+    // WHY: Подъём заявлен ходом: голой позой строки предпросмотра доезжали последним рывком
     private void paintPreviewShown(GuiGraphics graphics, int top) {
         if (picked != previewed) {
             previewed = picked;
@@ -343,14 +345,13 @@ public abstract class BrowseScreen extends GlassScreen implements Ambient {
 
         graphics.flush();
         RenderSystem.setShaderColor(red, green, blue, alpha * shown);
-        graphics.pose().pushPose();
-        graphics.pose().translate(0.0f, (1.0f - shown) * PREVIEW_SLIDE, 0.0f);
+        UiRestFrame.shift(graphics, 0.0f, (1.0f - shown) * PREVIEW_SLIDE);
         try {
             paintPreview(graphics, previewLeft() + PANEL_PAD, top + PANEL_PAD,
                     PREVIEW_WIDTH - PANEL_PAD * 2, actionsTop() - top - PANEL_PAD * 2);
             graphics.flush();
         } finally {
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
             RenderSystem.setShaderColor(red, green, blue, alpha);
         }
     }

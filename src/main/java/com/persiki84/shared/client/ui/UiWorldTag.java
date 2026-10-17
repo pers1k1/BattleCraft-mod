@@ -21,15 +21,17 @@ public final class UiWorldTag {
     }
 
     // WHY: сдвиг ухода прибавляется после подъёма стека, а не до: стек считает подъём от переданного
-    // WHY: верха и сглаженно гасил бы сдвиг обратно, отчего метка опускалась и тут же всплывала
-    public static void render(GuiGraphics graphics, Font font, Component name, Component range, float ranged,
+    // WHY: верха и сглаженно гасил бы сдвиг обратно, отчего метка опускалась и тут же всплывала.
+    // WHY: Дальность и отсчёт метки идут тикером метки: на ходу игрока меняются только сменившиеся
+    // WHY: цифры, а место под строку держит удерживаемую ширину, чтобы плашка не дрожала на 9 и 10
+    public static void render(GuiGraphics graphics, Font font, Component name, UiTicker range, float ranged,
                               float centerX, float topY, float height, float scale, int color,
                               float alpha, float focus, float presence, UiTagStack.Slot stack) {
         float shown = alpha * presence;
         float nameWidth = UiRender.measure(graphics, font, name, scale);
         float rangeWidth = range == null || ranged <= RANGE_FLOOR
                 ? 0.0f
-                : (UiRender.measure(graphics, font, range, scale) + GAP) * ranged;
+                : (range.steadyWidth(graphics, font, scale) + GAP) * ranged;
 
         float width = nameWidth + rangeWidth + PADDING * 2.0f;
         float left = centerX - width / 2.0f;
@@ -42,18 +44,16 @@ public final class UiWorldTag {
         if (rangeWidth <= RANGE_FLOOR) return;
 
         // WHY: место под дальность растёт множителем, поэтому и сама строка растёт им же: текст
-        // WHY: полного кегля в наполовину раскрытой щели выглядит вылезшим за плашку
+        // WHY: полного кегля в наполовину раскрытой щели выглядит вылезшим за плашку. Рост заявлен
+        // WHY: ходом: голым масштабом перо пересчитывалось под каждый кадр, и цифры дальности
+        // WHY: переставлялись по пикселю до самого конца раскрытия
         float rangeLeft = left + PADDING + nameWidth + GAP * ranged;
         float middle = topY + height / 2.0f;
-        graphics.pose().pushPose();
-        graphics.pose().translate(rangeLeft, middle, 0.0f);
-        graphics.pose().scale(ranged, ranged, 1.0f);
-        graphics.pose().translate(-rangeLeft, -middle, 0.0f);
+        UiRestFrame.push(graphics, rangeLeft, middle, ranged, ranged, 0.0f, 0.0f);
         try {
-            UiRender.labelScaled(graphics, font, range, rangeLeft, textY, scale,
-                    UiTheme.withAlpha(color, shown * ranged));
+            range.draw(graphics, font, rangeLeft, textY, scale, UiTheme.withAlpha(color, shown * ranged));
         } finally {
-            graphics.pose().popPose();
+            UiRestFrame.pop(graphics);
         }
     }
 }

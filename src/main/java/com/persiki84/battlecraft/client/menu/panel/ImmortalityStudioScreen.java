@@ -6,6 +6,7 @@ import com.persiki84.shared.client.menu.HeadingRow;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.ToggleRow;
+import com.persiki84.shared.client.menu.studio.StudioArtLines;
 import com.persiki84.shared.client.menu.studio.StudioMenu;
 import com.persiki84.shared.client.menu.studio.StudioNav;
 import com.persiki84.shared.client.menu.studio.StudioScreen;
@@ -36,6 +37,7 @@ public final class ImmortalityStudioScreen extends StudioScreen {
     private static final int MAX_SECONDS = 3600;
     private static final int ART = 40;
     private static final float LINE_SCALE = 0.72f;
+    private final StudioArtLines art = new StudioArtLines(1);
 
     private final HeadingRow settingsHeading = new HeadingRow(0, 0, 10, ROW,
             Component.translatable("immortality.menu.tab.main"));
@@ -268,8 +270,8 @@ public final class ImmortalityStudioScreen extends StudioScreen {
         UiRender.textTrackedFit(graphics, this.font, tile.name(), left + width / 2.0f, top, 14.0f, width, 0.95f, 0.0f,
                 UiTheme.alpha(UiAccent.text(), appear), false);
         Component detail = tile.immortal() ? tile.plate() : Component.translatable("studio.immortality.mortal");
-        UiRender.textTrackedFit(graphics, this.font, detail, left + width / 2.0f, top + 16.0f, 10.0f, width,
-                LINE_SCALE, 0.0f, UiTheme.alpha(UiAccent.textDim(), appear), false);
+        art.about(tile.player()).line(0, graphics, this.font, detail, left, top + 16.0f, 10.0f, width, LINE_SCALE,
+                UiTheme.alpha(UiAccent.textDim(), appear));
     }
 
     @Override

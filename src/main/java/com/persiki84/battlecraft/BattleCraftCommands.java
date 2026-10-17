@@ -9,6 +9,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import com.persiki84.battlecraft.craft.CraftCommand;
 import com.persiki84.battlecraft.menu.BattleCraftMenuState;
 import com.persiki84.battlecraft.modules.ModuleEvents;
 import com.persiki84.battlecraft.modules.ModuleId;
@@ -25,9 +26,11 @@ import com.persiki84.battlecraft.announce.AnnounceCommand;
 import com.persiki84.zones.command.MarkCommand;
 import com.persiki84.zones.command.ZoneCommand;
 import com.persiki84.zones.shop.ShopCommand;
+import com.persiki84.sellmod.money.MoneyCommand;
 import net.minecraft.ChatFormatting;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
+import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -62,7 +65,7 @@ public class BattleCraftCommands {
         return BattleCraftManager.getInstance().getConfig();
     }
 
-    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext build) {
         LiteralCommandNode<CommandSourceStack> root = dispatcher.register(Commands.literal("battlecraft")
                 .executes(context -> openMenu(context, BattleCraftMenuState.MENU_ID))
                 .then(selectTeamBranch())
@@ -80,7 +83,10 @@ public class BattleCraftCommands {
                 .then(ZoneCommand.build())
                 .then(MarkCommand.build())
                 .then(MapCommand.build())
-                .then(ShopCommand.build()));
+                .then(ShopCommand.build())
+                .then(MoneyCommand.pay())
+                .then(MoneyCommand.build())
+                .then(CraftCommand.build(build)));
 
         dispatcher.register(Commands.literal("bc")
                 .executes(context -> openMenu(context, BattleCraftMenuState.MENU_ID))

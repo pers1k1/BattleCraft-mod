@@ -373,7 +373,7 @@ public final class Greeting implements SetupPage {
         float shown = shown(HINT_DELAY);
         if (shown <= 0.0f) return;
 
-        boolean snapped = UiRender.floating(true);
+        float snapped = UiRender.floating(1.0f);
         try {
             UiRender.textTracked(graphics, font, HINT, centerX, centerY + HINT_TOP + rise(shown, LIFT) - bob(shown),
                     HINT_SCALE, HINT_TRACKING, tint(color, shown, leaving));

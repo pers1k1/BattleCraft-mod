@@ -8,9 +8,9 @@ import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiCrisp;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.network.chat.Component;
 
 // WHY: полоса мини-плеера ведёт себя как в «Сейчас играет» iOS: под курсором и на перетаскивании
 // WHY: плавно толстеет, на перетаскивании показывает долю курсора, а не плеера, и время идёт за
@@ -31,10 +31,12 @@ final class CenterScrub {
     private final TrackProgress progress = new TrackProgress();
     private final Smooth grow = new Smooth(0.0f, GROW_SPEED);
     private final Smooth ready = new Smooth(0.0f, READY_SPEED);
-    private Component elapsed = Component.literal("0:00");
-    private Component remaining = Component.literal("-0:00");
-    private long elapsedSeconds = -1L;
-    private long remainingSeconds = -1L;
+    private static final UiTicker.Format COUNTDOWN = seconds -> "-" + UiTicker.CLOCK.text(seconds);
+
+    private final UiTicker elapsed = new UiTicker().align(UiTicker.LEFT).rising();
+    private final UiTicker remaining = new UiTicker().align(UiTicker.RIGHT).rising();
+    private long elapsedSeconds;
+    private long remainingSeconds;
     private boolean dragging;
     private float dragShare;
     private float left;
@@ -66,20 +68,8 @@ final class CenterScrub {
     }
 
     private void time(long elapsedMs, long durationMs) {
-        long played = Math.max(0L, elapsedMs / 1000L);
-        long rest = Math.max(0L, (durationMs - elapsedMs + 999L) / 1000L);
-        if (played != elapsedSeconds) {
-            elapsedSeconds = played;
-            elapsed = Component.literal(clock(played));
-        }
-        if (rest != remainingSeconds) {
-            remainingSeconds = rest;
-            remaining = Component.literal("-" + clock(rest));
-        }
-    }
-
-    private static String clock(long seconds) {
-        return seconds / 60L + (seconds % 60L < 10L ? ":0" : ":") + seconds % 60L;
+        elapsedSeconds = Math.max(0L, elapsedMs / 1000L);
+        remainingSeconds = Math.max(0L, (durationMs - elapsedMs + 999L) / 1000L);
     }
 
     private boolean over(double mouseX, double mouseY) {
@@ -103,8 +93,19 @@ final class CenterScrub {
         if (shown <= 0.02f) return;
         float textY = UiRender.centerY(rowY - TIME_BOX / 2.0f, TIME_BOX, TIME_SCALE);
         int tone = UiTheme.alpha(dim, shown);
-        UiRender.labelScaled(graphics, font, elapsed, left, textY, TIME_SCALE, tone);
-        UiRender.labelRight(graphics, font, remaining, left + width, textY, TIME_SCALE, tone);
+        aim(elapsed, elapsedSeconds, UiTicker.CLOCK);
+        aim(remaining, remainingSeconds, COUNTDOWN);
+        elapsed.draw(graphics, font, left, textY, TIME_SCALE, tone);
+        remaining.draw(graphics, font, left + width, textY, TIME_SCALE, tone);
+    }
+
+    // WHY: время идёт по цифрам, как таймер острова; на перетаскивании оно идёт за курсором без хода
+    private void aim(UiTicker ticker, long seconds, UiTicker.Format format) {
+        if (dragging) {
+            ticker.snap(seconds, format);
+        } else {
+            ticker.set(seconds, format);
+        }
     }
 
     private static void panel(GuiGraphics graphics, float x, float y, float width, float height, int color) {

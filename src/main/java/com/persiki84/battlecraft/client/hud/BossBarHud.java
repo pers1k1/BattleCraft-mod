@@ -8,8 +8,10 @@ import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
 import com.persiki84.shared.client.ui.UiPalette;
 import com.persiki84.shared.client.ui.UiRender;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiVital;
 import net.minecraft.client.Minecraft;
@@ -73,7 +75,7 @@ public final class BossBarHud {
         UUID id = event.getBossEvent().getId();
         Bar bar = bars.computeIfAbsent(id, key -> new Bar());
         bar.seen = true;
-        bar.name = event.getBossEvent().getName();
+        bar.rename(event.getBossEvent().getName());
         bar.target = event.getBossEvent().getProgress();
         bar.alert = event.getBossEvent().getColor() == BossEvent.BossBarColor.RED;
         bar.top = event.getY() / scale;
@@ -101,20 +103,26 @@ public final class BossBarHud {
         }
     }
 
+    // WHY: выезд плашки заявлен ходом от её места, а не вычтен из верха: с вычтенным верхом имя
+    // WHY: босса шло ступенями по пикселю и вставало на место последним рывком в хвосте выезда
     private static void draw(GuiGraphics graphics, Minecraft mc, Bar bar, float scale, float delta, boolean live) {
         float alpha = bar.alpha.to(live ? 1.0f : 0.0f, delta);
         if (alpha <= 0.01f) return;
 
         float value = live ? bar.progress.to(bar.target, delta) : bar.progress.get();
         float centerX = mc.getWindow().getGuiScaledWidth() / scale / 2.0f;
-        float top = bar.top - (1.0f - UiAnim.easeOut(alpha)) * SLIDE;
-        float content = Math.max(BAR_WIDTH, UiRender.width(mc.font, bar.name) * LABEL_SCALE + LABEL_TRACKING * 4.0f);
         float panelHeight = PANEL_PADDING * 2.0f + LABEL_HEIGHT + LABEL_GAP + BAR_HEIGHT;
 
         graphics.pose().pushPose();
         graphics.pose().scale(scale, scale, 1.0f);
-        paint(graphics, mc, bar, centerX, top, content, panelHeight, alpha, value);
-        graphics.pose().popPose();
+        UiRestFrame.shift(graphics, 0.0f, -(1.0f - UiAnim.easeOut(alpha)) * SLIDE);
+        try {
+            float content = Math.max(BAR_WIDTH, bar.labelWidth(graphics, mc));
+            paint(graphics, mc, bar, centerX, bar.top, content, panelHeight, alpha, value);
+        } finally {
+            UiRestFrame.pop(graphics);
+            graphics.pose().popPose();
+        }
 
         if (live) {
             frameBottom = Math.max(frameBottom, (bar.top + panelHeight + 5.0f) * scale);
@@ -135,9 +143,14 @@ public final class BossBarHud {
             UiVital.card(graphics, panelX, top, panelWidth, panelHeight, UiMetrics.radius(panelHeight), alpha);
         }
 
-        UiRender.textTracked(graphics, mc.font, bar.name, centerX,
-                UiRender.centerY(top + PANEL_PADDING, LABEL_HEIGHT, LABEL_SCALE), LABEL_SCALE, LABEL_TRACKING,
-                UiTheme.alpha(HudInk.text(), alpha));
+        float labelY = UiRender.centerY(top + PANEL_PADDING, LABEL_HEIGHT, LABEL_SCALE);
+        if (bar.morphs) {
+            bar.label.draw(graphics, mc.font, centerX, labelY, LABEL_SCALE,
+                    TickerText.inkOr(bar.ink, HudInk.text()), alpha);
+        } else {
+            UiRender.textTracked(graphics, mc.font, bar.name, centerX, labelY, LABEL_SCALE, LABEL_TRACKING,
+                    UiTheme.alpha(HudInk.text(), alpha));
+        }
 
         float barX = centerX - content / 2.0f;
         float barY = top + PANEL_PADDING + LABEL_HEIGHT + LABEL_GAP;
@@ -145,13 +158,39 @@ public final class BossBarHud {
         UiGlass.progress(graphics, barX, barY, content, BAR_HEIGHT, value, accent, alpha);
     }
 
+    // WHY: имя полосы часто несёт отсчёт (боевой таймер пишет секунды в имя), поэтому оно идёт тикером:
+    // WHY: меняются только сменившиеся цифры. Строка снимается с компонента только на смене ссылки,
+    // WHY: а не в кадре; свой цвет имени берётся с корня стиля, иначе ставится цвет худа. Имя с
+    // WHY: разноцветными частями или кодами «§» тикер не несёт, оно рисуется прежним пером
     private static final class Bar {
         private final Smooth alpha = new Smooth(0.0f, 9.0f);
         private final Smooth progress = new Smooth(9.0f);
+        private final UiTicker label = new UiTicker().align(UiTicker.CENTER).tracking(LABEL_TRACKING);
         private Component name;
         private float target;
         private float top;
         private boolean alert;
         private boolean seen;
+        private boolean morphs;
+        private int ink;
+        private float plainWidth;
+
+        private void rename(Component next) {
+            if (next == name) return;
+            name = next;
+            morphs = TickerText.plain(next);
+            ink = TickerText.ink(next);
+            plainWidth = UiRender.width(Minecraft.getInstance().font, next) * LABEL_SCALE
+                    + LABEL_TRACKING * next.getString().length();
+            if (morphs) {
+                label.set(next.getString());
+            } else {
+                label.reset();
+            }
+        }
+
+        private float labelWidth(GuiGraphics graphics, Minecraft mc) {
+            return morphs ? label.steadyWidth(graphics, mc.font, LABEL_SCALE) : plainWidth;
+        }
     }
 }

@@ -21,6 +21,7 @@ import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiScale;
 import com.persiki84.shared.client.ui.UiSweep;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiTicker;
 import com.persiki84.shared.client.ui.UiVeil;
 import com.persiki84.shared.client.ui.UiVital;
 import net.minecraft.client.Minecraft;
@@ -106,6 +107,8 @@ public final class IslandHud {
     private static long shownWhole = -1L;
     private static long morphedFrame = -1L;
     private static float statsPeak;
+    private static final UiTicker framesTicker = new UiTicker();
+    private static final UiTicker latencyTicker = new UiTicker();
     private static float timingPeak;
 
     private IslandHud() {}
@@ -244,8 +247,8 @@ public final class IslandHud {
     // WHY: центра: у острова, прижатого к краю экрана, толчок иначе сдвигал всё содержимое вбок
     private static void paintAt(GuiGraphics graphics, Font font, MediaTrack track, float x, float y, float alpha) {
         float radius = IslandMorph.radius(frame.height, PILL_HEIGHT);
-        boolean outer = UiRender.floating(true);
-        UiRender.floating(outer || !morph.resting());
+        float outer = UiRender.floating(1.0f);
+        UiRender.floating(morph.resting() ? outer : 1.0f);
         try {
             paintIsland(graphics, font, track, x, y, radius, alpha);
         } finally {
@@ -688,13 +691,12 @@ public final class IslandHud {
         float cursor = x;
         if (HudConfig.islandFps()) {
             cursor += unit(graphics, font, FPS_UNIT, cursor, unitY, unitInk);
-            cursor += value(graphics, font, IslandModel.frames(), cursor, valueY,
-                    UiTheme.alpha(inked(), alpha)) + PAIR_GAP;
+            cursor += value(graphics, font, framesTicker, cursor, valueY, inked(), alpha) + PAIR_GAP;
         }
         if (!HudConfig.islandPing()) return;
 
         cursor += unit(graphics, font, PING_UNIT, cursor, unitY, unitInk);
-        value(graphics, font, IslandModel.latency(), cursor, valueY, UiTheme.alpha(pingTone(), alpha));
+        value(graphics, font, latencyTicker, cursor, valueY, pingTone(), alpha);
     }
 
     private static float unit(GuiGraphics graphics, Font font, Component label, float x, float y, int color) {
@@ -702,21 +704,26 @@ public final class IslandHud {
         return UiRender.measure(graphics, font, label, UNIT_SCALE) + UNIT_GAP;
     }
 
-    private static float value(GuiGraphics graphics, Font font, Component number, float x, float y, int color) {
-        UiRender.labelScaled(graphics, font, number, x, y, STAT_SCALE, color);
-        return UiRender.measure(graphics, font, number, STAT_SCALE);
+    // WHY: FPS и пинг меняются цифрами, как таймер острова: сменившиеся разряды уходят и приходят,
+    // WHY: а место под число держит held вокруг statsWidth, поэтому соседи не дёргаются
+    private static float value(GuiGraphics graphics, Font font, UiTicker number, float x, float y, int color,
+                               float alpha) {
+        number.draw(graphics, font, x, y, STAT_SCALE, color, alpha);
+        return number.width(graphics, font, STAT_SCALE);
     }
 
     private static float statsWidth(GuiGraphics graphics, Font font) {
+        framesTicker.set(IslandModel.frames());
+        latencyTicker.set(IslandModel.latency());
         float span = 0.0f;
         if (HudConfig.islandFps()) {
             span += UiRender.measure(graphics, font, FPS_UNIT, UNIT_SCALE) + UNIT_GAP
-                    + UiRender.measure(graphics, font, IslandModel.frames(), STAT_SCALE) + PAIR_GAP;
+                    + framesTicker.width(graphics, font, STAT_SCALE) + PAIR_GAP;
         }
         if (!HudConfig.islandPing()) return Math.max(0.0f, span - PAIR_GAP);
 
         return span + UiRender.measure(graphics, font, PING_UNIT, UNIT_SCALE) + UNIT_GAP
-                + UiRender.measure(graphics, font, IslandModel.latency(), STAT_SCALE);
+                + latencyTicker.width(graphics, font, STAT_SCALE);
     }
 
     private static int inked() {
@@ -791,8 +798,9 @@ public final class IslandHud {
         shownPlayed = played;
         shownWhole = whole;
         if (whole > 0L) {
-            timing.set(clock(played) + " / " + clock(whole));
-            pillRow.set(clock(played) + " / " + clock(whole));
+            String span = clock(played) + " / " + clock(whole);
+            timing.set(span);
+            pillRow.set(span);
             return;
         }
         timing.set(clock(played));

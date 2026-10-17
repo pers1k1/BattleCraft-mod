@@ -143,7 +143,7 @@ public abstract class PanelScreen extends StudioScreen {
         if (current == null || !(current.title().getContents() instanceof TranslatableContents contents)) return null;
         String key = contents.getKey() + ".about";
         return I18n.exists(key) ? Component.translatable(key) : null;
-    }
+        }
 
     @Override
     protected int artHeight() {

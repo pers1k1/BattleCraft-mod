@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.10` in files, `10.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.17` in files, `17.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1111,6 +1111,188 @@ Version 2026.10.09hotfix - built; not yet checked in game.
 - **White highlight.** The syllable being sung now lights up and glows in white on any cover instead of taking the cover colour; the visualiser keeps the cover colours. The same change is in Glass MediaPlayer Island 1.0.11.
 
 Version 2026.10.10 - built; not yet checked in game.
+
+## A new airdrop on GeckoLib, 13 October 2026
+
+The airdrop is drawn by GeckoLib 4.8.4 now, so the model and its animations come straight out of Blockbench: the source is `art/airdrop/airdrop.bbmodel`, and the GeckoLib plugin exports `geo/entity/airdrop.geo.json` and `animations/entity/airdrop.animation.json` into the mod without any code to convert. GeckoLib is not packed into the jar; the airdrop module requires it, and the pack already carries it for SuperbWarfare, on the client and on the server.
+
+- **Model.** A domed canopy of eight two-tier gores in alternating khaki and olive with a hem, eight lines to a ring and four straps from the ring to the corners of the crate. The crate stands on a pallet, has corner guards, bands and two clasps, and it is hollow: once the lid is open the cargo inside can be seen. A red strobe sits on one end and a signal flare on the other. No two faces of the model lie in the same plane facing the same way, which is what made parts of the old model flicker; the build script checks that before it writes the model.
+- **Animations.** The canopy opens with an overshoot when the drop appears, then swings as a pendulum with the canopy breathing and lagging behind the crate; the swing speeds up with the fall. Ten blocks above the ground the swing settles. On landing the crate squats from the impact, the lines go, and the canopy deflates and slumps to one side. The clasps flip open and the lid swings back with a bounce. Anyone who comes up to a drop that has already landed or opened sees it lying as it is, not the landing or the opening played again.
+- **Light.** The strobe flashes twice a second in red, glows at night through a glow mask, and carries a halo that faces the camera and grows with distance so it can be picked out from afar. It goes dark once the drop has been emptied. The world around it is not lit: that needs a dynamic light mod.
+- **Smoke.** The flare burns with a flame and sparks and leaves a trail of red signal smoke in flight; after landing it sends up a red column until the drop is emptied. The smoke is visible beyond 32 blocks and turns grey as it thins out.
+- **Dust.** Landing throws a ring of particles of the block under the crate and puffs of dust that run out along the ground. A drop that arrives already lying on the ground raises nothing.
+- **Sounds.** The canopy opening flaps when the drop appears, and landing is a heavy wooden thud with the canopy collapsing. The lid still opens silently.
+
+## Two kinds of money and transfers between players
+
+The server picks one currency mode for everything that pays or charges: shop purchases, the sell-all
+button, kill rewards, capture rewards, point income and the team treasury.
+
+- **Item** (default, as before): money is the currency item from `sellmod.json`, and a balance is the
+  number of those items in the inventory.
+- **Account**: money is a number on the player's account, kept in `<world>/battlecraft/wallets.json`.
+  A reward or income paid in the currency item goes onto the account; any other item stays an item.
+  Taking the currency item out of the team treasury credits the account, and the sell-all button takes
+  loose currency items at face value.
+
+Switching modes converts nothing: accounts wait in the world file, items stay items. Account mode has
+its own settings: the currency name (empty means the translated "coins"), an icon (any item; none means
+the built-in coin), "reset accounts at match start" (on by default, sets every account to the starting
+balance), the starting balance and the share of the account lost on death (goes to the killer if a
+player killed you, burns otherwise; only during a match).
+
+Any player can send money to anyone online with `/battlecraft pay <player> <amount>` or from the shop
+window. The server checks the amount, the sender's balance, that the recipient is online and not the
+sender, and the rate; a knocked-down player cannot pay. In item mode the items move from one inventory
+to the other, and a recipient without room for the whole sum gets nothing - the transfer is refused
+rather than dropped at their feet. Every account keeps its last 16 operations.
+
+Operators: `/battlecraft money` (permission 2) - `info`, `get|history <account>`,
+`set|add|take <account> <amount>`, `reset`, `mode item|account`, `name [text]`,
+`icon hand|slot <n>|item <id{nbt}>|clear`, `startbalance <n>`, `deathloss <0..100>`,
+`resetonstart <true|false>`. The shop editor reads the same data from the `money` menu snapshot.
+
+Fixed along the way: a shop price is never negative (a hand-edited `shop.json` could make a purchase
+pay the buyer), the purchase total is counted in 64 bits, money is taken before the stock, and an
+oversized bundle that does not fit is dropped in proper stacks.
+
+### Where money shows up
+
+- **HUD** (bottom right): the balance with the currency icon. In account mode that is the operator's icon
+  or, without one, a drawn coin; in item mode the currency item, as before. Incoming money still flashes
+  `+N` above the card.
+- **Shop**: the balance plate, tile prices, the price line and the buy button speak the chosen currency
+  (icon and name). The **Transfer** button next to the balance opens a transfer window: faces of players
+  online as tiles (teammates first, search by nick), the amount typed on the keyboard with `+10`,
+  `+100` and `All`, a "you will keep N" line, a second press to confirm, and the server's answer
+  (sent, or why it was refused) right in the window.
+- **Team treasury**: in account mode taking the currency item says "to account" and explains that it is
+  credited, not put into the inventory.
+- **Shop editor**: a **Currency** node under the sections. Accounts are tiles (head, nick, balance; online
+  first, offline dimmed), with multi-select and a right-click menu (credit, debit, zero). The right
+  column edits the selected account (balance typed in, quick credit or debit, its last 16 operations),
+  a group (one amount for everyone selected) or, with nothing selected, the currency itself: mode
+  (switching asks for a confirmation and says what happens to the money already held), the currency
+  item and the account icon from the item shelf, the name, the starting balance, the death loss and the
+  match-start reset. Every number is typed, not dragged.
+
+## Crafting bans
+
+An operator can close the recipes of any item. Each ban has a phase: **always**, **only in a match** or
+**only in the lobby** (with the match core switched off a match always counts as running). The ban sits in the recipe lookup itself, so it covers the crafting table and the
+inventory grid, furnaces, smokers, blast furnaces, the campfire, the stonecutter, the smithing table,
+the recipe book (it still fills the grid, but no result appears) and modded machines that take their
+recipes from the recipe manager, including the TACZ gun smith table. If the same ingredients also make
+an allowed item, that recipe is used instead. A furnace already smelting a banned item stops on the
+next tick, and a phase change takes effect within a second.
+
+- **Matching.** A ban without a tag closes the item entirely. A ban added from a stack keeps only the
+  tags that define the variant (potion, stored enchantments, TACZ `GunId`, `AmmoId`, `AttachmentId`,
+  `BlockId`), so one potion or one gun can be banned while the rest stay open; wear, names and loaded
+  ammo are ignored.
+- **Client.** The ban list is sent to every player, so the stonecutter and the smithing table do not
+  show a result the server will not hand out. An item tooltip says "Banned on the server", or "Banned
+  in a match" / "Banned in the lobby" while its phase is not on.
+- **Commands** (permission 2): `/battlecraft craft` opens the editor, `ban <item> [always|match|lobby]`,
+  `unban <item>`, `phase <item> <always|match|lobby>`, `list`, `clear [always|match|lobby]`. `unban`
+  and `phase` complete over the current bans.
+- **Editor** (`/bc` -> Crafting bans): phases on the left with counts, banned items as tiles, dimmed
+  while their phase is not on. Drag an item from the shelf onto the grid or straight onto a phase,
+  or double-click it; drag a tile onto another phase to move it; Delete or the right-click menu lifts
+  a ban; multi-select moves or lifts a group. The right column shows the item on a turntable, its
+  phase, whether it holds right now and how many recipes it closes.
+- **Storage.** `<world>/battlecraft/craft_bans.json`, written atomically. A file that cannot be read is
+  set aside as `.broken-<time>`; an entry naming an item that is not in the pack is kept in the file
+  untouched.
+
+## Numbers that change digit by digit
+
+Every number the HUD and the world tags show changes the way the island timer does: digits that
+stay put do not move, a changed digit slides out and the new one slides in from below (from above
+when the value goes down). Numbers that change many times a second (range to a tag while running,
+capture percent, air, stamina, coordinates) take a shortened stroke and settle at most ten times a
+second, so they never smear.
+
+- **Covered:** money and pending money, the lobby countdown, its waiting list and the auto-pick
+  timer, the surrender vote,
+  boss bars (the combat timer), countdown toasts and the kill streak, the scan progress, goggles
+  charge, ammo, spare ammo and fire mode, health, food, armour, air, stamina and mount health, item
+  counts in the hotbar and offhand, effect durations, FPS and ping on the island, the radio talk
+  timer, titles and the action bar, capture progress and its state tag, the scoreboard and match
+  clock, the return-to-point card, ranges on point, base, shop, cache and quarry tags, cache refill
+  and quarry return timers, knockdown bleed-out and revive progress, stacked damage numbers and the
+  minimap coordinates.
+- Text with several colours or legacy `§` codes is drawn as before, without the digit motion.
+- A card whose width depends on its number holds its recent widest size, so 9 -> 10 -> 9 does not
+  shake its neighbours.
+- **In menus too:** counts in the editor navigators, plates and badges on editor tiles, the stats
+  plate, read-only rows, number rows stepped with the arrows, shop prices, stock and restock timers,
+  the balance, the treasury, the lobby, the desktop mini player, the server list and the gun bench
+  stats. A number being typed or dragged with a slider is shown as is, without the motion.
+
+## Editor tiles fill the row
+
+Editor tiles in `/bc` (shop, airdrop, hub, modifiers, quarry, points, teams and the rest), the item
+shelf and the attachment bench are sized from the width of their window: four tiles across the editor
+canvas from edge to edge (about 72 units each instead of 58 with a strip of empty space on the right),
+and everything inside a tile grows with it. Hovering a tile no longer pops up a second name over it:
+the name on the tile is the only one, and a long name scrolls inside its box. Glass that lies over
+item icons (a tile being dragged, the right-click menu, hints, the loot trial window) now bends the
+icons beneath it instead of letting them show through.
+
+## Letters come to rest without a jump
+
+At the end of an animation text used to step to a neighbouring pixel, and some value switches (the
+window motion row, for example) trembled for a moment once they settled. Every animated pose around
+text now goes through the rest frame, the resting place is rounded once and kept, and a line whose
+place moved glides onto the pixel grid in a third of a second. This covers menus, editors, the HUD,
+the desktop and vanilla screens drawn with the mod's pen.
+
+## Customization is an editor like the others
+
+The customization screen uses the same layout as the `/bc` editors: tabs and their groups on the
+left, a live sample of what is being changed in the middle (the glass panel, the palette, the HUD
+element drawn by its own code), the controls of the group on the right, search in the header and a
+right-click menu. Presets, built-in and your own, are tiles in one gallery with apply, rename,
+duplicate and delete. The desktop search still jumps to a group and highlights the row.
+
+## Team select
+
+The lobby screen shows teams as glass columns in their colour with the players' heads. Click a
+column (or press 1-9) to join; your own head shows where it will go and then flies there. Columns
+that cannot be joined (full, switch on cooldown, match running, mode off) are dimmed with the reason.
+The title plate is now measured by the title typeface itself, so "TEAM SELECT" no longer sticks out
+of its glass.
+
+## A frost exit without a frame drop
+
+Leaving a screen with the frost motion set blurred the whole screen with a 41-sample disc every frame,
+which cost 2-21 ms per frame at 1440p and more at 4K. The same blur is now built from downscaled
+separable passes: 0.4-0.7 ms at 1440p, with the look matched against the old pass.
+
+## Holes closed in this pass
+
+- Taking a craft result computed before a ban could duplicate the ingredients; the leftover is
+  always counted from the real recipe now.
+- The recipe book, recipe rewards and knowledge books are not affected by bans, so a ban never wipes
+  recipes from a player's book.
+- A transfer to a dead player in item mode is refused instead of burning the money.
+- Turning the sell module off also stops transfers, death loss and the match-start reset.
+- Selling everything in item mode is capped by the room for the currency items, so it cannot drop
+  millions of item entities.
+- The starting balance can be spent but not sent, so fresh nicknames on an offline-mode server cannot
+  feed one main account.
+- An unknown phase in `craft_bans.json` is kept as written instead of quietly becoming "always".
+- Team select and ready requests are rate limited on the server.
+
+## Airdrop smoke
+
+The flare smoke was computed from the drop's random rotation while GeckoLib drew the model without
+it, so the smoke rose about a block away from the crate. The model now turns with the drop and the
+smoke comes out of the flare.
+
+Version 2026.10.17 - built; not yet checked in game.
+
 
 ## Releases
 

@@ -8,11 +8,13 @@ import com.persiki84.shared.client.menu.MenuRow;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.PickRow;
 import com.persiki84.shared.client.menu.ToggleRow;
+import com.persiki84.shared.client.menu.studio.StudioArtLines;
 import com.persiki84.shared.client.menu.studio.StudioStack;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiTheme;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.nbt.CompoundTag;
@@ -39,6 +41,7 @@ final class AirDropSettings {
 
     private final AirDropStudioScreen screen;
     private final List<AbstractWidget> rows = new ArrayList<>();
+    private final StudioArtLines art = new StudioArtLines(2);
     private final HeadingRow lootHeading = heading("studio.drop.group.loot");
     private final HeadingRow dangerHeading = heading("studio.drop.group.danger");
     private final ActionRow openRow;
@@ -178,9 +181,10 @@ final class AirDropSettings {
     void renderArt(GuiGraphics graphics, float left, float top, float width, float appear) {
         CompoundTag state = state();
         if (state.isEmpty()) return;
-        UiRender.textTrackedFit(graphics, Minecraft.getInstance().font, stats(), left + width / 2.0f, top, 14.0f,
-                width, 0.9f, 0.0f, UiTheme.alpha(UiAccent.text(), appear), false);
-        line(graphics, areaLine(state), left, width, top + 16.0f, appear);
+        Font font = Minecraft.getInstance().font;
+        art.line(0, graphics, font, stats(), left, top, 14.0f, width, 0.9f, UiTheme.alpha(UiAccent.text(), appear));
+        art.line(1, graphics, font, areaLine(state), left, top + 16.0f, 10.0f, width, LINE_SCALE,
+                UiTheme.alpha(UiAccent.textDim(), appear));
         line(graphics, Component.translatable("studio.drop.art.table", state.getString("lootTable")),
                 left, width, top + 27.0f, appear);
     }

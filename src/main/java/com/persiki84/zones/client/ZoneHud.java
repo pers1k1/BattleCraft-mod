@@ -169,7 +169,7 @@ public final class ZoneHud {
         drawDot(graphics, marker, x, y, focus, presence * (1.0f - plate));
         if (plate <= MARKER_GONE) return;
 
-        UiWorldTag.render(graphics, minecraft.font, marker.label(), marker.rangeLabel(), ranged,
+        UiWorldTag.render(graphics, minecraft.font, marker.label(), marker.meters(), ranged,
                 x, y - height, height, markerScale, marker.color(), alpha, focus,
                 presence * plate, marker.stack());
     }

@@ -3,14 +3,18 @@ package com.persiki84.shared.client.menu.studio;
 import com.persiki84.shared.client.menu.GlassScreen;
 import com.persiki84.shared.client.menu.MenuCommands;
 import com.persiki84.shared.client.menu.MenuFeedback;
+import com.persiki84.shared.client.menu.MenuLayer;
 import com.persiki84.shared.client.menu.MenuRow;
 import com.persiki84.shared.client.menu.PaletteStack;
 import com.persiki84.shared.client.menu.PaletteWindow;
+import com.persiki84.shared.client.menu.SearchField;
+import com.persiki84.shared.client.menu.TickerLine;
 import com.persiki84.shared.client.menu.pick.ItemShelf;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiButton;
+import com.persiki84.shared.client.ui.UiCover;
 import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiMetrics;
@@ -55,6 +59,7 @@ public abstract class StudioScreen extends GlassScreen {
     private static final int PANEL_LIMIT = 340;
     private static final int TITLE_TOP = 12;
     private static final int STATS_WIDTH = 236;
+    private static final int SEARCH_WIDTH = 156;
     private static final float RADIUS = 9.0f;
     private static final float FIT_MARGIN = 10.0f;
     private static final float LINE_SCALE = 0.72f;
@@ -75,6 +80,7 @@ public abstract class StudioScreen extends GlassScreen {
 
     protected final StudioNav nav = new StudioNav();
     protected final StudioGrid grid = new StudioGrid();
+    private final TickerLine statsLine = new TickerLine(0.5f);
     protected final StudioStack inspector = new StudioStack();
     protected final StudioStack canvas = new StudioStack();
     protected final StudioShelf shelf = new StudioShelf(this::layout);
@@ -115,6 +121,7 @@ public abstract class StudioScreen extends GlassScreen {
         super(title);
         this.parent = parent;
         grid.mark(marks.bits());
+        grid.keys(this::tickerKey);
     }
 
     public void returnTo(Screen screen) {
@@ -270,7 +277,7 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     protected boolean overCanvas(double mouseX, double mouseY) {
-        return mouseX >= canvasLeft() && mouseX < canvasLeft() + CANVAS_WIDTH
+        return mouseX >= canvasLeft() && mouseX < canvasLeft() + canvasWidth()
                 && mouseY >= contentTop() && mouseY < panelBottom();
     }
 
@@ -296,6 +303,12 @@ public abstract class StudioScreen extends GlassScreen {
 
     protected String tileKey(int index) {
         return null;
+    }
+
+    // WHY: число на плитке держится за вещь. Обычно это ключ отметки, но где ключ отметки это номер
+    // WHY: (записи лута), экран отдаёт null, и сетка узнаёт вещь по имени и порядку среди одноимённых
+    protected String tickerKey(int index) {
+        return tileKey(index);
     }
 
     protected List<StudioMenu.Action> bulkActions(List<Integer> indices) {
@@ -367,8 +380,24 @@ public abstract class StudioScreen extends GlassScreen {
         marks.refresh(tiles().size(), this::tileKey);
     }
 
+    // WHY: ширины колонок можно перераспределить: у редактора настроек главное справа строки, а не
+    // WHY: витрина, и строкам нужна ширина под подпись и значение. Общая ширина студии при этом та же
+    protected int canvasWidth() {
+        return CANVAS_WIDTH;
+    }
+
+    protected int inspectorWidth() {
+        return INSPECTOR_WIDTH;
+    }
+
+    // WHY: поиск живёт в шапке студии, слева от сводки: строка поиска не уезжает с прокруткой
+    // WHY: колонок и видна, пока игрок смотрит на найденное. Отбор строк решает наследник
+    protected SearchField search() {
+        return null;
+    }
+
     protected int contentWidth() {
-        return NAV_WIDTH + CANVAS_WIDTH + INSPECTOR_WIDTH + GAP * 2;
+        return NAV_WIDTH + canvasWidth() + inspectorWidth() + GAP * 2;
     }
 
     protected int contentLeft() {
@@ -388,7 +417,7 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     protected int inspectorLeft() {
-        return canvasLeft() + CANVAS_WIDTH + GAP;
+        return canvasLeft() + canvasWidth() + GAP;
     }
 
     protected int inspectorRowsLeft() {
@@ -396,7 +425,7 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     protected int inspectorRowsWidth() {
-        return INSPECTOR_WIDTH - (int) UiMetrics.PAD * 2;
+        return inspectorWidth() - (int) UiMetrics.PAD * 2;
     }
 
     protected int canvasRowsLeft() {
@@ -404,7 +433,7 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     protected int canvasRowsWidth() {
-        return CANVAS_WIDTH - (int) UiMetrics.PAD_WIDE * 2;
+        return canvasWidth() - (int) UiMetrics.PAD_WIDE * 2;
     }
 
     protected int headerTop() {
@@ -413,7 +442,15 @@ public abstract class StudioScreen extends GlassScreen {
 
     private int headerLeft() {
         int buttons = headerButtons().size();
-        return (this.width - (STATS_WIDTH + buttons * (HEADER_BUTTON + GAP))) / 2;
+        return (this.width - (searchRoom() + STATS_WIDTH + buttons * (HEADER_BUTTON + GAP))) / 2;
+    }
+
+    private int searchRoom() {
+        return search() == null ? 0 : SEARCH_WIDTH + GAP;
+    }
+
+    private int statsLeft() {
+        return headerLeft() + searchRoom();
     }
 
     protected int panelBottom() {
@@ -504,13 +541,21 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     private void placeHeader() {
-        int x = headerLeft() + STATS_WIDTH + GAP;
+        placeSearch();
+        int x = statsLeft() + STATS_WIDTH + GAP;
         for (UiButton button : headerButtons()) {
             button.setWidth(HEADER_BUTTON);
             button.setPosition(x, headerTop());
             addRenderableWidget(button);
             x += HEADER_BUTTON + GAP;
         }
+    }
+
+    private void placeSearch() {
+        SearchField field = search();
+        if (field == null) return;
+        field.place(headerLeft(), headerTop() + (HEADER_ROW - SearchField.HEIGHT) / 2, SEARCH_WIDTH);
+        addWidget(field.box());
     }
 
     private void placeInspector() {
@@ -593,6 +638,7 @@ public abstract class StudioScreen extends GlassScreen {
         pointerY = mouseY;
         UiTitle.render(graphics, this.font, getTitle(), this.width / 2.0f, TITLE_TOP, 1.0f, 0.0f, UiAccent.text());
         renderStats(graphics);
+        renderSearch(graphics, mouseX, mouseY, partialTick);
         renderWindows(graphics);
         nav.place(contentLeft(), contentTop(), NAV_WIDTH, panelHeight());
         nav.render(graphics, nodes(), selectedNode(), mouseX, mouseY);
@@ -601,8 +647,10 @@ public abstract class StudioScreen extends GlassScreen {
         inspector.glide();
         canvas.glide();
         renderWidgets(graphics, mouseX, mouseY, partialTick);
-        inspector.renderHints(graphics, inspectorLeft() + INSPECTOR_WIDTH / 2.0f);
+        inspector.renderHints(graphics, inspectorLeft() + inspectorWidth() / 2.0f);
         renderCanvasOverlay(graphics, mouseX, mouseY);
+        coverContent(graphics);
+        MenuLayer.flatten(graphics);
         renderLifted(graphics);
         if (modalOpen()) renderModal(graphics, this.width / 2.0f, contentTop() + panelHeight() / 2.0f, mouseX, mouseY);
         contextMenu.render(graphics, mouseX, mouseY);
@@ -610,36 +658,41 @@ public abstract class StudioScreen extends GlassScreen {
         renderTooltip(graphics, mouseX, mouseY);
     }
 
+    private void renderSearch(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        SearchField field = search();
+        if (field != null) field.render(graphics, mouseX, mouseY, partialTick);
+    }
+
     private void renderStats(GuiGraphics graphics) {
-        float left = headerLeft();
+        float left = statsLeft();
         UiGlass.panel(graphics, left, headerTop(), STATS_WIDTH, HEADER_ROW, UiMetrics.radius(HEADER_ROW), 1.0f);
-        UiRender.textTrackedFit(graphics, this.font, stats(), left + STATS_WIDTH / 2.0f, headerTop(), HEADER_ROW,
-                STATS_WIDTH - UiMetrics.PAD_WIDE * 2.0f, 0.8f, 0.0f, UiAccent.text(), false);
+        statsLine.box(graphics, this.font, stats(), left + UiMetrics.PAD_WIDE, headerTop(), HEADER_ROW,
+                STATS_WIDTH - UiMetrics.PAD_WIDE * 2.0f, 0.8f, UiAccent.text());
     }
 
     private void renderWindows(GuiGraphics graphics) {
         int top = contentTop();
         int height = panelHeight();
         UiGlass.window(graphics, contentLeft(), top, NAV_WIDTH, height, RADIUS, 1.0f);
-        UiGlass.window(graphics, canvasLeft(), top, CANVAS_WIDTH, height, RADIUS, 1.0f);
-        UiGlass.window(graphics, inspectorLeft(), top, INSPECTOR_WIDTH, height, RADIUS, 1.0f);
+        UiGlass.window(graphics, canvasLeft(), top, canvasWidth(), height, RADIUS, 1.0f);
+        UiGlass.window(graphics, inspectorLeft(), top, inspectorWidth(), height, RADIUS, 1.0f);
         UiGlass.layer(graphics);
     }
 
     private void renderCanvasArea(GuiGraphics graphics, int mouseX, int mouseY) {
         if (paintsCanvas()) {
-            renderPainted(graphics, canvasLeft(), contentTop(), CANVAS_WIDTH, panelHeight(), mouseX, mouseY);
+            renderPainted(graphics, canvasLeft(), contentTop(), canvasWidth(), panelHeight(), mouseX, mouseY);
             return;
         }
         if (!gridCanvas()) {
-            canvas.renderHints(graphics, canvasLeft() + CANVAS_WIDTH / 2.0f);
+            canvas.renderHints(graphics, canvasLeft() + canvasWidth() / 2.0f);
             return;
         }
-        grid.place(canvasLeft(), contentTop() + UiMetrics.PAD, CANVAS_WIDTH, panelHeight() - UiMetrics.PAD * 2.0f);
+        grid.place(canvasLeft(), contentTop() + UiMetrics.PAD, canvasWidth(), panelHeight() - UiMetrics.PAD * 2.0f);
         List<? extends StudioTile> tiles = tiles();
         if (tiles.isEmpty() && !carryingPick) {
-            renderWrapped(graphics, emptyCanvas(), canvasLeft() + CANVAS_WIDTH / 2.0f,
-                    contentTop() + panelHeight() / 2.0f, CANVAS_WIDTH);
+            renderWrapped(graphics, emptyCanvas(), canvasLeft() + canvasWidth() / 2.0f,
+                    contentTop() + panelHeight() / 2.0f, canvasWidth());
             return;
         }
         grid.render(graphics, tiles, selectedTile(), mouseX, mouseY);
@@ -647,7 +700,7 @@ public abstract class StudioScreen extends GlassScreen {
 
     private void renderInspectorArea(GuiGraphics graphics, int mouseX, int mouseY) {
         float left = inspectorLeft() + UiMetrics.PAD_WIDE;
-        float width = INSPECTOR_WIDTH - UiMetrics.PAD_WIDE * 2.0f;
+        float width = inspectorWidth() - UiMetrics.PAD_WIDE * 2.0f;
         if (shelfOpen()) {
             renderShelf(graphics, mouseX, mouseY);
             return;
@@ -679,7 +732,7 @@ public abstract class StudioScreen extends GlassScreen {
 
     private void renderShelf(GuiGraphics graphics, int mouseX, int mouseY) {
         float left = inspectorLeft() + UiMetrics.PAD;
-        float width = INSPECTOR_WIDTH - UiMetrics.PAD * 2.0f;
+        float width = inspectorWidth() - UiMetrics.PAD * 2.0f;
         float bottom = panelBottom() - UiMetrics.PAD - SHELF_HINT;
         shelf.render(graphics, left, width, bottom, mouseX, mouseY);
         line(graphics, shelfHint(), left, width, bottom + 2.0f);
@@ -700,6 +753,13 @@ public abstract class StudioScreen extends GlassScreen {
                     LINE_SCALE, UiAccent.textDim(), false);
             y += step;
         }
+    }
+
+    // WHY: значки предметов, модели и строки окон легли после снимка подложки, а учёт покрытия знает
+    // WHY: только стекло. Окна помечаются занятыми целиком: всплывающее стекло над ними (меню по ПКМ,
+    // WHY: тост) переснимает подложку и преломляет предметы, а над пустым миром пересъёмки нет
+    private void coverContent(GuiGraphics graphics) {
+        UiCover.add(graphics.pose().last().pose(), contentLeft(), contentTop(), contentWidth(), panelHeight());
     }
 
     // WHY: всё поднятое (плитка, строка раздела, предмет с полки) рисуется последним слоем, поверх окон
@@ -749,14 +809,13 @@ public abstract class StudioScreen extends GlassScreen {
         }
     }
 
+    // WHY: у плитки витрины подсказки по наведению нет: имя уже стоит на карточке, а ванильная
+    // WHY: подсказка добавляла вторую подпись поверх неё, причём у плиток хаба, команд и игроков это
+    // WHY: было имя значка (знамя, голова), а не самой вещи. Подсказка осталась у ячеек полки: там имени нет
     private ItemStack hoveredStack(int mouseX, int mouseY) {
         if (modalOpen()) return modalHovered(mouseX, mouseY);
         if (shelfOpen() && shelf.over(mouseX, mouseY)) return shelf.hovered(mouseX, mouseY);
-        if (!gridCanvas()) return ItemStack.EMPTY;
-
-        List<? extends StudioTile> tiles = tiles();
-        int index = grid.pick(mouseX, mouseY, tiles.size());
-        return index < 0 ? ItemStack.EMPTY : tiles.get(index).icon();
+        return ItemStack.EMPTY;
     }
 
     @Override
@@ -1122,11 +1181,11 @@ public abstract class StudioScreen extends GlassScreen {
             scrollPainted(x, y, amount);
         } else if (gridCanvas() && grid.over(x, y)) {
             grid.scrollBy(step, tiles().size());
-        } else if (!gridCanvas() && canvas.covers(x, y, canvasLeft(), CANVAS_WIDTH)) {
+        } else if (!gridCanvas() && canvas.covers(x, y, canvasLeft(), canvasWidth())) {
             if (canvas.scrollBy(amount)) layout();
         } else if (shelfOpen() && shelf.over(x, y)) {
             shelf.scrollBy(step);
-        } else if ((bulk() || !scrollArt(x, y, amount)) && inspector.covers(x, y, inspectorLeft(), INSPECTOR_WIDTH)) {
+        } else if ((bulk() || !scrollArt(x, y, amount)) && inspector.covers(x, y, inspectorLeft(), inspectorWidth())) {
             if (inspector.scrollBy(amount)) layout();
         }
         return true;
@@ -1164,6 +1223,7 @@ public abstract class StudioScreen extends GlassScreen {
             closeModal();
             return true;
         }
+        if (key == GLFW.GLFW_KEY_ESCAPE && clearSearch()) return true;
         boolean typing = typingRow() || shelf.typing() || getFocused() instanceof EditBox;
         if (key == GLFW.GLFW_KEY_ESCAPE && marks.size() > 0) {
             clearMarks();
@@ -1176,6 +1236,15 @@ public abstract class StudioScreen extends GlassScreen {
         }
         if ((key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) && typing && submit()) return true;
         return super.keyPressed(key, scan, modifiers);
+    }
+
+    // WHY: Escape сначала снимает поиск, а не закрывает студию: строка, в которой печатают число или
+    // WHY: клавишу, ловит его сама, поэтому поиск перехватывает только вне таких строк
+    private boolean clearSearch() {
+        SearchField field = search();
+        if (field == null || field.query().isEmpty() || typingRow()) return false;
+        field.clear();
+        return true;
     }
 
     @Override

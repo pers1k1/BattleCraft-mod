@@ -1,5 +1,6 @@
 package com.persiki84.battlecraft.client.menu.desktop;
 
+import com.persiki84.shared.client.menu.TickerLine;
 import com.persiki84.shared.client.ui.UiIcon;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAccent;
@@ -57,6 +58,7 @@ final class DesktopMenuBar {
     private Slot hovered;
     private long stamp = -1L;
     private Component clockLine = Component.empty();
+    private final TickerLine clockTicker = new TickerLine(0.5f);
     private long clockMinute = Long.MIN_VALUE;
     private float laidWidth = -1.0f;
     private Language laidLanguage;
@@ -149,7 +151,7 @@ final class DesktopMenuBar {
             case BRAND -> glyph(graphics, UiIcon.Kind.SPARKLE, centreX, alpha);
             case SEARCH -> glyph(graphics, UiIcon.Kind.SEARCH, centreX, alpha);
             case CENTER -> glyph(graphics, UiIcon.Kind.TOGGLES, centreX, alpha);
-            case CLOCK -> UiRender.textCentered(graphics, font, clockLine, centreX, 3.0f, TEXT_SCALE, ink, false);
+            case CLOCK -> clockTicker.at(graphics, font, clockLine, centreX, 3.0f, TEXT_SCALE, ink);
             default -> UiRender.textCentered(graphics, font, label(place.slot()), centreX, 3.0f, TEXT_SCALE,
                     ink, false);
         }

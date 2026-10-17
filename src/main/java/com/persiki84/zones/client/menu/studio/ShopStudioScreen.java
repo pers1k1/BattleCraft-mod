@@ -1,5 +1,7 @@
 package com.persiki84.zones.client.menu.studio;
 
+import com.persiki84.sellmod.money.MoneyMenuState;
+import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.gunsmith.GunsmithScreen;
 import com.persiki84.shared.client.menu.pick.ItemShelf;
@@ -35,6 +37,8 @@ public final class ShopStudioScreen extends StudioScreen {
     private static final int PENDING_TICKS = 80;
 
     private final ShopInspector inspectorRows = new ShopInspector(this);
+    private final MoneyStudio money = new MoneyStudio(this);
+    private final MoneyInspector moneyRows = new MoneyInspector(this, money);
     private final List<UiButton> header;
     private final UiButton modeButton;
     private final UiButton viewerButton;
@@ -50,6 +54,7 @@ public final class ShopStudioScreen extends StudioScreen {
     private int cachedVersion = -1;
     private String cachedNode;
     private String cachedTeam;
+    private long cachedMoney = Long.MIN_VALUE;
     private List<StudioNav.Node> nodes = List.of();
     private List<ShopTile> tiles = List.of();
 
@@ -83,14 +88,39 @@ public final class ShopStudioScreen extends StudioScreen {
     private void ensureCache() {
         String node = selectedNode();
         int version = ClientShopData.version();
+        long moneyStamp = money.signature();
         if (version == cachedVersion && java.util.Objects.equals(node, cachedNode)
-                && java.util.Objects.equals(viewedTeam, cachedTeam)) return;
+                && java.util.Objects.equals(viewedTeam, cachedTeam) && moneyStamp == cachedMoney) return;
 
         cachedVersion = version;
         cachedNode = node;
         cachedTeam = viewedTeam;
-        nodes = ShopNode.tree();
+        cachedMoney = moneyStamp;
+        List<StudioNav.Node> tree = ShopNode.tree();
+        tree.addAll(money.nodes());
+        nodes = tree;
         tiles = buildTiles();
+    }
+
+    boolean moneyShown() {
+        return MoneyStudio.KEY.equals(nodeKey);
+    }
+
+    // WHY: правка денег идёт командой, а ответ виден снимком меню «money»: он запрашивается сразу,
+    // WHY: а не ждёт следующего опроса, иначе плитка показывала бы старую сумму полсекунды
+    void money(String command) {
+        if (command.isEmpty()) return;
+        send(command);
+        refreshMoney();
+    }
+
+    void refreshMoney() {
+        MenuData.invalidate(MoneyMenuState.MENU_ID);
+        MenuData.request(MoneyMenuState.MENU_ID);
+    }
+
+    void relayout() {
+        layout();
     }
 
     private List<ShopTile> buildTiles() {
@@ -115,6 +145,7 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected String selectedNode() {
+        if (moneyShown()) return nodeKey;
         ShopNode node = nodeKey != null && nodeKey.equals(parsedKey) ? parsedNode : ShopNode.parse(nodeKey);
         if (node != null && node.owner() != null) return nodeKey;
         if (nodeKey != null && nodeKey.equals(wantedNode) && ticks - wantedSince < WANTED_TICKS) return nodeKey;
@@ -146,6 +177,9 @@ public final class ShopStudioScreen extends StudioScreen {
         entryId = null;
         grid.reset();
         inspectorRows.rest();
+        if (!moneyShown()) return;
+        adding = false;
+        money.open();
     }
 
     void want(String key) {
@@ -159,6 +193,7 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected Component stats() {
+        if (moneyShown()) return money.stats();
         ShopSection owner = ownerOf(node());
         if (owner == null) return Component.translatable(ClientShopData.sections().isEmpty()
                 ? "studio.shop.stats.empty" : "battlecraft.menu.waiting");
@@ -202,6 +237,7 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected Object inspectorSubject() {
+        if (moneyShown()) return money.subject();
         if (adding) return "shelf";
         if (entry() != null) return "entry:" + nodeKey + "/" + entryId;
         return "node:" + nodeKey;
@@ -209,7 +245,9 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected void buildInspector(StudioStack stack, int x, int width) {
-        if (adding) {
+        if (moneyShown()) {
+            moneyRows.build(stack, x, width, false);
+        } else if (adding) {
             inspectorRows.shelf(stack, x, width);
         } else if (entry() != null) {
             inspectorRows.entry(stack, x, width);
@@ -220,18 +258,23 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected int artHeight() {
+        if (moneyShown()) return moneyRows.artHeight(false);
         return adding ? 0 : inspectorRows.artHeight();
     }
 
     @Override
     protected void renderArt(GuiGraphics graphics, float left, float top, float width, float appear,
                              int mouseX, int mouseY) {
+        if (moneyShown()) {
+            moneyRows.renderArt(graphics, left, top, width, appear);
+            return;
+        }
         inspectorRows.renderArt(graphics, left, top, width, appear);
     }
 
     @Override
     protected boolean pressArt(double mouseX, double mouseY) {
-        return !adding && inspectorRows.pressArt(mouseX, mouseY);
+        return !adding && !moneyShown() && inspectorRows.pressArt(mouseX, mouseY);
     }
 
     @Override
@@ -246,18 +289,19 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected boolean scrollArt(double mouseX, double mouseY, double amount) {
-        return !adding && inspectorRows.scrollArt(mouseX, mouseY, amount);
+        return !adding && !moneyShown() && inspectorRows.scrollArt(mouseX, mouseY, amount);
     }
 
     @Override
     protected Object stamp() {
-        return ClientShopData.version();
+        return ClientShopData.version() * 1_000_003L + (moneyShown() ? money.signature() : 0L);
     }
 
     @Override
     public void tick() {
         super.tick();
         inspectorRows.tick();
+        money.tick(ticks, moneyShown());
     }
 
     @Override
@@ -268,12 +312,14 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected List<? extends StudioTile> tiles() {
+        if (moneyShown()) return money.tiles();
         ensureCache();
         return tiles;
     }
 
     @Override
     protected int selectedTile() {
+        if (moneyShown()) return money.selectedTile();
         if (entryId == null) return -1;
         List<? extends StudioTile> shown = tiles();
         for (int index = 0; index < shown.size(); index++) {
@@ -284,6 +330,10 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected void selectTile(int index) {
+        if (moneyShown()) {
+            money.selectTile(index);
+            return;
+        }
         entryId = index < 0 ? null : tiles.get(index).entry().id();
         adding = false;
         inspectorRows.rest();
@@ -291,7 +341,7 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected boolean tilesMovable() {
-        return true;
+        return !moneyShown();
     }
 
     // WHY: витрина показывает ровно один раздел или отдел, поэтому номер плитки равен месту товара
@@ -299,13 +349,13 @@ public final class ShopStudioScreen extends StudioScreen {
     @Override
     protected void moveTile(int from, int to) {
         ShopNode node = node();
-        if (node == null) return;
+        if (node == null || moneyShown()) return;
         send(COMMAND + "item order " + node.section() + " " + tiles.get(from).entry().id() + " to " + (to + 1));
     }
 
     @Override
     protected boolean acceptsTile(StudioNav.Node target, int tile) {
-        return !target.key().equals(nodeKey) && ShopNode.parse(target.key()) != null;
+        return !moneyShown() && !target.key().equals(nodeKey) && ShopNode.parse(target.key()) != null;
     }
 
     @Override
@@ -368,13 +418,17 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected boolean shelfOpen() {
-        return adding;
+        return moneyShown() ? money.shelfOpen() : adding;
     }
 
     // WHY: номер нового товара клиент не знает, его выбирает сервер; поэтому запоминается состав
     // WHY: раздела до добавления, и новый товар узнаётся в первом снимке, где его не было
     @Override
     protected void addPick(ItemShelf.Pick pick, int slot) {
+        if (moneyShown()) {
+            money.pick(pick);
+            return;
+        }
         ShopNode node = node();
         ShopSection top = node == null ? null : node.topSection();
         if (top == null) {
@@ -436,6 +490,7 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected List<StudioMenu.Action> tileActions(int index) {
+        if (moneyShown()) return money.tileActions(index);
         ShopEntry entry = tiles.get(index).entry();
         List<StudioMenu.Action> actions = new ArrayList<>();
         actions.add(StudioMenu.Action.of("studio.menu.copy", this::copyEntry));
@@ -460,6 +515,7 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected String tileKey(int index) {
+        if (moneyShown()) return money.tileKey(index);
         ensureCache();
         return index < tiles.size() ? tiles.get(index).entry().id() : null;
     }
@@ -474,6 +530,7 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected List<StudioMenu.Action> bulkActions(List<Integer> indices) {
+        if (moneyShown()) return money.bulkActions(indices);
         int count = indices.size();
         return List.of(
                 new StudioMenu.Action(Component.translatable("studio.menu.copy_many", count), () -> copyAll(indices),
@@ -486,6 +543,10 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected void buildBulk(StudioStack stack, int x, int width, List<Integer> indices) {
+        if (moneyShown()) {
+            moneyRows.build(stack, x, width, true);
+            return;
+        }
         inspectorRows.bulk(stack, x, width, entriesAt(indices));
     }
 
@@ -514,7 +575,7 @@ public final class ShopStudioScreen extends StudioScreen {
     @Override
     protected void deleteMarked(List<Integer> indices) {
         ShopNode node = node();
-        if (node == null) return;
+        if (node == null || moneyShown()) return;
         for (ShopEntry entry : entriesAt(indices)) {
             send(COMMAND + "item remove " + node.section() + " " + entry.id());
         }
@@ -523,6 +584,7 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected void dropTiles(StudioNav.Node target, List<Integer> indices) {
+        if (moneyShown()) return;
         ShopNode node = node();
         ShopNode to = target == null ? null : ShopNode.parse(target.key());
         if (node == null || to == null || target.key().equals(nodeKey)) return;
@@ -542,6 +604,7 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected List<StudioMenu.Action> nodeActions(StudioNav.Node picked) {
+        if (MoneyStudio.KEY.equals(picked.key())) return money.nodeActions();
         ShopNode node = ShopNode.parse(picked.key());
         if (node == null) return List.of();
         List<String> siblings = node.top() ? sectionIds() : childIdsOf(node);
@@ -559,6 +622,7 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected List<StudioMenu.Action> canvasActions() {
+        if (moneyShown()) return money.canvasActions();
         if (node() == null) return List.of(StudioMenu.Action.of("studio.menu.new_section", this::createSection));
         return List.of(StudioMenu.Action.of("studio.menu.add", this::openShelf),
                 StudioMenu.Action.of("studio.menu.new_section", this::createSection));
@@ -590,18 +654,22 @@ public final class ShopStudioScreen extends StudioScreen {
 
     @Override
     protected Component emptyCanvas() {
+        if (moneyShown()) {
+            return Component.translatable(money.ready() ? "sellmod.studio.money.empty" : "battlecraft.menu.waiting");
+        }
         if (ClientShopData.sections().isEmpty()) return Component.translatable("studio.shop.empty_catalog");
         return Component.translatable(adding ? "studio.shop.empty_adding" : "studio.shop.empty");
     }
 
     @Override
     protected Component shelfHint() {
+        if (moneyShown()) return Component.translatable("sellmod.studio.money.shelf.hint");
         return Component.translatable("studio.shop.shelf.hint");
     }
 
     @Override
     protected void deleteSelected() {
-        if (entry() != null) removeEntry();
+        if (!moneyShown() && entry() != null) removeEntry();
     }
 
     void removeEntry() {

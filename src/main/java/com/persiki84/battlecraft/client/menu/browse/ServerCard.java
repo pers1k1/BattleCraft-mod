@@ -2,6 +2,8 @@ package com.persiki84.battlecraft.client.menu.browse;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
+import com.persiki84.shared.client.menu.CountedText;
+import com.persiki84.shared.client.menu.TickerLine;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiRender;
 import net.minecraft.SharedConstants;
@@ -25,6 +27,8 @@ public final class ServerCard extends BrowseCard {
     private final boolean lan;
     private byte[] shownIcon;
     private boolean asked;
+    private final TickerLine playersLine = new TickerLine(1.0f);
+    private final CountedText playersText = new CountedText();
 
     public ServerCard(ServerBrowseScreen screen, ServerData data, boolean lan) {
         super(screen, BrowseScreen.LIST_WIDTH, BrowseScreen.CARD_HEIGHT, Component.literal(data.name));
@@ -80,18 +84,17 @@ public final class ServerCard extends BrowseCard {
 
     @Override
     protected void paintTrailing(GuiGraphics graphics, float rightX, float focus) {
-        UiRender.textRight(graphics, font(), players(), rightX, getY() + COUNT_TOP,
-                COUNT_SCALE, UiAccent.textDim(), false);
+        playersLine.at(graphics, font(), players(), rightX, getY() + COUNT_TOP, COUNT_SCALE, UiAccent.textDim());
         PingBars.paint(graphics, rightX, getY() + height - BARS_BOTTOM,
                 compatible() ? PingBars.level(data.ping) : 0, !answered());
     }
 
     private Component players() {
-        if (!compatible()) return Component.translatable("battlecraft.servers.incompatible");
-        if (!answered()) return Component.empty();
-        if (data.ping < 0L) return Component.translatable("battlecraft.servers.offline");
-        if (data.players == null) return Component.empty();
-        return Component.literal(data.players.online() + "/" + data.players.max());
+        if (!compatible()) return playersText.of("battlecraft.servers.incompatible");
+        if (!answered()) return playersText.blank();
+        if (data.ping < 0L) return playersText.of("battlecraft.servers.offline");
+        if (data.players == null) return playersText.blank();
+        return playersText.ratio(data.players.online(), data.players.max());
     }
 
     private void askPing() {

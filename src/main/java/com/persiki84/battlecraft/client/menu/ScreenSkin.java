@@ -9,6 +9,7 @@ import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAnim;
 import com.persiki84.shared.client.ui.UiBackdrop;
 import com.persiki84.shared.client.ui.UiFrame;
+import com.persiki84.shared.client.ui.UiRestFrame;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.ChatScreen;
@@ -97,24 +98,23 @@ public final class ScreenSkin {
     }
 
     // WHY: въезд принадлежит открытому экрану: уходящий перерисовывается в позе покоя, иначе он
-    // WHY: подхватил бы въезд нового и дёрнулся бы на первом кадре ухода
+    // WHY: подхватил бы въезд нового и дёрнулся бы на первом кадре ухода.
+    // WHY: Въезд заявлен ходом: голым масштабом буквы ванильного экрана вставали на сетку живого
+    // WHY: кадра, шли ступенями по пикселю, и в хвосте въезда последний шаг приходил рывком уже
+    // WHY: после того, как экран выглядел вставшим (стенд Z:\tmp\smm_textflex2: 86 % въездов)
     public static void begin(GuiGraphics graphics, Screen screen) {
         lifted = false;
         if (screen != opened || settled() || !animated(screen)) return;
 
         lifted = true;
-        PoseStack pose = graphics.pose();
         float scale = scale();
-        pose.pushPose();
-        pose.translate(screen.width / 2.0f, screen.height / 2.0f + lift(), 0.0f);
-        pose.scale(scale, scale, 1.0f);
-        pose.translate(-screen.width / 2.0f, -screen.height / 2.0f, 0.0f);
+        UiRestFrame.push(graphics, screen.width / 2.0f, screen.height / 2.0f, scale, scale, 0.0f, lift());
     }
 
     public static void end(GuiGraphics graphics) {
         if (!lifted) return;
         lifted = false;
-        graphics.pose().popPose();
+        UiRestFrame.pop(graphics);
     }
 
     public static boolean paint(Screen screen, GuiGraphics graphics) {

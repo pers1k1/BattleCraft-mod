@@ -8,6 +8,7 @@ import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.ToggleRow;
 import com.persiki84.shared.client.menu.pick.ItemShelf;
+import com.persiki84.shared.client.menu.studio.StudioArtLines;
 import com.persiki84.shared.client.menu.studio.StudioMenu;
 import com.persiki84.shared.client.menu.studio.StudioNav;
 import com.persiki84.shared.client.menu.studio.StudioScreen;
@@ -45,6 +46,7 @@ public final class SellStudioScreen extends StudioScreen {
     private static final int ART = 110;
     private static final float TURNTABLE_HEIGHT = 70.0f;
     private static final float LINE_SCALE = 0.72f;
+    private final StudioArtLines art = new StudioArtLines(1);
     private static final String DROP = "drop-price";
     private static final Component SURE = Component.translatable("studio.sure");
     private static final Component DELETE = Component.translatable("studio.delete");
@@ -308,7 +310,8 @@ public final class SellStudioScreen extends StudioScreen {
                 UiTheme.alpha(UiAccent.text(), appear), false);
         Component detail = currencyNode() ? Component.translatable("studio.sell.art.currency")
                 : Component.translatable("studio.sell.art.price", tile.price());
-        artLine(graphics, detail, left, width, y + 15.0f, appear);
+        art.about(tile.item(), currencyNode() ? 1 : 0).line(0, graphics, this.font, detail, left, y + 15.0f, 10.0f,
+                width, LINE_SCALE, UiTheme.alpha(UiAccent.textDim(), appear));
         artLine(graphics, Component.literal(tile.item()), left, width, y + 26.0f, appear);
     }
 

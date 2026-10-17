@@ -4,6 +4,8 @@ import com.persiki84.capturepoints.CapturePointsMod;
 import com.persiki84.capturepoints.event.BlockProtectionHandler;
 import com.persiki84.capturepoints.network.*;
 import com.persiki84.capturepoints.treasury.TeamTreasury;
+import com.persiki84.shared.economy.Wallet;
+import com.persiki84.shared.economy.WalletEntryKind;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -21,7 +23,6 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -171,7 +172,7 @@ public class CapturePointManager {
 
         ItemStack incomeStack;
         if (itemTemplate == null || itemTemplate.isEmpty()) {
-            incomeStack = new ItemStack(Items.EMERALD, amount);
+            incomeStack = new ItemStack(Wallet.currencyItem(), amount);
         } else {
             incomeStack = itemTemplate.copy();
             incomeStack.setCount(amount);
@@ -200,11 +201,10 @@ public class CapturePointManager {
     // WHY: то, что не влезло в инвентарь, уходит в казну команды, а не под ноги: брошенное у точки
     // WHY: подобрал бы враг
     static void payIncome(ServerPlayer player, ItemStack incomeStack, int amount, String pointName) {
-        ItemStack toGive = incomeStack.copy();
-        toGive.setCount(amount);
-        player.getInventory().add(toGive);
-        if (!toGive.isEmpty()) {
-            TeamTreasury.deposit(TeamTreasury.teamOf(player), toGive);
+        ItemStack income = incomeStack.copyWithCount(amount);
+        ItemStack rest = Wallet.hand(player, income, WalletEntryKind.INCOME, pointName);
+        if (!rest.isEmpty()) {
+            TeamTreasury.deposit(TeamTreasury.teamOf(player), rest);
             TeamTreasury.syncTo(player);
         }
 
@@ -212,8 +212,7 @@ public class CapturePointManager {
                 .append(Component.translatable("capturepoints.income.prefix").withStyle(ChatFormatting.GREEN))
                 .append(Component.translatable("capturepoints.income.received",
                         Component.literal(pointName).withStyle(ChatFormatting.YELLOW),
-                        Component.literal(amount + "x " + incomeStack.getHoverName().getString())
-                                .withStyle(ChatFormatting.GOLD)).withStyle(ChatFormatting.WHITE)));
+                        Wallet.prize(income).copy().withStyle(ChatFormatting.GOLD)).withStyle(ChatFormatting.WHITE)));
     }
 
     private static void updateHolograms() {
