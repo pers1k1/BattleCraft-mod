@@ -155,6 +155,9 @@ final class InterfaceSections {
 
     private static CustomSection elements(RowKit kit) {
         List<AbstractWidget> rows = new ArrayList<>();
+        rows.add(kit.percent("battlecraft.custom.hud_size", () -> Customization.glass(GlassKey.HUD_SCALE),
+                InterfaceSections::hudSize, GlassKey.HUD_SCALE.minimum(), GlassKey.HUD_SCALE.maximum(),
+                DIAL_STEP));
         rows.add(kit.toggle("battlecraft.custom.hud_follows_screen", HudConfig::hudFollowsScreen,
                 HudConfig::hudFollowsScreen));
         rows.add(kit.heading("battlecraft.custom.hud.in_chat"));
@@ -168,6 +171,12 @@ final class InterfaceSections {
     private static void resetElements() {
         Customization.resetHud();
         InterfaceFlag.HUD_FOLLOWS_SCREEN.reset();
+        hudSize(GlassKey.HUD_SCALE.fallback());
+    }
+
+    private static void hudSize(float value) {
+        Customization.glass(GlassKey.HUD_SCALE, value);
+        Customization.save();
     }
 
     private static ToggleRow slotRow(RowKit kit, HudSlot slot) {

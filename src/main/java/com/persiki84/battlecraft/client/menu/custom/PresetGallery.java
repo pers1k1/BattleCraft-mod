@@ -35,9 +35,11 @@ final class PresetGallery {
     private static final float STAGGER_MS = 24.0f;
     private static final float APPEAR_LIFT = 6.0f;
     private static final float HOVER_RISE = 1.0f;
+    private static final float RIM_REACH = 3.0f;
     private static final float BADGE_RADIUS = 2.6f;
     private static final float PLUS_ARM = 0.16f;
 
+    private final PresetThumbs thumbs;
     private final List<Smooth> hover = new ArrayList<>();
     private final Smooth choice = new Smooth(1.0f, CHOICE_SPEED);
     private final Smooth glide = new Smooth(0.0f, GLIDE_SPEED);
@@ -50,6 +52,10 @@ final class PresetGallery {
     private float width;
     private float height;
     private int scrollRow;
+
+    PresetGallery(PresetThumbs thumbs) {
+        this.thumbs = thumbs;
+    }
 
     void show(List<PresetCard> shown) {
         cards = shown;
@@ -143,17 +149,39 @@ final class PresetGallery {
         return top + (index / COLUMNS - scrollRow) * step();
     }
 
+    // WHY: рамка выбранной карточки и её подъём под курсором выходят за край карточки, а крайние
+    // WHY: карточки стоят вплотную к краю галереи: ножницы по краю срезали рамку сверху и справа
+    // WHY: два прохода: карточки с шарами, пересъёмка подложки вне ножниц и стеклянные пластины,
+    // WHY: иначе пластина преломляла бы мир за окном, а не шары своей карточки
     void render(GuiGraphics graphics, String selectedKey, int mouseX, int mouseY) {
         glide.to(0.0f, UiFrame.delta());
         followChoice(selectedKey);
-        UiRender.clip(graphics, left, top, width, height);
+        prepare(graphics);
+        announce(paintPass(graphics, selectedKey, mouseX, mouseY, true));
+        UiGlass.layer(graphics);
+        paintPass(graphics, selectedKey, mouseX, mouseY, false);
+    }
+
+    // WHY: миниатюры собираются до прохода, вне ножниц галереи: сборка рисует в свою цель с начала
+    // WHY: координат, и ножницы по галерее срезали бы её целиком
+    private void prepare(GuiGraphics graphics) {
+        float glyphWidth = tileWidth() - GLYPH_INSET * 2.0f;
+        for (int index = 0; index < cards.size(); index++) {
+            float y = tileY(index);
+            if (y + tileHeight() < top || y > top + height) continue;
+            thumbs.texture(graphics, cards.get(index), glyphWidth, glyphSize());
+        }
+    }
+
+    private String paintPass(GuiGraphics graphics, String selectedKey, int mouseX, int mouseY, boolean ground) {
+        UiRender.clip(graphics, left - RIM_REACH, top - RIM_REACH, width + RIM_REACH * 2.0f, height + RIM_REACH * 2.0f);
         try {
             String pointed = null;
             for (int index = 0; index < cards.size(); index++) {
-                if (paintSlot(graphics, index, selectedKey, mouseX, mouseY)) pointed = cards.get(index).key();
+                if (paintSlot(graphics, index, selectedKey, mouseX, mouseY, ground)) pointed = cards.get(index).key();
             }
-            announce(pointed);
             graphics.flush();
+            return pointed;
         } finally {
             graphics.disableScissor();
         }
@@ -172,20 +200,22 @@ final class PresetGallery {
         announced = pointed;
     }
 
-    private boolean paintSlot(GuiGraphics graphics, int index, String selectedKey, int mouseX, int mouseY) {
+    private boolean paintSlot(GuiGraphics graphics, int index, String selectedKey, int mouseX, int mouseY,
+                              boolean ground) {
         float x = tileX(index);
         float y = tileY(index);
         if (y + tileHeight() < top || y > top + height) return false;
         boolean pointed = mouseX >= x && mouseX < x + tileWidth() && mouseY >= y && mouseY < y + tileHeight()
                 && over(mouseX, mouseY);
-        float focus = hover.get(index).to(pointed ? 1.0f : 0.0f, UiFrame.delta());
+        float focus = ground ? hover.get(index).to(pointed ? 1.0f : 0.0f, UiFrame.delta()) : hover.get(index).get();
         float appear = UiAnim.easeOut((System.currentTimeMillis() - shownAt - index * STAGGER_MS) / APPEAR_MS);
         PresetCard card = cards.get(index);
         float taken = card.key().equals(selectedKey) ? choice.get() : 0.0f;
         float restY = restY(index);
         UiRestFrame.shift(graphics, 0.0f, y - restY + (1.0f - appear) * APPEAR_LIFT - focus * wholeRise(graphics));
         try {
-            paintTile(graphics, card, x, restY, UiAnim.clamp01(appear), focus, taken);
+            if (ground) paintTile(graphics, card, x, restY, UiAnim.clamp01(appear), focus, taken);
+            else paintFace(graphics, card, x, restY, UiAnim.clamp01(appear), taken);
         } finally {
             UiRestFrame.pop(graphics);
         }
@@ -206,8 +236,20 @@ final class PresetGallery {
         UiGlass.panel(graphics, x, y, w, h, RADIUS, appear, 0.3f * taken + 0.45f * focus);
         if (taken > 0.01f) UiRender.rim(graphics, x, y, w, h, RADIUS, 1.2f,
                 UiTheme.alpha(UiAccent.color(), 0.8f * taken * appear));
-        float glyphSize = h - NAME_ROW - GLYPH_INSET * 2.0f;
-        PresetGlyph.paint(graphics, card, x + GLYPH_INSET, y + GLYPH_INSET, w - GLYPH_INSET * 2.0f, glyphSize, appear);
+        PresetGlyph.paintGround(graphics, card, x + GLYPH_INSET, y + GLYPH_INSET, w - GLYPH_INSET * 2.0f,
+                glyphSize(), appear);
+    }
+
+    private float glyphSize() {
+        return tileHeight() - NAME_ROW - GLYPH_INSET * 2.0f;
+    }
+
+    private void paintFace(GuiGraphics graphics, PresetCard card, float x, float y, float appear, float taken) {
+        float w = tileWidth();
+        float h = tileHeight();
+        float glyphSize = glyphSize();
+        PresetGlyph.paintFace(graphics, thumbs, card, x + GLYPH_INSET, y + GLYPH_INSET, w - GLYPH_INSET * 2.0f,
+                glyphSize, appear);
         if (card.fresh()) paintPlus(graphics, x + w / 2.0f, y + GLYPH_INSET + glyphSize / 2.0f, glyphSize, appear);
         if (card.current()) UiRender.dot(graphics, x + w - GLYPH_INSET - BADGE_RADIUS * 2.0f,
                 y + GLYPH_INSET + BADGE_RADIUS * 2.0f, BADGE_RADIUS, UiTheme.alpha(UiAccent.color(), appear));

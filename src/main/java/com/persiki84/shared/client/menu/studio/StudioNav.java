@@ -322,16 +322,19 @@ public final class StudioNav {
         if (carried != null) paintCarried(graphics);
     }
 
+    // WHY: плашка едет к месту строки в списке, а не на экране: прокрутка сдвигает экранное место
+    // WHY: скачком, строки доезжают своим ходом, и плашка уезжала вместе с прокруткой, а потом
+    // WHY: возвращалась к строке
     private void paintPill(GuiGraphics graphics, String selected) {
         int index = selected == null ? -1 : indexOf(selected);
         if (index < 0) {
             pillPlaced = false;
             return;
         }
-        float targetY = rowY(index) - glide.get();
+        float targetY = index * ROW;
         if (!pillPlaced) pill.snap(targetY);
         pillPlaced = true;
-        float y = pill.to(targetY, UiFrame.delta()) + glide.get();
+        float y = top + UiMetrics.PAD + pill.to(targetY, UiFrame.delta()) - scroll * ROW + glide.get();
         float x = rowLeft(shown.get(index));
         float w = left + width - UiMetrics.GAP - x;
         UiGlass.panel(graphics, x, y + 1.0f, w, ROW - 2.0f, UiMetrics.radius(ROW - 2.0f), 1.0f, 0.55f);

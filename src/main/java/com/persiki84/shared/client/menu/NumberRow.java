@@ -50,6 +50,7 @@ public class NumberRow extends MenuRow {
     private long holdStart;
     private long lastRepeat;
     private boolean typing;
+    private long typingFrom = Long.MIN_VALUE;
     private String typed = "";
     private Component floorLabel;
     private int divisor = 1;
@@ -263,17 +264,24 @@ public class NumberRow extends MenuRow {
     }
 
     // WHY: набранное принималось только по Enter, а щелчок мимо строки его молча выбрасывал:
-    // WHY: игрок вводил число, жал «Добавить» и отправлял прежнее значение
+    // WHY: игрок вводил число, жал «Добавить» и отправлял прежнее значение. Строка, которая уже в
+    // WHY: фокусе после стрелки, получает от экрана снятие и новую постановку фокуса тем же щелчком,
+    // WHY: что открыл ввод: это снятие ввод не закрывает, иначе набор сразу же гас
     @Override
     public void setFocused(boolean focused) {
-        if (!focused) commitTyped();
+        if (!focused && !openedNow()) commitTyped();
         super.setFocused(focused);
+    }
+
+    private boolean openedNow() {
+        return typing && typed.isEmpty() && typingFrom == UiFrame.frame();
     }
 
     private void beginTyping() {
         UiSound.press();
         typing = true;
         typed = "";
+        typingFrom = UiFrame.frame();
         setFocused(true);
     }
 

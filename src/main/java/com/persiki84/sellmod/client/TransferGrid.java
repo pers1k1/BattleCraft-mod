@@ -35,6 +35,7 @@ final class TransferGrid {
 
     private static final float RADIUS = 7.0f;
     private static final float LEAD = 3.0f;
+    private static final float RIM_REACH = 2.0f;
     private static final float FACE = 18.0f;
     private static final float FACE_TOP = 8.0f;
     private static final float FACE_FRAME = 1.5f;
@@ -234,10 +235,11 @@ final class TransferGrid {
         return null;
     }
 
+    // WHY: рамка выбранной плитки выходит за её край, а крайние плитки могут стоять вплотную к краю
     void render(GuiGraphics graphics, int mouseX, int mouseY) {
         float delta = UiFrame.delta();
         float offset = glide.to(scroll * (TILE_HEIGHT + TILE_GAP), delta);
-        UiRender.clip(graphics, left, top, width, height);
+        UiRender.clip(graphics, left - RIM_REACH, top, width + RIM_REACH * 2.0f, height);
         try {
             for (int index = 0; index < shown.size(); index++) {
                 paintSlot(graphics, shown.get(index), index, offset, mouseX, mouseY, delta);

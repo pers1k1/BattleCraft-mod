@@ -90,6 +90,27 @@ public final class UiBackdrop {
         UiCover.clear();
     }
 
+    // WHY: миниатюре пресета нужен снимок, собранный её собственным размытием и в любом режиме, даже
+    // WHY: когда у игрока стекло плоское и кадр не снимается вовсе. lend включает снимок на время
+    // WHY: сборки, retake снимает текущую цель без счёта слоёв, giveBack возвращает выключенный
+    public static boolean lend() {
+        boolean was = enabled;
+        enabled = true;
+        return was;
+    }
+
+    public static void retake() {
+        if (!enabled || failed) return;
+
+        substitute = 0;
+        take(GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING));
+        UiCover.clear();
+    }
+
+    public static void giveBack(boolean was) {
+        if (!was) setEnabled(false);
+    }
+
     // WHY: снимок со сцены уже лежит в координатах плоской отрисовки, и переносить сэмпл по мировой
     // WHY: позе для него значит читать чужое место кадра; перенос нужен только снимку с самого кадра
     public static UiPlane carrier() {

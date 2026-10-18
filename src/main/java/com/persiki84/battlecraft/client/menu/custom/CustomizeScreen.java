@@ -174,6 +174,14 @@ public final class CustomizeScreen extends StudioScreen implements CustomHost {
         return MENU_ID;
     }
 
+    // WHY: миниатюры пресетов держат по текстуре и цель размером с кадр; уходящий экран ещё рисует
+    // WHY: витрину, поэтому они освобождаются после ухода
+    @Override
+    public void removed() {
+        if (!com.persiki84.shared.client.ui.UiFarewell.defer(this, desk::release)) desk.release();
+        super.removed();
+    }
+
     @Override
     protected float enterSeconds() {
         return ENTER_SECONDS;

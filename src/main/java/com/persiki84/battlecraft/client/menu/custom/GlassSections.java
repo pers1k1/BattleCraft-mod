@@ -49,7 +49,7 @@ final class GlassSections {
     static List<AbstractWidget> knobs(RowKit kit, GlassKey.Group group) {
         List<AbstractWidget> built = new ArrayList<>();
         for (GlassKey key : GlassKey.values()) {
-            if (key.group() == group) built.add(kit.glass(key));
+            if (key.group() == group && key != GlassKey.HUD_SCALE) built.add(kit.glass(key));
         }
         return built;
     }
@@ -65,7 +65,7 @@ final class GlassSections {
     static void resetGroup(GlassKey.Group group) {
         Map<GlassKey, Float> tuning = Customization.preset().tuning();
         for (GlassKey key : GlassKey.values()) {
-            if (key.group() != group) continue;
+            if (key.group() != group || key == GlassKey.HUD_SCALE) continue;
             Float tuned = tuning.get(key);
             Customization.glass(key, tuned == null ? key.fallback() : tuned);
         }

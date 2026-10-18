@@ -229,6 +229,7 @@ public final class HudEvents {
             event.setCanceled(true);
             return;
         }
+        if (VanillaGuiOverlay.VIGNETTE.id().equals(id)) settleVignette();
         ForeignHud.watch(MEASURED_OVERLAYS.contains(id));
     }
 
@@ -250,6 +251,13 @@ public final class HudEvents {
         if (HOTBAR_OVERLAYS.contains(id)) return !mc.player.isSpectator();
         if (STATUS_OVERLAYS.contains(id)) return HudConfig.statusBars();
         return HudConfig.effectChips() && VanillaGuiOverlay.POTION_ICONS.id().equals(id);
+    }
+
+    // WHY: виньетка ставит умножение руками и не включает блендинг, то есть верит, что кеш BlendMode
+    // WHY: стоит на стандартном режиме. Застрявший там чужой режим (непрозрачный проход, после него
+    // WHY: наш нестандартный) заставлял её position_tex перебить умножение, и кадр заливался чёрным
+    private static void settleVignette() {
+        com.persiki84.shared.client.ui.UiRender.standardBlend();
     }
 
     private static boolean blindingVignette(Minecraft mc) {

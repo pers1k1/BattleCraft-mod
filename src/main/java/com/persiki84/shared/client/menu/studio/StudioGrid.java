@@ -70,12 +70,11 @@ public final class StudioGrid {
     private static final float COUNT_INSET = 2.0f;
     private static final float COUNT_SCALE = 0.75f;
     private static final float COUNT_RISE = 3.5f;
-    private static final float LAND_SPEED = 20.0f;
+    private static final float LAND_MS = 340.0f;
     private static final float DEPART_MS = 260.0f;
     private static final float DEPART_SCALE = 0.35f;
     private static final float HUSH_ALPHA = 0.55f;
     private static final float HUSH_DROP = 3.0f;
-    private static final float LAND_REST = 0.5f;
     private static final float GRAB_SPEED = 16.0f;
     private static final float LIFT_DEPTH = 50.0f;
     private static final float OVER_ICON = 200.0f;
@@ -90,7 +89,6 @@ public final class StudioGrid {
     private final Smooth gapGlow = new Smooth(0.0f, GAP_SPEED);
     private final List<Smooth> marks = new ArrayList<>();
     private final Smooth bandShown = new Smooth(0.0f, BAND_SPEED);
-    private final Smooth land = new Smooth(0.0f, LAND_SPEED);
     private final BitSet vanished = new BitSet();
     private final BitSet crossing = new BitSet();
     private final BitSet painted = new BitSet();
@@ -123,6 +121,10 @@ public final class StudioGrid {
     private int carriedTo = -1;
     private int gap = -1;
     private boolean holding;
+    private float landFromX;
+    private float landFromY;
+    private float landLift;
+    private long landAt;
     private float carryX;
     private float carryY;
     private float grabX;
@@ -287,7 +289,10 @@ public final class StudioGrid {
     }
 
     // WHY: взятая плитка не прыгает центром под курсор, а подъезжает к нему от своего места:
-    // WHY: разница сходит на нет за десятые доли секунды, пока плитка уже идёт за рукой
+    // WHY: разница сходит на нет за десятые доли секунды, пока плитка уже идёт за рукой.
+    // WHY: Подъём под курсором переходит в подъём переноса, а наведение гасится: поднятую плитку
+    // WHY: сетка не рисует и наведение ей не ведёт, и оставленное в единице, оно после посадки
+    // WHY: разом подбрасывало плитку на высоту подъёма
     public void carry(int index, double mouseX, double mouseY) {
         carriedFrom = index;
         carriedTo = index;
@@ -295,8 +300,10 @@ public final class StudioGrid {
         carryX = (float) mouseX;
         carryY = (float) mouseY;
         boolean placed = index >= 0 && index < slideX.size();
+        float risen = placed && index < hover.size() ? hover.get(index).get() * HOVER_RISE * unit : 0.0f;
         grabX = placed ? slideX.get(index).get() - (carryX - tileSize / 2.0f) : 0.0f;
-        grabY = placed ? slideY.get(index).get() - (carryY - tileSize / 2.0f) : 0.0f;
+        grabY = placed ? slideY.get(index).get() - risen - (carryY - tileSize / 2.0f) : 0.0f;
+        if (placed && index < hover.size()) hover.get(index).snap(0.0f);
         carryLift.snap(0.0f);
     }
 
@@ -319,11 +326,14 @@ public final class StudioGrid {
         holding = false;
         boolean seen = carriedFrom >= 0 && carriedFrom < slideX.size() && visible(slotOf(carriedFrom));
         landing = seen ? carriedFrom : -1;
-        land.snap(carryLift.get());
+        landLift = carryLift.get();
+        landAt = System.currentTimeMillis();
+        landFromX = carryX - tileSize / 2.0f + grabX;
+        landFromY = carryY - tileSize / 2.0f + grabY;
         carryLift.snap(0.0f);
         if (carriedFrom >= 0 && carriedFrom < slideX.size()) {
-            slideX.get(carriedFrom).snap(carryX - tileSize / 2.0f + grabX);
-            slideY.get(carriedFrom).snap(carryY - tileSize / 2.0f + grabY);
+            slideX.get(carriedFrom).snap(landFromX);
+            slideY.get(carriedFrom).snap(landFromY);
         }
         return move;
     }
@@ -531,16 +541,21 @@ public final class StudioGrid {
         if (carrying() && carriedFrom < tiles.size()) paintCarried(graphics, tiles.get(carriedFrom));
     }
 
+    // WHY: отпущенная плитка доезжает ходом по времени с нулевой скоростью в конце и отдаётся сетке,
+    // WHY: только встав ровно в слот. Экспонента с порогом в полпикселя отдавала её раньше, и на хвосте
+    // WHY: хода плитка заметно защёлкивалась на место
     private void paintLanding(GuiGraphics graphics, StudioTile tile) {
-        float delta = UiFrame.delta();
         int index = landing;
         int slot = slotOf(index);
-        float x = slideX.get(index).to(tileX(slot), delta);
-        float y = slideY.get(index).to(tileY(slot), delta);
-        float lift = land.to(0.0f, delta);
-        float mark = marks.get(index).to(marked.get(index) ? 1.0f : 0.0f, delta);
-        if (lift < 0.01f && Math.abs(x - tileX(slot)) < LAND_REST && Math.abs(y - tileY(slot)) < LAND_REST) landing = -1;
-        paintRaised(graphics, tile, index, x, y, lift, 1.0f, mark, false);
+        float share = UiAnim.clamp01((System.currentTimeMillis() - landAt) / LAND_MS);
+        float glide = UiAnim.easeOut(share);
+        float x = landFromX + (tileX(slot) - landFromX) * glide;
+        float y = landFromY + (tileY(slot) - landFromY) * glide;
+        slideX.get(index).snap(x);
+        slideY.get(index).snap(y);
+        float mark = marks.get(index).to(marked.get(index) ? 1.0f : 0.0f, UiFrame.delta());
+        if (share >= 1.0f) landing = -1;
+        paintRaised(graphics, tile, index, x, y, landLift * (1.0f - glide), 1.0f, mark, false);
     }
 
     private void paintDeparture(GuiGraphics graphics) {

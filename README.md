@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.17` in files, `17.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.17hotfix` in files, `17.10.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1293,6 +1293,47 @@ smoke comes out of the flare.
 
 Version 2026.10.17 - built; not yet checked in game.
 
+
+## Hotfix, 18 October 2026 (2026.10.17hotfix)
+
+- **Clocks no longer roll digits that did not change.** Letters of a changing number were matched by
+  their place in pixels, and the font has digits of different widths: on the centred match timer
+  09 turning into 10 shifted the minutes by a fraction of a pixel, and the minutes rolled as if they
+  had changed. Letters are now matched by their position from the ends of the string, and a kept
+  letter that lands somewhere else slides there instead of rolling.
+- **The HUD is smaller.** On 1920x1080 one HUD unit is now 3.25 screen pixels instead of 4, which
+  gives the HUD more room and stops its elements from running into each other. Other resolutions scale
+  from that.
+- **The frost motion set no longer blacks out the world.** Minecraft remembers the last blend mode a
+  shader applied and only updates that memory when a shader switches between opaque and blended. The
+  frost blur pass is opaque, the composite after it is not standard, and with Distant Horizons and
+  Embeddium nothing in the frame reset the memory again. The vanilla vignette relies on it, painted
+  with the wrong blend and covered the world and the HUD in black until a restart. Every interface
+  pass now leaves that memory on the vanilla standard mode, and the vignette is guarded on its own.
+- **The frost exit pass returns the GL state exactly.** It now reads the bound framebuffers, viewport,
+  unpack buffer, blend, cull and depth switches from GL itself, not from the Minecraft state cache,
+  puts all of it back, and switches its blur off with a log line on any GL error.
+- **A HUD size slider where it can be found.** It moved from Glass to the HUD elements group on the
+  Interface tab and reads in percent. The base HUD unit on 1920x1080 is 3.25 screen pixels. Menus,
+  /bc and customization follow the Minecraft GUI Scale setting and are not affected by it.
+- **A dropped tile glides all the way into its slot.** It travels on a timed ease with no speed left at the
+  end and hands over to the grid only once it sits exactly in place; before, it was handed over half a
+  pixel early and visibly snapped at the end.
+- **The selection plate in editor lists stays on its row while scrolling.** It follows the row's place
+  in the list rather than on screen, so a scroll no longer drags it away and back.
+- **Typing a number right after +/- works.** The click that opened the field also refocused the same row,
+  and that refocus closed the field at once.
+- **A carried tile no longer hops when it lands.** Its hover lift is handed over to the carry and its hover
+  state cleared; before, the stale hover state lifted the tile by its hover rise the moment it landed.
+- **Each preset card shows its own glass.** The cards are painted in two passes, the backdrop is captured
+  between them, and each glass plate is drawn with its preset's own material, lens and shine, so the plate
+  bends the two blobs of its card instead of the world behind the window. Each preview is rendered once
+  into its own texture with its preset's full style, its own backdrop blur and mode included, so the
+  previews no longer follow whichever preset is currently applied.
+- **The outline of a chosen preset card is no longer cut** at the top and right edge of the gallery, and
+  the transfer window's player tiles keep the same margin.
+- **`screenProbe` now also logs GL state.** Every two seconds it writes the GL state at four points of
+  the frame and names the HUD layer after which the centre pixel changed.
 
 ## Releases
 

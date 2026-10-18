@@ -19,7 +19,6 @@ public final class UiMorphText {
     private static final float STAGGER_LIMIT = 0.3f;
     private static final float TRAVEL_UNITS = 2.0f;
     private static final float IDLE = Float.MAX_VALUE;
-    private static final float SAME_PLACE = 0.01f;
     private static final float FASTEST_TEMPO = 0.05f;
     private static final float GHOST_FLOOR = 0.004f;
 
@@ -85,6 +84,7 @@ public final class UiMorphText {
     private boolean[] keptNew = new boolean[0];
     private boolean[] keptOld = new boolean[0];
     private int[] matched = new int[0];
+    private float[] keptShift = new float[0];
     private int keptCount;
     private int oldCount;
     private int lead;
@@ -408,8 +408,10 @@ public final class UiMorphText {
         if (!related) relate();
     }
 
-    // WHY: буква стоит, если в обеих строках на её месте та же буква. Места сравниваются от якоря,
-    // WHY: а не по номеру: у числа по правому краю 99 и 100 совпадают с конца, а не с начала
+    // WHY: буква стоит, если она та же на том же номере строки (строки равной длины: у часов 12:09 и
+    // WHY: 12:10 стоят минуты и двоеточие) или лежит в общем начале или общем хвосте. Сверка по месту в
+    // WHY: пикселях здесь не годится: цифры у шрифта разной ширины, и у строки по центру смена 09 на 10
+    // WHY: сдвигала минуты на полпикселя, после чего они морфились без смены значения
     private void relate() {
         related = true;
         keptCount = Math.min(codes.length, stops.length - 1);
@@ -417,9 +419,11 @@ public final class UiMorphText {
         keptNew = sized(keptNew, keptCount);
         keptOld = sized(keptOld, oldCount);
         matched = sized(matched, keptCount);
+        keptShift = sized(keptShift, keptCount);
         Arrays.fill(keptNew, 0, keptCount, false);
         Arrays.fill(keptOld, 0, oldCount, false);
         Arrays.fill(matched, 0, keptCount, -1);
+        Arrays.fill(keptShift, 0, keptCount, 0.0f);
         pair((stops[stops.length - 1] - previousStops[previousStops.length - 1]) * align);
         lead = 0;
         while (lead < keptCount && keptNew[lead]) lead++;
@@ -428,25 +432,27 @@ public final class UiMorphText {
     }
 
     private void pair(float offset) {
-        int index = 0;
-        int other = 0;
-        while (index < keptCount && other < oldCount) {
-            float place = stops[index];
-            float was = previousStops[other] + offset;
-            if (Math.abs(place - was) < SAME_PLACE) {
-                if (codes[index] == previousCodes[other]) {
-                    keptNew[index] = true;
-                    keptOld[other] = true;
-                    matched[index] = other;
-                }
-                index++;
-                other++;
-            } else if (place < was) {
-                index++;
-            } else {
-                other++;
+        if (codes.length == previousCodes.length) {
+            int count = Math.min(keptCount, oldCount);
+            for (int index = 0; index < count; index++) {
+                if (codes[index] == previousCodes[index]) link(index, index, offset);
             }
+            return;
         }
+        int head = Math.min(prefix, Math.min(keptCount, oldCount));
+        for (int index = 0; index < head; index++) link(index, index, offset);
+        for (int step = 0; step < suffix; step++) {
+            int index = codes.length - 1 - step;
+            int other = previousCodes.length - 1 - step;
+            if (index >= head && index < keptCount && other >= head && other < oldCount) link(index, other, offset);
+        }
+    }
+
+    private void link(int index, int other, float offset) {
+        keptNew[index] = true;
+        keptOld[other] = true;
+        matched[index] = other;
+        keptShift[index] = previousStops[other] + offset - stops[index];
     }
 
     private static float[] sized(float[] array, int count) {
@@ -707,6 +713,12 @@ public final class UiMorphText {
         private float shown(int index, int count) {
             if (direction == 0.0f) return 1.0f;
             return direction > 0.0f ? arrivingShown(index, count) : leavingShown(index, count);
+        }
+
+        @Override
+        public float shift(int index, int count) {
+            if (direction <= 0.0f || !heldNew(index) || index >= keptCount) return 0.0f;
+            return keptShift[index] * (1.0f - slide());
         }
 
         @Override

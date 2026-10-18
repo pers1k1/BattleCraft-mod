@@ -2,6 +2,7 @@ package com.persiki84.shared.client.ui;
 
 import com.persiki84.shared.client.font.GlowGlyph;
 import com.persiki84.shared.client.font.MsdfFontSets;
+import com.mojang.blaze3d.shaders.BlendMode;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -24,6 +25,8 @@ import net.minecraft.util.Mth;
 import net.minecraftforge.client.ForgeRenderTypes;
 import org.joml.Matrix4f;
 import org.joml.Vector2f;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL14;
 
 import java.util.Arrays;
 import java.util.List;
@@ -589,6 +592,30 @@ public final class UiRender {
         standardBlend();
     }
 
+    // WHY: текстура цели кадра лежит снизу вверх, поэтому v у неё перевёрнут против картинок из ресурсов
+    public static void frame(GuiGraphics graphics, int texture, float x, float y, float width, float height,
+                             float alpha) {
+        if (texture <= 0 || width <= 0.0f || height <= 0.0f || alpha <= 0.0f) return;
+
+        Matrix4f matrix = graphics.pose().last().pose();
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.disableCull();
+        RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
+        RenderSystem.setShaderTexture(0, texture);
+
+        BufferBuilder builder = Tesselator.getInstance().getBuilder();
+        builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
+        textured(builder, matrix, x, y + height, 0.0f, 0.0f, alpha);
+        textured(builder, matrix, x + width, y + height, 1.0f, 0.0f, alpha);
+        textured(builder, matrix, x + width, y, 1.0f, 1.0f, alpha);
+        textured(builder, matrix, x, y, 0.0f, 1.0f, alpha);
+        Tesselator.getInstance().end();
+
+        RenderSystem.enableCull();
+        standardBlend();
+    }
+
     private static void textured(BufferBuilder builder, Matrix4f matrix, float x, float y,
                                  float u, float v, float alpha) {
         builder.vertex(matrix, x, y, 0.0f).uv(u, v).color(1.0f, 1.0f, 1.0f, alpha).endVertex();
@@ -672,8 +699,19 @@ public final class UiRender {
     }
 
     // WHY: голый disableBlend расходится с кешем BlendMode, и следующий шейдер с тем же узлом blend
-    // WHY: не применяет ничего и рисуется без блендинга, выбивая нулевой альфой дырку в покрытии
+    // WHY: не применяет ничего и рисуется без блендинга, выбивая нулевой альфой дырку в покрытии.
+    // WHY: Кеш BlendMode.lastApplied меняется только на смене «непрозрачный/прозрачный», поэтому наш
+    // WHY: нестандартный режим после непрозрачного прохода (иней, размытие) застревает в нём, пока в
+    // WHY: кадре не встретится ванильный непрозрачный шейдер; с Distant Horizons и Embeddium его нет
+    // WHY: вовсе. Тогда виньетка, ставящая умножение руками, получает стандартный режим поверх и
+    // WHY: заливает кадр чёрным. Кеш возвращается к стандартному режиму ванили через переход
+    private static final BlendMode OPAQUE_MODE = new BlendMode();
+    private static final BlendMode STANDARD_MODE = new BlendMode(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA,
+            GL14.GL_FUNC_ADD);
+
     public static void standardBlend() {
+        OPAQUE_MODE.apply();
+        STANDARD_MODE.apply();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
     }
@@ -1333,6 +1371,12 @@ public final class UiRender {
             return 0.0f;
         }
 
+        // WHY: буква, что стоит в обеих строках, но в новой оказалась на другом месте (цифры разной
+        // WHY: ширины, строка по центру), доезжает туда сдвигом, а не сменой. В единицах вызывающего
+        default float shift(int index, int count) {
+            return 0.0f;
+        }
+
         default float glow(int index, int count) {
             return 0.0f;
         }
@@ -1690,7 +1734,7 @@ public final class UiRender {
             if (!vanishing(tint)) {
                 GlowGlyph.boost(tone == null ? 0.0f : tone.glow(i, glyphs));
                 GlowGlyph.weigh(tone == null ? 0.0f : tone.weigh(i, glyphs));
-                float left = pen * unit + drift;
+                float left = pen * unit + drift + (tone == null ? 0.0f : tone.shift(i, glyphs) * lift);
                 font.drawInBatch(CURSOR, left, -rise, tint, false, grown(pose, tone, i, left + step / 2.0f, -rise),
                         buffer, Font.DisplayMode.NORMAL, 0, FULL_BRIGHT);
             }

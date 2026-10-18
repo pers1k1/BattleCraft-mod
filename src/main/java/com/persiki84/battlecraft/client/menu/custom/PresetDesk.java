@@ -32,7 +32,8 @@ final class PresetDesk {
     private static final float HINT_SCALE = 0.72f;
 
     private final RowKit kit;
-    private final PresetGallery gallery = new PresetGallery();
+    private final PresetThumbs thumbs = new PresetThumbs();
+    private final PresetGallery gallery = new PresetGallery(thumbs);
     private final PresetRows rows;
     private List<PresetCard> cards = List.of();
     private String selected;
@@ -65,6 +66,10 @@ final class PresetDesk {
         gallery.show(cards);
         if (card(selected) == null) select(PresetCard.of(Customization.preset()).key());
         version++;
+    }
+
+    void release() {
+        thumbs.release();
     }
 
     void opened() {
@@ -130,7 +135,9 @@ final class PresetDesk {
     void renderArt(GuiGraphics graphics, Font font, float left, float top, float width, float appear) {
         PresetCard card = chosen();
         if (card == null) return;
-        PresetGlyph.paint(graphics, card, left, top, width, GLYPH_HEIGHT, appear);
+        int texture = thumbs.texture(graphics, card, width, GLYPH_HEIGHT);
+        if (texture > 0) UiRender.frame(graphics, texture, left, top, width, GLYPH_HEIGHT, appear);
+        else PresetGlyph.paint(graphics, card, left, top, width, GLYPH_HEIGHT, appear);
         float center = left + width / 2.0f;
         UiRender.textTrackedFit(graphics, font, card.name(), center, top + GLYPH_HEIGHT + 4.0f, 14.0f, width,
                 NAME_SCALE, 0.0f, UiTheme.alpha(UiAccent.text(), appear), false);

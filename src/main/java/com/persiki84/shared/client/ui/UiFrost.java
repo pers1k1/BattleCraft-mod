@@ -19,6 +19,8 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
+import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL30;
 
 import java.io.IOException;
@@ -57,6 +59,7 @@ public final class UiFrost {
     private static final float PASS_LINE = 2.0f;
     private static final float PASS_PIXEL = 3.0f;
     private static final long IDLE_NANOS = 20_000_000_000L;
+    private static final int ERROR_DRAIN = 16;
 
     private static final Level FIRST = new Level();
     private static final Level SECOND = new Level();
@@ -67,14 +70,20 @@ public final class UiFrost {
     private static AbstractUniform stepUniform;
     private static AbstractUniform spreadUniform;
 
+    private static final int[] VIEWPORT = new int[4];
+
     private static boolean failed;
     private static long usedAt;
     private static int drawn;
-    private static int viewportX;
-    private static int viewportY;
-    private static int viewportWidth;
-    private static int viewportHeight;
+    private static int read;
+    private static int unpack;
+    private static int sampled;
+    private static ShaderInstance shaderBefore;
     private static boolean scissored;
+    private static boolean blended;
+    private static boolean culled;
+    private static boolean depthTested;
+    private static boolean depthWritten;
 
     private static int levelWidth;
     private static int levelHeight;
@@ -120,16 +129,26 @@ public final class UiFrost {
         if (sigma < SHARP) return false;
 
         plan(sigma, main.width, main.height);
+        drainErrors();
         remember();
         try {
             run(stage, main.width, main.height);
         } catch (Throwable error) {
-            fail(error);
+            fail(String.valueOf(error));
         } finally {
             restore();
         }
+        int error = GL11.glGetError();
+        if (error != GL11.GL_NO_ERROR) fail("GL error 0x" + Integer.toHexString(error));
         usedAt = System.nanoTime();
         return result != null;
+    }
+
+    // WHY: чужие ошибки GL, оставленные до прохода, иначе приписались бы ему и выключили бы размытие
+    private static void drainErrors() {
+        for (int i = 0; i < ERROR_DRAIN; i++) {
+            if (GL11.glGetError() == GL11.GL_NO_ERROR) return;
+        }
     }
 
     static void aim(AbstractUniform span, AbstractUniform mixed) {
@@ -158,10 +177,14 @@ public final class UiFrost {
         if (FIRST.target == null || System.nanoTime() - usedAt < IDLE_NANOS) return;
         if (!RenderSystem.isOnRenderThread()) return;
 
-        int bound = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int boundDraw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int boundRead = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int texture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         FIRST.release();
         SECOND.release();
-        GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, bound);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, boundDraw);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, boundRead);
+        GlStateManager._bindTexture(texture);
     }
 
     // WHY: уровень берётся самый мелкий, где на сигму ещё приходится не меньше двух текселей: при одном
@@ -306,30 +329,58 @@ public final class UiFrost {
         if (scissored) GL11.glDisable(GL11.GL_SCISSOR_TEST);
     }
 
+    // WHY: состояние снимается с самого GL, а не с кеша GlStateManager: чужие моды (Distant Horizons,
+    // WHY: Embeddium) ставят его мимо кеша, и возврат по кешу оставлял бы им не ту привязку кадра,
+    // WHY: не то окно вывода и выключенную глубину. Проход обязан вернуть всё ровно как было
     private static void remember() {
         drawn = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
-        viewportX = GlStateManager.Viewport.x();
-        viewportY = GlStateManager.Viewport.y();
-        viewportWidth = GlStateManager.Viewport.width();
-        viewportHeight = GlStateManager.Viewport.height();
+        read = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        unpack = GL11.glGetInteger(GL21.GL_PIXEL_UNPACK_BUFFER_BINDING);
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         scissored = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+        blended = GL11.glIsEnabled(GL11.GL_BLEND);
+        culled = GL11.glIsEnabled(GL11.GL_CULL_FACE);
+        depthTested = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
+        depthWritten = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
+        sampled = RenderSystem.getShaderTexture(0);
+        shaderBefore = RenderSystem.getShader();
+        if (unpack != 0) GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, 0);
     }
 
     private static void restore() {
-        GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, drawn);
-        GlStateManager._viewport(viewportX, viewportY, viewportWidth, viewportHeight);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawn);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
+        GlStateManager._viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
+        if (unpack != 0) GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, unpack);
         if (scissored) GL11.glEnable(GL11.GL_SCISSOR_TEST);
-        RenderSystem.enableCull();
-        UiRender.resumeDepth();
-        UiRender.standardBlend();
+        restoreSwitches();
+        RenderSystem.setShaderTexture(0, sampled);
+        RenderSystem.setShader(UiFrost::previousShader);
+        shaderBefore = null;
     }
 
-    private static void fail(Throwable error) {
+    private static void restoreSwitches() {
+        if (blended) RenderSystem.enableBlend();
+        else RenderSystem.disableBlend();
+        if (culled) RenderSystem.enableCull();
+        else RenderSystem.disableCull();
+        if (depthTested) RenderSystem.enableDepthTest();
+        else RenderSystem.disableDepthTest();
+        RenderSystem.depthMask(depthWritten);
+    }
+
+    private static ShaderInstance previousShader() {
+        return shaderBefore;
+    }
+
+    private static void fail(String reason) {
         failed = true;
         result = null;
         FIRST.release();
         SECOND.release();
-        LogUtils.getLogger().warn("[battlecraft] frost blur off: {}", String.valueOf(error));
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawn);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
+        LogUtils.getLogger().warn("[battlecraft] frost blur off: {}", reason);
     }
 
     // WHY: цель растёт до полного кадра, только когда сигма потребовала уровня по самому кадру (первые
@@ -347,12 +398,14 @@ public final class UiFrost {
             release();
             frameWidth = frameWide;
             frameHeight = frameTall;
+            int texture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
             target = new TextureTarget(width, height, false, Minecraft.ON_OSX);
             target.setFilterMode(GL11.GL_LINEAR);
-            GlStateManager._bindTexture(target.getColorTextureId());
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, target.getColorTextureId());
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_MAX_LEVEL, 0);
             deepen(width, height);
-            GlStateManager._bindTexture(0);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+            GlStateManager._bindTexture(texture);
         }
 
         // WHY: в восьми битах размытая кромка стекла с альфой 0.06 шла бы полосами, поэтому уровни
