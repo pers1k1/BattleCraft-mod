@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.24` in files, `24.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.24hotfix` in files, `24.10.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1373,6 +1373,13 @@ Version 2026.10.17 - built; not yet checked in game.
   the clients have to be updated together.
 
 Version 2026.10.24 - built; not yet checked in game.
+
+## Hotfix, 24 October 2026 (2026.10.24hotfix)
+
+- **The player list can be switched off.** Customization, Interface tab, HUD elements group: "Own player list". Off brings back the vanilla Tab list.
+- **Server TPS can be hidden from players.** /bc, Game rules: "Server TPS in the player list". Off stops the server from measuring and sending TPS, and the list drops the TPS and tick chips, keeping players online and your own ping. On by default.
+
+Version 2026.10.24hotfix - built; not yet checked in game.
 
 ## Releases
 

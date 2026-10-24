@@ -30,6 +30,7 @@ public enum InterfaceFlag {
     VOICE_TRACE("voiceTrace", true, HudConfig::voiceTrace, HudConfig::voiceTrace),
     RADIO_STATIC("radioStatic", true, HudConfig::radioStatic, HudConfig::radioStatic),
     RADIO_CHIRP("radioChirp", true, HudConfig::radioChirp, HudConfig::radioChirp),
+    ROSTER("roster", true, HudConfig::roster, HudConfig::roster),
     DAMAGE_NUMBERS("damageNumbers", true, HudConfig::damageNumbers, HudConfig::damageNumbers),
     DAMAGE_STACK("damageStack", true, HudConfig::damageStack, HudConfig::damageStack),
     MENU_DESKTOP("menuDesktop", true, HudConfig::menuDesktop, HudConfig::menuDesktop),

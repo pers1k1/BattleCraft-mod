@@ -53,6 +53,7 @@ public final class HudConfig {
     private static ForgeConfigSpec.BooleanValue ISLAND_NICK;
     private static ForgeConfigSpec.BooleanValue ISLAND_FPS;
     private static ForgeConfigSpec.BooleanValue ISLAND_PING;
+    private static ForgeConfigSpec.BooleanValue ROSTER;
     private static ForgeConfigSpec.BooleanValue ISLAND_COVER;
     private static ForgeConfigSpec.BooleanValue ISLAND_BAR;
     private static ForgeConfigSpec.BooleanValue ISLAND_TITLE;
@@ -150,6 +151,8 @@ public final class HudConfig {
     private static void defineVanillaReplacements() {
         STATUS_BARS = defineStatusBars();
         EFFECT_CHIPS = defineEffectChips();
+        ROSTER = BUILDER.comment("Свой список игроков на Tab вместо ванильного")
+                .define("customRoster", true);
         BOSS_BARS = defineBossBars();
         CHAT_TOASTS = defineChatToasts();
         CHAT_MOTION = defineChatMotion();
@@ -432,6 +435,14 @@ public final class HudConfig {
 
     public static boolean statusBars() {
         return read(STATUS_BARS, true);
+    }
+
+    public static boolean roster() {
+        return read(ROSTER, true);
+    }
+
+    public static void roster(boolean value) {
+        if (SPEC.isLoaded()) ROSTER.set(value);
     }
 
     public static boolean effectChips() {

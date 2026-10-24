@@ -177,7 +177,7 @@ public final class HudEvents {
         VeilOverlay.render(event.getGuiGraphics(), width, height);
         com.persiki84.shared.client.ui.UiFarewell.render(event.getGuiGraphics(), width, height,
                 event.getPartialTick());
-        RosterOverlay.render(event.getGuiGraphics(), width, height);
+        if (HudConfig.roster()) RosterOverlay.render(event.getGuiGraphics(), width, height);
         com.persiki84.battlecraft.client.menu.WidgetRestyle.settle();
         if (HudConfig.screenProbe()) probeScreens(event.getGuiGraphics());
         if (com.persiki84.battlecraft.client.hudedit.HudEditSession.fading()) {
@@ -249,7 +249,7 @@ public final class HudEvents {
 
     private static boolean replaced(ResourceLocation id, Minecraft mc) {
         if (VanillaGuiOverlay.VIGNETTE.id().equals(id)) return blindingVignette(mc);
-        if (VanillaGuiOverlay.PLAYER_LIST.id().equals(id)) return true;
+        if (VanillaGuiOverlay.PLAYER_LIST.id().equals(id)) return HudConfig.roster();
         if (FOREIGN_OVERLAYS.contains(id)) return true;
         if (FOREIGN_NAMESPACES.contains(id.getNamespace())) return true;
         if (MESSAGE_OVERLAYS.contains(id)) return GuiBridge.available();

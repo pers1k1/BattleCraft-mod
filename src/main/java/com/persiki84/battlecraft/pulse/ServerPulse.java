@@ -3,6 +3,8 @@ package com.persiki84.battlecraft.pulse;
 import com.persiki84.battlecraft.BattleCraftMod;
 import com.persiki84.battlecraft.network.PacketHandler;
 import com.persiki84.battlecraft.network.S2CServerPulsePacket;
+import com.persiki84.battlecraft.rules.GameRule;
+import com.persiki84.battlecraft.rules.GameRules;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
@@ -53,7 +55,8 @@ public final class ServerPulse {
             lastEnd = now;
             return;
         }
-        if (windowStart == NEVER || resumedFromPause(event.getServer(), now)) {
+        if (windowStart == NEVER || !GameRules.allows(GameRule.SERVER_PULSE)
+                || resumedFromPause(event.getServer(), now)) {
             restart(now);
             return;
         }
@@ -72,7 +75,8 @@ public final class ServerPulse {
 
     @SubscribeEvent
     public static void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (!measured || !(event.getEntity() instanceof ServerPlayer player)) return;
+        if (!measured || !GameRules.allows(GameRule.SERVER_PULSE)) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
         PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), current());
     }
 

@@ -30,7 +30,9 @@ public enum GameRule {
     NO_ENCHANT_GLINT("no_enchant_glint", true),
     CHECK_CONFIGS("check_configs", true),
     CAPTURE_GLOW("capture_glow", true),
-    IFF_DEVICE("iff_device", true);
+    IFF_DEVICE("iff_device", true),
+    // WHY: маска правил - int, это последний свободный бит; следующее правило требует long и подъёма протокола
+    SERVER_PULSE("server_pulse", true);
 
     private final String id;
     private final boolean enabledByDefault;

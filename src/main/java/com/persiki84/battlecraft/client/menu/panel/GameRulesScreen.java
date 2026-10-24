@@ -28,7 +28,8 @@ public class GameRulesScreen extends PanelScreen {
             GameRule.SPECTATOR_LIGHT,
             GameRule.BLOCK_SUBTITLES,
             GameRule.NO_ENCHANT_GLINT,
-            GameRule.CHECK_CONFIGS
+            GameRule.CHECK_CONFIGS,
+            GameRule.SERVER_PULSE
     };
 
     private static final GameRule[] COMBAT_RULES = {

@@ -160,6 +160,7 @@ final class InterfaceSections {
                 DIAL_STEP));
         rows.add(kit.toggle("battlecraft.custom.hud_follows_screen", HudConfig::hudFollowsScreen,
                 HudConfig::hudFollowsScreen));
+        rows.add(kit.toggle("battlecraft.custom.roster", HudConfig::roster, HudConfig::roster));
         rows.add(kit.heading("battlecraft.custom.hud.in_chat"));
         for (HudSlot slot : HudSlot.values()) {
             rows.add(slotRow(kit, slot));
@@ -171,6 +172,7 @@ final class InterfaceSections {
     private static void resetElements() {
         Customization.resetHud();
         InterfaceFlag.HUD_FOLLOWS_SCREEN.reset();
+        InterfaceFlag.ROSTER.reset();
         hudSize(GlassKey.HUD_SCALE.fallback());
     }
 

@@ -1,6 +1,8 @@
 package com.persiki84.battlecraft.client.roster;
 
+import com.persiki84.battlecraft.client.ClientGameRules;
 import com.persiki84.battlecraft.client.hud.HudInk;
+import com.persiki84.battlecraft.rules.GameRule;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiRender;
@@ -13,7 +15,8 @@ import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 
 // WHY: строка состояния под шапкой: слева сколько игроков на сервере, справа здоровье сервера
-// WHY: (TPS по стене и средняя длина тика) и свой пинг. Все числа живые, тикером, как у острова
+// WHY: (TPS по стене и средняя длина тика) и свой пинг. Все числа живые, тикером, как у острова.
+// WHY: Здоровье сервера показывается, только пока его разрешает правило server_pulse
 final class RosterStatus {
     private static final Component ONLINE = Component.translatable("battlecraft.roster.online");
     private static final Component RATE = Component.translatable("battlecraft.roster.tps");
@@ -57,6 +60,7 @@ final class RosterStatus {
                 HudInk.text(), alpha);
         float right = x + width - INSET;
         right = chip(graphics, font, LATENCY, latency, right, labelY, valueY, latencyTone, alpha) - CHIP_GAP;
+        if (!ClientGameRules.allows(GameRule.SERVER_PULSE)) return;
         right = chip(graphics, font, SPENT, spent, right, labelY, valueY, spentTone, alpha) - CHIP_GAP;
         float rateLeft = right - chipWidth(graphics, font, RATE, rate, false);
         if (rateLeft - DOT_RADIUS * 2.0f - PAIR_GAP < left) return;
