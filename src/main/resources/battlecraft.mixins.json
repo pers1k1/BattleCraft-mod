@@ -39,6 +39,7 @@
     "LocalPlayerMixin",
     "MinecraftOverlayMixin",
     "NameTagMixin",
+    "PlayerTabOverlayAccessor",
     "PostChainAccessor",
     "ProgressScreenAccessor",
     "ScreenMixin",

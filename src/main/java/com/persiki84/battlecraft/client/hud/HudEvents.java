@@ -6,6 +6,8 @@ import com.persiki84.battlecraft.client.custom.HudLayout;
 import com.persiki84.battlecraft.client.island.IslandModel;
 import com.persiki84.battlecraft.client.lyrics.SpotifyBridge;
 import com.persiki84.battlecraft.client.media.MediaWatch;
+import com.persiki84.battlecraft.client.roster.RosterBook;
+import com.persiki84.battlecraft.client.roster.RosterOverlay;
 import com.persiki84.battlecraft.client.voice.RadioChirp;
 import com.persiki84.battlecraft.client.voice.RadioTalk;
 import com.persiki84.shared.client.menu.ScreenVeil;
@@ -89,6 +91,7 @@ public final class HudEvents {
         }
         ScanBridge.tick();
         KillFeedBridge.tick();
+        RosterBook.tick(Minecraft.getInstance());
         pollHeld();
     }
 
@@ -174,6 +177,7 @@ public final class HudEvents {
         VeilOverlay.render(event.getGuiGraphics(), width, height);
         com.persiki84.shared.client.ui.UiFarewell.render(event.getGuiGraphics(), width, height,
                 event.getPartialTick());
+        RosterOverlay.render(event.getGuiGraphics(), width, height);
         com.persiki84.battlecraft.client.menu.WidgetRestyle.settle();
         if (HudConfig.screenProbe()) probeScreens(event.getGuiGraphics());
         if (com.persiki84.battlecraft.client.hudedit.HudEditSession.fading()) {
@@ -245,6 +249,7 @@ public final class HudEvents {
 
     private static boolean replaced(ResourceLocation id, Minecraft mc) {
         if (VanillaGuiOverlay.VIGNETTE.id().equals(id)) return blindingVignette(mc);
+        if (VanillaGuiOverlay.PLAYER_LIST.id().equals(id)) return true;
         if (FOREIGN_OVERLAYS.contains(id)) return true;
         if (FOREIGN_NAMESPACES.contains(id.getNamespace())) return true;
         if (MESSAGE_OVERLAYS.contains(id)) return GuiBridge.available();

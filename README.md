@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.17hotfix` in files, `17.10.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.24` in files, `24.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1334,6 +1334,45 @@ Version 2026.10.17 - built; not yet checked in game.
   the transfer window's player tiles keep the same margin.
 - **`screenProbe` now also logs GL state.** Every two seconds it writes the GL state at four points of
   the frame and names the HUD layer after which the centre pixel changed.
+
+## Player list with server TPS, 24 October 2026
+
+- **Tab opens the pack's own player list.** The vanilla list is replaced by a glass window at the top of
+  the screen, built like the /bc screens. Players are grouped into cards by scoreboard team, each card in
+  its team colour with the team name and a live head count; players without a team share one card, which
+  is titled "Players" when the server has no teams at all, and spectators get their own dimmed card at the
+  end. A card holds up to 20 rows per column and grows columns past that, the way the vanilla list does,
+  and cards wrap to a new line when they no longer fit the screen. Each row has the player's head, name,
+  the list objective's score when the server shows one (with a heart for health objectives), and the ping
+  as five procedural bars with the number next to them, on the vanilla thresholds of 150, 300, 600 and
+  1000 ms. Your own row is filled with your team colour, names carry the team prefix and suffix the way
+  the vanilla list shows them (rank plugins live there), and spectators show no score, as in vanilla.
+  The header and footer a server sends for the tab list are shown above and below. A list too wide for
+  the screen narrows the name column first, as vanilla does, and a long name then scrolls in its box; a
+  list too tall shrinks as a whole and lays out more cards per line. The window clears the depth the HUD
+  left behind, so chat and item icons no longer poke through its glass, and the glass of the closing
+  window keeps refracting the HUD under it.
+- **Server TPS in the list.** A status strip under the header shows how many players are online, the
+  server's TPS, the average tick time in milliseconds and your own ping. TPS is measured by the server
+  against the wall clock over one second, not derived from the tick time: a server that falls behind
+  runs ticks back to back, so a 40 ms tick does not mean 20 TPS. The window is stamped at the start of a tick, where
+  ticks sit on the server's 50 ms grid, so a healthy server reads a flat 20.0 instead of wandering
+  between 19.2 and 20. The server sends the reading to every player once a second. A singleplayer pause
+  is dropped rather than reported as a collapse; a dedicated or LAN server cannot pause, so a freeze there
+  reaches the players as the red number it is. A reading older than five seconds is shown as "-", and
+  the switch between "-" and a number lands at once instead of rolling. The TPS dot, the tick
+  time and the ping turn amber and then red as they degrade. All numbers roll digit by digit like the
+  island timer.
+- **It moves like a window.** The list appears with the motion set chosen in customization (light,
+  sharpness, frost) through the same off-screen pass as the /bc screens. When Tab is released it stays
+  hanging in the world where it was and leaves the same way the screens do: it burns, splinters or
+  thaws, redrawn live, so its glass keeps answering the camera and its numbers keep going while it goes.
+  With the screen animations turned off it fades. Rows slide to their new place when the order changes,
+  a joining player fades in and rises, a leaving one fades out, and the window resizes on a glide.
+- **Network protocol.** The battlecraft channel moved to version 6 for the TPS packet: the server and
+  the clients have to be updated together.
+
+Version 2026.10.24 - built; not yet checked in game.
 
 ## Releases
 

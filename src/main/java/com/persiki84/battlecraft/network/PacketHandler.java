@@ -9,7 +9,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.Optional;
 
 public class PacketHandler {
-    private static final String PROTOCOL_VERSION = "5";
+    private static final String PROTOCOL_VERSION = "6";
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation("battlecraft", "main"),
             () -> PROTOCOL_VERSION,
@@ -42,6 +42,18 @@ public class PacketHandler {
         registerRadioTalk();
         registerRadioKey();
         registerCraftBans();
+        registerServerPulse();
+    }
+
+    private static void registerServerPulse() {
+        INSTANCE.registerMessage(
+                id(),
+                S2CServerPulsePacket.class,
+                S2CServerPulsePacket::encode,
+                S2CServerPulsePacket::decode,
+                S2CServerPulsePacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT)
+        );
     }
 
     private static void registerCraftBans() {

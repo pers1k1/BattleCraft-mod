@@ -7,6 +7,7 @@ import com.persiki84.battlecraft.client.hud.RadioHud;
 import com.persiki84.battlecraft.client.island.IslandModel;
 import com.persiki84.battlecraft.client.lyrics.SpotifyBridge;
 import com.persiki84.battlecraft.client.media.MediaWatch;
+import com.persiki84.battlecraft.client.roster.RosterOverlay;
 import com.persiki84.battlecraft.client.voice.RadioChirp;
 import com.persiki84.battlecraft.client.voice.RadioTalk;
 import com.persiki84.shared.client.menu.MenuData;
@@ -38,6 +39,7 @@ public final class ClientLifecycle {
         RadioHud.forget();
         RadioChirp.forget();
         RadioTalk.forget();
+        RosterOverlay.forget();
     }
 
     @SubscribeEvent
