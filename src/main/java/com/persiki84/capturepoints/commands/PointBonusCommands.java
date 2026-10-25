@@ -249,8 +249,11 @@ public final class PointBonusCommands {
         return point;
     }
 
+    // WHY: награда, доход и бафф видны игроку в окне точки на карте, поэтому правка уходит клиентам сразу
     private static int confirm(CommandContext<CommandSourceStack> context, String key, CapturePoint point) {
         CapturePointManager.persist();
+        CapturePointManager.syncPoints();
+        CapturePointManager.syncFinalPoints();
         context.getSource().sendSuccess(() -> Component.translatable(key,
                 Component.literal(point.getName()).withStyle(ChatFormatting.YELLOW))
                 .withStyle(ChatFormatting.GREEN), true);

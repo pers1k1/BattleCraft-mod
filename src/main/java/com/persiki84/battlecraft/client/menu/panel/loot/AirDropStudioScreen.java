@@ -4,6 +4,7 @@ import com.persiki84.airdrop.loot.LootEntry;
 import com.persiki84.airdrop.loot.LootTable;
 import com.persiki84.airdrop.loot.LootTables;
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
+import com.persiki84.shared.client.menu.MenuCommands;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.pick.ItemShelf;
@@ -429,9 +430,14 @@ public final class AirDropStudioScreen extends StudioScreen {
     protected void addPick(ItemShelf.Pick pick, int slot) {
         if (tableName() == null) return;
         int total = table().entries().size();
-        send(addCommand(pick));
         int wanted = slot >= 0 && slot < total ? slot : total;
-        if (wanted < total) send(base() + total + " move " + wanted);
+        String add = addCommand(pick);
+        if (!MenuCommands.fits(add)) return;
+        if (wanted < total) {
+            sendBatch(List.of(add, base() + total + " move " + wanted));
+        } else {
+            send(add);
+        }
         selectedEntry = wanted;
         flashAt = wanted;
     }
@@ -518,9 +524,11 @@ public final class AirDropStudioScreen extends StudioScreen {
         flushCommits();
         List<Integer> order = new ArrayList<>(indices);
         order.sort(Comparator.reverseOrder());
+        List<String> commands = new ArrayList<>(order.size());
         for (int index : order) {
-            send(base() + index + verb);
+            commands.add(base() + index + verb);
         }
+        sendBatch(commands);
         marks.clear();
         layout();
     }
@@ -536,9 +544,11 @@ public final class AirDropStudioScreen extends StudioScreen {
     }
 
     private void eachCache(List<Integer> indices, String verb) {
+        List<String> commands = new ArrayList<>(indices.size());
         for (int index : indices) {
-            if (tiles.get(index) instanceof CacheTile cache) now("airdrop cache " + cache.id() + " " + verb);
+            if (tiles.get(index) instanceof CacheTile cache) commands.add("airdrop cache " + cache.id() + " " + verb);
         }
+        sendBatch(commands);
     }
 
     private void removeCaches(List<Integer> indices) {

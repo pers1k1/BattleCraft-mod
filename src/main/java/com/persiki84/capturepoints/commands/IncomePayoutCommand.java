@@ -23,6 +23,7 @@ final class IncomePayoutCommand {
 
     private static int set(CommandContext<CommandSourceStack> context, IncomePayout payout) {
         CapturePointManager.incomePayout(payout);
+        CapturePointManager.syncPoints();
         context.getSource().sendSuccess(() -> Component.translatable("capturepoints.success.payout",
                 Component.translatable(payout.translationKey())).withStyle(ChatFormatting.GREEN), true);
         return 1;

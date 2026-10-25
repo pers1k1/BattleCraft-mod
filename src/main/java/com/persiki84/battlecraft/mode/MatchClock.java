@@ -2,11 +2,12 @@ package com.persiki84.battlecraft.mode;
 
 import com.persiki84.battlecraft.BattleCraftManager;
 import com.persiki84.battlecraft.LobbyRoster;
+import com.persiki84.battlecraft.MatchVerdict;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
 import com.persiki84.capturepoints.capture.CapturePoint;
 import com.persiki84.capturepoints.capture.CapturePointManager;
-import com.persiki84.capturepoints.network.MatchVictoryPacket;
+import com.persiki84.capturepoints.network.MatchBannerPacket;
 import com.persiki84.capturepoints.network.PacketHandler;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -35,18 +36,17 @@ final class MatchClock {
         long elapsed = manager.matchElapsedMillis();
         awardHeldPoints(mode, elapsed);
         holdSuddenDeath();
-        String winner = decided(server, mode, elapsed);
-        if (winner == null) return;
-        finish(server, winner.isEmpty() ? null : winner);
+        MatchVerdict verdict = decided(server, mode, elapsed);
+        if (verdict != null) manager.stopMatch(server, verdict);
     }
 
     private static void awardHeldPoints(MatchMode mode, long elapsed) {
         long minute = elapsed / MINUTE_MILLIS;
         for (int step = 0; step < CATCH_UP_MINUTES && MatchScore.scoredMinute() < minute; step++) {
             MatchScore.scoredMinute(MatchScore.scoredMinute() + 1L);
-            if (mode.pointScore() <= 0 || !ModuleSwitches.allows(ModuleId.CAPTURE_POINTS)) continue;
+            if (!ModuleSwitches.allows(ModuleId.CAPTURE_POINTS)) continue;
             for (CapturePoint point : CapturePointManager.getAllPoints()) {
-                MatchScore.add(point.getOwnerTeam(), mode.pointScore());
+                MatchScore.add(point.getOwnerTeam(), MatchModes.pointWorth(point));
             }
         }
     }
@@ -59,22 +59,22 @@ final class MatchClock {
         }
     }
 
-    // WHY: пустая строка значит «матч кончен ничьей», null - «матч идёт дальше»
+    // WHY: null значит «матч идёт дальше»; ничья это вердикт без победителя
     @Nullable
-    private static String decided(MinecraftServer server, MatchMode mode, long elapsed) {
+    private static MatchVerdict decided(MinecraftServer server, MatchMode mode, long elapsed) {
         Standing standing = STANDING.measure(server);
         if (mode.scoreTarget() > 0 && standing.clearLeader() && standing.top >= mode.scoreTarget()) {
-            return standing.leader;
+            return MatchVerdict.scoreTarget(standing.leader, mode.scoreTarget());
         }
         if (mode.capMinutes() <= 0 || elapsed < mode.capMinutes() * MINUTE_MILLIS) return null;
         if (MatchScore.suddenEndMillis() != MatchScore.NO_SUDDEN) {
-            return elapsed >= MatchScore.suddenEndMillis() ? standing.winnerOrDraw() : null;
+            return elapsed >= MatchScore.suddenEndMillis() ? MatchVerdict.suddenOver(standing.winner()) : null;
         }
         if (mode.suddenMinutes() > 0 && standing.top - standing.second < mode.suddenMargin()) {
             beginSuddenDeath(server, elapsed + mode.suddenMinutes() * MINUTE_MILLIS, mode.suddenMinutes());
             return null;
         }
-        return standing.winnerOrDraw();
+        return MatchVerdict.timeCap(standing.winner(), mode.capMinutes());
     }
 
     private static void beginSuddenDeath(MinecraftServer server, long endMillis, int minutes) {
@@ -82,13 +82,8 @@ final class MatchClock {
         CapturePointManager.forceFinalOpen(true);
         server.getPlayerList().broadcastSystemMessage(Component.translatable("battlecraft.mode.sudden", minutes)
                 .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD), false);
-    }
-
-    private static void finish(MinecraftServer server, @Nullable String winner) {
-        if (winner != null) {
-            PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(), new MatchVictoryPacket(winner));
-        }
-        BattleCraftManager.getInstance().stopMatch(server, winner);
+        PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(), new MatchBannerPacket(MatchBannerPacket.Kind.SUDDEN,
+                null, Component.translatable("battlecraft.mode.sudden.detail", minutes), ScoreLine.of(server)));
     }
 
     private static final class Standing {
@@ -129,8 +124,9 @@ final class MatchClock {
             }
         }
 
-        private String winnerOrDraw() {
-            return clearLeader() ? leader : "";
+        @Nullable
+        private String winner() {
+            return clearLeader() ? leader : null;
         }
     }
 }

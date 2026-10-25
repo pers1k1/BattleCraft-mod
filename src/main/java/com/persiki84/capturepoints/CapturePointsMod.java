@@ -11,6 +11,7 @@ import com.persiki84.capturepoints.capture.CaptureSessions;
 import com.persiki84.capturepoints.capture.FinalCapturePoint;
 import com.persiki84.capturepoints.client.CaptureHudOverlay;
 import com.persiki84.capturepoints.client.KeyBindings;
+import com.persiki84.capturepoints.client.MatchBanner;
 import com.persiki84.capturepoints.client.menu.PointStudioScreen;
 import com.persiki84.capturepoints.menu.CapturePointMenuState;
 import com.persiki84.capturepoints.commands.CapturePointCommand;
@@ -223,6 +224,7 @@ public class CapturePointsMod {
         @SubscribeEvent
         public static void registerGuiOverlays(RegisterGuiOverlaysEvent event) {
             event.registerAboveAll("capture_hud", CaptureHudOverlay.HUD_CAPTURE);
+            event.registerAboveAll("match_banner", MatchBanner.OVERLAY);
         }
     }
 }

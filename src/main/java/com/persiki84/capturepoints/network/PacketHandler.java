@@ -9,7 +9,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.Optional;
 
 public class PacketHandler {
-    private static final String PROTOCOL_VERSION = "4";
+    private static final String PROTOCOL_VERSION = "5";
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(CapturePointsMod.MOD_ID, "main"),
             () -> PROTOCOL_VERSION,
@@ -98,10 +98,10 @@ public class PacketHandler {
 
         INSTANCE.registerMessage(
                 id(),
-                MatchVictoryPacket.class,
-                MatchVictoryPacket::encode,
-                MatchVictoryPacket::decode,
-                MatchVictoryPacket::handle,
+                MatchBannerPacket.class,
+                MatchBannerPacket::encode,
+                MatchBannerPacket::decode,
+                MatchBannerPacket::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT)
         );
 

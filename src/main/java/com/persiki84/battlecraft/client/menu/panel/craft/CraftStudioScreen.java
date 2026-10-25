@@ -429,9 +429,11 @@ public final class CraftStudioScreen extends StudioScreen implements CraftRows.H
     protected void dropTiles(StudioNav.Node node, List<Integer> indices) {
         CraftPhase target = node == null ? null : CraftPhase.byId(node.key());
         if (target == null || target == phase) return;
+        List<String> commands = new ArrayList<>();
         for (CraftTile tile : tilesAt(indices)) {
-            send(CraftOrders.phase(tile.key(), target));
+            commands.add(CraftOrders.phase(tile.key(), target));
         }
+        sendBatch(commands);
         selectedKey = null;
     }
 

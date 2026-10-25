@@ -248,6 +248,8 @@ final class PointInspector {
                 PointStudioScreen.REWARD));
         add(stack, x, width, amountRow("rewardAmount", "capturepoints.menu.reward", true));
         if (entry.last()) return;
+        heading(stack, x, width, "capturepoints.menu.group.score");
+        add(stack, x, width, scoreRow());
         heading(stack, x, width, "capturepoints.menu.group.income");
         add(stack, x, width, itemRow("incomeItem", "capturepoints.menu.income_item", PointEntry::income,
                 PointStudioScreen.INCOME));
@@ -399,6 +401,15 @@ final class PointInspector {
         return row("number:" + key, () -> new NumberRow(0, 0, 10, ROW, Component.translatable(label),
                 () -> current(entry -> entry.number(field)),
                 value -> later(key, verb, String.valueOf(value)), minimum, maximum, step).hint(label + ".hint"));
+    }
+
+    // WHY: у нижней границы своя подпись: -1 значит «как в режиме матча», а не «минус одно очко»
+    private MenuRow scoreRow() {
+        String label = "capturepoints.menu.score";
+        return row("number:score", () -> new NumberRow(0, 0, 10, ROW, Component.translatable(label),
+                () -> current(entry -> entry.number("scorePerMinute")),
+                value -> later("score", "setscore", String.valueOf(value)), CapturePoint.SCORE_BY_MODE,
+                CapturePoint.SCORE_MAX, 1).floorLabel(Component.translatable(label + ".mode")).hint(label + ".hint"));
     }
 
     private <T> MenuRow pick(String key, String label, T[] values, Function<T, String> translation,

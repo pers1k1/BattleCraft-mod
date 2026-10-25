@@ -553,9 +553,11 @@ public final class ShopStudioScreen extends StudioScreen {
     private void copyAll(List<Integer> indices) {
         ShopNode node = node();
         if (node == null) return;
+        List<String> commands = new ArrayList<>();
         for (ShopEntry entry : entriesAt(indices)) {
-            send(COMMAND + "item copy " + node.section() + " " + entry.id());
+            commands.add(COMMAND + "item copy " + node.section() + " " + entry.id());
         }
+        sendBatch(commands);
         clearMarks();
     }
 
@@ -576,9 +578,11 @@ public final class ShopStudioScreen extends StudioScreen {
     protected void deleteMarked(List<Integer> indices) {
         ShopNode node = node();
         if (node == null || moneyShown()) return;
+        List<String> commands = new ArrayList<>();
         for (ShopEntry entry : entriesAt(indices)) {
-            send(COMMAND + "item remove " + node.section() + " " + entry.id());
+            commands.add(COMMAND + "item remove " + node.section() + " " + entry.id());
         }
+        sendBatch(commands);
         entryId = null;
     }
 
@@ -588,9 +592,12 @@ public final class ShopStudioScreen extends StudioScreen {
         ShopNode node = node();
         ShopNode to = target == null ? null : ShopNode.parse(target.key());
         if (node == null || to == null || target.key().equals(nodeKey)) return;
+        List<String> commands = new ArrayList<>();
         for (ShopEntry entry : entriesAt(indices)) {
-            send(COMMAND + "item move " + node.section() + " " + entry.id() + " " + to.section() + to.childSuffix());
+            commands.add(COMMAND + "item move " + node.section() + " " + entry.id() + " " + to.section()
+                    + to.childSuffix());
         }
+        sendBatch(commands);
         entryId = null;
     }
 

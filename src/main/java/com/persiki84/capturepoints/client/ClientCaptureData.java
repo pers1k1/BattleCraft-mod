@@ -7,10 +7,12 @@ import com.persiki84.capturepoints.capture.CaptureMode;
 import com.persiki84.capturepoints.capture.CapturePoint;
 import com.persiki84.knockdown.cap.KnockdownCapability;
 import com.persiki84.knockdown.cap.KnockdownProvider;
+import com.persiki84.capturepoints.network.PointPerks;
 import com.persiki84.capturepoints.network.PointSyncData;
 import com.persiki84.shared.zone.ZoneArea;
 import net.minecraft.core.BlockPos;
 
+import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -30,6 +32,7 @@ public class ClientCaptureData {
     private static final Map<String, ZoneArea> finalPointAreas = new HashMap<>();
     private static final Map<String, CaptureMode> pointModes = new HashMap<>();
     private static final Map<String, Integer> pointRanges = new HashMap<>();
+    private static final Map<String, PointPerks> pointPerks = new HashMap<>();
     private static final Set<String> optionalPoints = new HashSet<>();
     private static final Set<String> hiddenFromHud = new HashSet<>();
     private static final Set<String> shownInside = new HashSet<>();
@@ -113,6 +116,7 @@ public class ClientCaptureData {
         finalPointAreas.clear();
         pointModes.clear();
         pointRanges.clear();
+        pointPerks.clear();
         optionalPoints.clear();
         hiddenFromHud.clear();
         shownInside.clear();
@@ -171,6 +175,7 @@ public class ClientCaptureData {
     private static void forgetPoint(String pointName) {
         pointModes.remove(pointName);
         pointRanges.remove(pointName);
+        pointPerks.remove(pointName);
         optionalPoints.remove(pointName);
         hiddenFromHud.remove(pointName);
         shownInside.remove(pointName);
@@ -208,6 +213,7 @@ public class ClientCaptureData {
     private static void rememberFlags(String name, PointSyncData data) {
         pointModes.put(name, data.mode);
         pointRanges.put(name, data.markerRange);
+        pointPerks.put(name, data.perks);
         if (data.required) {
             optionalPoints.remove(name);
         } else {
@@ -223,6 +229,11 @@ public class ClientCaptureData {
         } else {
             shownInside.add(name);
         }
+    }
+
+    @Nullable
+    public static PointPerks getPerks(String pointName) {
+        return pointPerks.get(pointName);
     }
 
     public static int getMarkerRange(String pointName) {
@@ -346,6 +357,10 @@ public class ClientCaptureData {
     // WHY: точки, а когда обязательных нет вовсе - открывать нечего, и она доступна сразу
     public static void finalForcedOpen(boolean value) {
         finalForcedOpen = value;
+    }
+
+    public static boolean isFinalForcedOpen() {
+        return finalForcedOpen;
     }
 
     public static boolean areAllPointsCapturedBySameTeam() {

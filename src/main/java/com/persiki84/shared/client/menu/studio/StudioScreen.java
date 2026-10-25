@@ -2,6 +2,7 @@ package com.persiki84.shared.client.menu.studio;
 
 import com.persiki84.shared.client.menu.GlassScreen;
 import com.persiki84.shared.client.menu.MenuCommands;
+import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.MenuLayer;
 import com.persiki84.shared.client.menu.MenuRow;
@@ -36,6 +37,7 @@ import org.lwjgl.glfw.GLFW;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -65,6 +67,10 @@ public abstract class StudioScreen extends GlassScreen {
     private static final float LINE_SCALE = 0.72f;
     private static final int COMMIT_TICKS = 6;
     private static final int SETTLE_TICKS = 40;
+    // WHY: сервер отвечает на запрос снимка не чаще раза в 3 тика, и запрос сразу после планового
+    // WHY: опроса глотался: правка доезжала до экрана через секунду. Повторный запрос через 4 тика
+    // WHY: проходит мимо сторожа всегда
+    private static final int FOLLOW_UP_TICKS = 4;
     private static final long ARM_MILLIS = 3000L;
     private static final int DRAG_START = 4;
     private static final float ART_SPEED = 11.0f;
@@ -96,6 +102,7 @@ public abstract class StudioScreen extends GlassScreen {
     protected int ticks;
     private int commitAt = -1;
     private int pendingSince = -1;
+    private int followUpAt = -1;
     private String armedKey;
     private long armedAt;
     private Object shownStamp;
@@ -492,6 +499,21 @@ public abstract class StudioScreen extends GlassScreen {
     protected void send(String command) {
         MenuCommands.run(command, menuId());
         pendingSince = ticks;
+        followUpAt = ticks + FOLLOW_UP_TICKS;
+    }
+
+    // WHY: пачка правок уходит подряд с одним запросом снимка в конце: команды и запрос сервер
+    // WHY: разбирает по порядку, а запрос после каждой команды получал ответ только на первую
+    protected void sendBatch(List<String> commands) {
+        List<String> fitting = new ArrayList<>(commands.size());
+        for (String command : commands) {
+            if (MenuCommands.fits(command)) fitting.add(command);
+        }
+        if (fitting.isEmpty()) return;
+        for (int index = 0; index < fitting.size() - 1; index++) {
+            MenuCommands.run(fitting.get(index));
+        }
+        send(fitting.get(fitting.size() - 1));
     }
 
     // WHY: число уходит на сервер после паузы в наборе: удержание стрелки шагает десятки раз
@@ -506,9 +528,7 @@ public abstract class StudioScreen extends GlassScreen {
     }
 
     protected void flushCommits() {
-        for (String command : due.values()) {
-            send(command);
-        }
+        sendBatch(new ArrayList<>(due.values()));
         due.clear();
         commitAt = -1;
     }
@@ -605,6 +625,11 @@ public abstract class StudioScreen extends GlassScreen {
     public void tick() {
         ticks++;
         if (commitAt >= 0 && ticks >= commitAt && !typingRow()) flushCommits();
+        if (followUpAt >= 0 && ticks >= followUpAt) {
+            followUpAt = -1;
+            MenuData.invalidate(menuId());
+            MenuData.request(menuId());
+        }
         if (pendingSince >= 0 && ticks - pendingSince > SETTLE_TICKS) {
             pendingSince = -1;
             grid.settle();

@@ -18,6 +18,7 @@ import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
 import com.persiki84.battlecraft.network.PacketHandler;
+import com.persiki84.capturepoints.network.MatchBannerPacket;
 import com.persiki84.battlecraft.network.S2CLobbyRosterPacket;
 import com.persiki84.battlecraft.network.S2CSurrenderVotePacket;
 import com.persiki84.battlecraft.network.S2CSyncGamePhasePacket;
@@ -416,9 +417,11 @@ public class BattleCraftManager {
         MatchStore.save(server, phase, elapsed, readyPlayers, com.persiki84.battlecraft.mode.MatchModes.save());
     }
 
-    public void stopMatch(MinecraftServer server, String winnerTeam) {
+    public void stopMatch(MinecraftServer server, MatchVerdict verdict) {
         if (softDisabled) return;
+        boolean running = phase == GamePhase.ACTIVE;
         phase = GamePhase.ENDED;
+        if (running) sendBanner(verdict, com.persiki84.battlecraft.mode.MatchModes.scoreLine(server));
 
         executeConsoleCommands(server, config.stopCommands);
         com.persiki84.capturepoints.capture.CapturePointManager.resetAllPoints();
@@ -430,18 +433,36 @@ public class BattleCraftManager {
             com.persiki84.minimap.network.PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> p), emptyPosPacket);
         }
         emptyMatchTeams(server);
-
-        Component msg = winnerTeam != null 
-            ? Component.translatable("battlecraft.match.ended.winner", winnerTeam).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)
-            : Component.translatable("battlecraft.match.ended").withStyle(ChatFormatting.YELLOW, ChatFormatting.BOLD);
-
-         server.getPlayerList().broadcastSystemMessage(msg, false);
+        announceVerdict(server, verdict);
 
          resetState();
          com.persiki84.battlecraft.mode.MatchModes.matchEnded(server);
          persistMatch(server);
          syncToAll(server);
          net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new MatchEvent.Ended(server));
+    }
+
+    // WHY: баннер уходит при любом конце идущего матча и раньше команд конца: те могут выкинуть
+    // WHY: игроков или перевести их на другой сервер. Счёт снят до сброса, у клиента своих цифр к
+    // WHY: тому времени нет. Стоп оператором в лобби баннера не даёт
+    private static void sendBanner(MatchVerdict verdict, Component score) {
+        com.persiki84.capturepoints.network.PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(),
+                new MatchBannerPacket(bannerKind(verdict), verdict.winner(), verdict.reason(), score));
+    }
+
+    private static void announceVerdict(MinecraftServer server, MatchVerdict verdict) {
+        String winner = verdict.winner();
+        Component message = winner != null
+                ? Component.translatable("battlecraft.match.ended.winner", winner, verdict.reason())
+                        .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)
+                : Component.translatable("battlecraft.match.ended", verdict.reason())
+                        .withStyle(ChatFormatting.YELLOW, ChatFormatting.BOLD);
+        server.getPlayerList().broadcastSystemMessage(message, false);
+    }
+
+    private static MatchBannerPacket.Kind bannerKind(MatchVerdict verdict) {
+        if (verdict.winner() != null) return MatchBannerPacket.Kind.VICTORY;
+        return verdict.stopped() ? MatchBannerPacket.Kind.STOPPED : MatchBannerPacket.Kind.DRAW;
     }
 
     // WHY: команды снимались только с тех, кто онлайн, а сессии вышедших стирает resetState: вышедший
@@ -674,7 +695,7 @@ public class BattleCraftManager {
             server.getPlayerList().broadcastSystemMessage(Component.translatable("battlecraft.vote.surrendered", teamName).withStyle(ChatFormatting.RED), false);
             executeConsoleCommands(server, config.surrenderCommands);
             String otherTeam = getOtherTeam(server, teamName);
-            stopMatch(server, otherTeam);
+            stopMatch(server, MatchVerdict.surrender(otherTeam, teamName));
         }
     }
 

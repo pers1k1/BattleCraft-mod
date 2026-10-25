@@ -85,6 +85,7 @@ public final class CapturePointMenuState {
         tag.putInt("ownedRollbackSpeed", point.getOwnedRollbackSpeed());
         tag.putInt("teamCooldown", point.getTeamCooldown());
         tag.putString("cooldownScope", point.getTeamCooldownScope().id());
+        tag.putInt("scorePerMinute", point.getScorePerMinute());
     }
 
     private static void putRewards(CompoundTag tag, CapturePoint point) {

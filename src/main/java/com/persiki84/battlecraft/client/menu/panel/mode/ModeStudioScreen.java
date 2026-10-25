@@ -6,6 +6,7 @@ import com.persiki84.battlecraft.mode.ModeMenuState;
 import com.persiki84.shared.client.menu.MenuCommands;
 import com.persiki84.shared.client.menu.MenuData;
 import com.persiki84.shared.client.menu.MenuFeedback;
+import com.persiki84.shared.client.menu.gunsmith.GunsmithScreen;
 import com.persiki84.shared.client.menu.pick.ItemShelf;
 import com.persiki84.shared.client.menu.studio.StudioMenu;
 import com.persiki84.shared.client.menu.studio.StudioNav;
@@ -13,6 +14,7 @@ import com.persiki84.shared.client.menu.studio.StudioScreen;
 import com.persiki84.shared.client.menu.studio.StudioStack;
 import com.persiki84.shared.client.menu.studio.StudioTile;
 import com.persiki84.shared.client.ui.UiButton;
+import com.persiki84.shared.gunsmith.GunSmith;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -223,10 +225,11 @@ public final class ModeStudioScreen extends StudioScreen implements ModeRows.Hos
         String command = pick.fromInventory() ? ModeOrders.kitSlot(mode, pick.slot())
                 : ModeOrders.kitItem(mode, ItemShelf.spec(pick.stack()), 1);
         if (!MenuCommands.fits(command)) return;
-        send(command);
         if (slot >= 0 && slot < total) {
-            send(ModeOrders.kitMove(mode, total, slot));
+            sendBatch(List.of(command, ModeOrders.kitMove(mode, total, slot)));
             selected = slot;
+        } else {
+            send(command);
         }
         nav.nudge(mode.id(), 1);
     }
@@ -238,7 +241,24 @@ public final class ModeStudioScreen extends StudioScreen implements ModeRows.Hos
 
     @Override
     protected List<StudioMenu.Action> tileActions(int index) {
-        return List.of(StudioMenu.Action.danger("studio.modes.menu.remove", this::removeChosen));
+        boolean gun = index >= 0 && index < kit().size() && GunSmith.isGun(kit().get(index).icon());
+        return List.of(StudioMenu.Action.of("studio.menu.guns", () -> openGuns(index)).when(gun),
+                StudioMenu.Action.danger("studio.modes.menu.remove", this::removeChosen));
+    }
+
+    // WHY: пока меню было открыто, набор мог сдвинуться: тогда мастерская не открывается на чужом стволе
+    private void openGuns(int index) {
+        flushCommits();
+        ModeGunBench bench = new ModeGunBench(mode);
+        int position = bench.positionOf(index);
+        if (position < 0) return;
+        GunsmithScreen.open(bench, position, this);
+    }
+
+    @Override
+    public void openGuns() {
+        KitTile tile = chosen();
+        if (tile != null) openGuns(tile.index());
     }
 
     @Override
@@ -257,9 +277,11 @@ public final class ModeStudioScreen extends StudioScreen implements ModeRows.Hos
         flushCommits();
         List<Integer> order = new ArrayList<>(indices);
         order.sort(Comparator.reverseOrder());
+        List<String> removals = new ArrayList<>(order.size());
         for (int index : order) {
-            send(ModeOrders.kitRemove(mode, index));
+            removals.add(ModeOrders.kitRemove(mode, index));
         }
+        sendBatch(removals);
         nav.nudge(mode.id(), -order.size());
         selected = -1;
         marks.clear();

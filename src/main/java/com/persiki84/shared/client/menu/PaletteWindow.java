@@ -3,22 +3,18 @@ package com.persiki84.shared.client.menu;
 import com.persiki84.shared.client.ui.Smooth;
 import com.persiki84.shared.client.ui.UiAccent;
 import com.persiki84.shared.client.ui.UiAnim;
-import com.persiki84.shared.client.ui.UiAssemble;
 import com.persiki84.shared.client.ui.UiBackdrop;
 import com.persiki84.shared.client.ui.UiColor;
-import com.persiki84.shared.client.ui.UiFrame;
 import com.persiki84.shared.client.ui.UiGlass;
 import com.persiki84.shared.client.ui.UiGlassStyle;
-import com.persiki84.shared.client.ui.UiMotion;
-import com.persiki84.shared.client.ui.UiMotionSet;
 import com.persiki84.shared.client.ui.UiRender;
 import com.persiki84.shared.client.ui.UiRestFrame;
 import com.persiki84.shared.client.ui.UiReveal;
 import com.persiki84.shared.client.ui.UiShards;
-import com.persiki84.shared.client.ui.UiShatter;
 import com.persiki84.shared.client.ui.UiSound;
 import com.persiki84.shared.client.ui.UiStage;
 import com.persiki84.shared.client.ui.UiTheme;
+import com.persiki84.shared.client.ui.UiWindowMotion;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -69,10 +65,6 @@ public final class PaletteWindow {
 
     private static final float ENTER_SECONDS = 0.45f;
     private static final float BURN_SECONDS = 0.32f;
-    private static final float MAX_STEP = 1.0f / 15.0f;
-    private static final float MIN_FRAMES = 6.0f;
-    private static final float BURN_MARGIN = 28.0f;
-    private static final float WINDOW_CHARGE = 0.55f;
     private static final long SERVER_GAP_MS = 400L;
 
     private static final int[] PRESETS = {
@@ -123,17 +115,9 @@ public final class PaletteWindow {
     private float copyPulse;
     private float pastePulse;
 
-    private float entered;
-    private float burned = -1.0f;
-    private long stamp = -1L;
-    private boolean fresh = true;
-    private float leavingArrival = 1.0f;
+    private final UiWindowMotion motion = new UiWindowMotion(ENTER_SECONDS, BURN_SECONDS);
     private float screenWidth;
     private float screenHeight;
-
-    private UiMotionSet set;
-    private UiShards shards;
-    private long grain;
 
     public PaletteWindow(String owner, Kind kind, Component title, int color, IntConsumer apply, Runnable clear) {
         this.owner = owner;
@@ -141,7 +125,6 @@ public final class PaletteWindow {
         this.title = title;
         this.apply = apply;
         this.clear = clear;
-        this.set = chosenMotion();
         adopt(color);
     }
 
@@ -155,39 +138,19 @@ public final class PaletteWindow {
     }
 
     public boolean closing() {
-        return burned >= 0.0f;
+        return motion.closing();
     }
 
     public boolean gone() {
-        return burned >= leaveSpan() && !held;
+        return motion.finished() && !held;
     }
 
-    // WHY: набор движения защёлкивается на каждой стадии отдельно: смена его на экране кастомизации
-    // WHY: не должна ломать уже идущее появление или уход открытого окна. Уход, начатый посреди входа,
-    // WHY: остаётся в наборе входа: доля Arrival относится к его кривой, и чужой набор начал бы уход скачком
     public void beginClose() {
         if (closing()) return;
 
         typing = false;
         grab = Grab.NONE;
-        leavingArrival = animating() ? phase() : 1.0f;
-        fresh = true;
-        burned = 0.0f;
-        if (leavingArrival >= 1.0f) set = chosenMotion();
-        shards = null;
-        grain = System.nanoTime();
-    }
-
-    private static UiMotionSet chosenMotion() {
-        return UiMotion.of(Minecraft.getInstance().screen);
-    }
-
-    private float enterSpan() {
-        return set.enterSeconds(ENTER_SECONDS);
-    }
-
-    private float leaveSpan() {
-        return set == UiMotionSet.IGNITE ? BURN_SECONDS : set.leaveSeconds(Minecraft.getInstance().level != null);
+        motion.beginClose();
     }
 
     public boolean covers(double pointX, double pointY) {
@@ -227,12 +190,12 @@ public final class PaletteWindow {
         advance();
 
         graphics.flush();
-        UiShards field = splitting() ? field() : null;
-        UiBackdrop.scatter(null, field, phase(), width, height);
+        UiShards field = motion.splitting() ? motion.field(left, top, WIDTH, height()) : null;
+        UiBackdrop.scatter(null, field, motion.phase(), width, height);
         hush(graphics);
-        boolean staged = animating() && UiStage.beginWindow(field, phase(), width, height);
+        boolean staged = motion.animating() && UiStage.beginWindow(field, motion.phase(), width, height);
         if (closing() && !staged) {
-            burned = leaveSpan();
+            motion.finish();
             UiBackdrop.plain();
             return;
         }
@@ -240,7 +203,7 @@ public final class PaletteWindow {
         paintStaged(graphics, mouseX, mouseY, staged);
         if (!staged) return;
 
-        resolve(graphics, width, height);
+        motion.resolve(graphics, width, height, left, top, WIDTH, height());
     }
 
     // WHY: окно, взятое за пустое место, приподнимается, светлеет кромкой и отбрасывает тень вниз, а
@@ -250,7 +213,7 @@ public final class PaletteWindow {
     }
 
     private void paintStaged(GuiGraphics graphics, int mouseX, int mouseY, boolean staged) {
-        float outerPresence = UiGlassStyle.scalePresence(staged ? presence() : 1.0f);
+        float outerPresence = UiGlassStyle.scalePresence(staged ? motion.presence() : 1.0f);
         UiRestFrame.shift(graphics, 0.0f, -CARRY_RISE * lift());
         try {
             paint(graphics, mouseX, mouseY);
@@ -265,97 +228,25 @@ public final class PaletteWindow {
         }
     }
 
-    // WHY: у раскола осколки уходят за габарит окна, поэтому он рисуется треугольниками по своим
-    // WHY: местам, а не композитным квадом по прямоугольнику окна, как вход из света и горение
-    private void resolve(GuiGraphics graphics, float width, float height) {
-        if (splitting()) {
-            UiShatter.draw(graphics, width, height, UiStage.windowTexture(), field(), phase(), leavingArrival);
-            return;
-        }
-
-        float mode = closing() ? leaveMode() : set.enterMode();
-        UiAssemble.window(graphics, width, height, UiStage.windowTexture(), left, top, WIDTH, height(),
-                BURN_MARGIN, phase(), seconds(), mode, WINDOW_CHARGE, closing() ? leavingArrival : 1.0f);
-    }
-
-    private boolean splitting() {
-        return closing() && set == UiMotionSet.GLASS;
-    }
-
-    // WHY: замощение нужно раньше композита: через него переносятся и копия кадра в стадии окна, и
-    // WHY: снимок подложки, иначе мир за улетевшим осколком остаётся с места, где ячейка была
-    private UiShards field() {
-        if (shards == null) shards = UiShards.of(left, top, WIDTH, height(), grain);
-        return shards;
-    }
-
-    private float leaveMode() {
-        return set == UiMotionSet.FROST ? UiReveal.FROST_LEAVE : UiReveal.BURN;
-    }
-
     private void advance() {
-        long frame = UiFrame.frame();
-        if (frame == stamp) return;
-        stamp = frame;
         settle();
-
-        float step = fresh ? 0.0f : Math.min(MAX_STEP, UiFrame.delta());
-        fresh = false;
+        float step = motion.advance();
         carried.to(grab == Grab.MOVE ? 1.0f : 0.0f, step);
         copyPulse = Math.max(0.0f, copyPulse - step / PULSE_SECONDS);
         pastePulse = Math.max(0.0f, pastePulse - step / PULSE_SECONDS);
-        if (closing()) {
-            burned += Math.min(step, leaveSpan() / MIN_FRAMES);
-            return;
-        }
-        entered += Math.min(step, enterSpan() / MIN_FRAMES);
     }
 
-    private boolean animating() {
-        if (!UiReveal.enabled()) return false;
-        return closing() || entered < enterSpan();
-    }
-
-    private float phase() {
-        return closing() ? UiAnim.clamp01(burned / leaveSpan()) : UiAnim.clamp01(entered / enterSpan());
-    }
-
-    // WHY: время горения продолжает время входа: шейдер восстанавливает недоигранный фронт входа
-    // WHY: по тому же шуму, и с нуля он встал бы на другой рисунок
-    private float seconds() {
-        return closing() ? entered + burned : entered;
-    }
-
-    // WHY: окно приходит сборкой и уходит горением или расколом, а не альфой, поэтому ореол гаснет по
-    // WHY: фазе анимации и кладётся до стадии окна: в ней он обрезался бы рамкой композита и ушёл бы с осколками.
-    // WHY: Уход, начатый посреди входа, гасит ту долю ореола, что успела набраться, а не полную
+    // WHY: ореол кладётся до стадии окна: в ней он обрезался бы рамкой композита и ушёл бы с осколками
     private void hush(GuiGraphics graphics) {
         if (closing() && !UiReveal.enabled()) return;
 
-        float shown = closing()
-                ? UiAnim.easeOut(leavingArrival) * leavingHush(1.0f - phase())
-                : UiAnim.easeOut(phase());
+        float shown = motion.hushShown();
         UiGlass.hush(graphics, left, top, WIDTH, height(), PANEL_RADIUS, shown);
         float lift = lift();
         if (lift > 0.004f) {
             UiGlass.hush(graphics, left, top + CARRY_HUSH_DROP * lift, WIDTH, height(), PANEL_RADIUS,
                     CARRY_HUSH_ALPHA * lift * shown);
         }
-    }
-
-    // WHY: иней гасит тело окна своей кривой ухода (frostCloseOpacity в ui_assemble.fsh), и ореол гаснет
-    // WHY: по ней же: другой спад пережил бы панель на несколько кадров тёмным пятном на её месте
-    private float leavingHush(float left) {
-        if (set != UiMotionSet.FROST) return UiAnim.easeOut(left);
-        return UiReveal.frostLeaveOpacity(1.0f - left);
-    }
-
-    // WHY: сила стекла растёт с фазой входа и гаснет с фазой ухода; уход, начатый посреди входа,
-    // WHY: гасит ту силу, что успела набраться, а не полную, иначе на первом кадре был бы скачок
-    private float presence() {
-        if (!animating()) return 1.0f;
-        if (closing()) return UiReveal.glassPresence(leavingArrival) * UiReveal.glassPresence(1.0f - phase());
-        return UiReveal.glassPresence(phase());
     }
 
     private void paint(GuiGraphics graphics, int mouseX, int mouseY) {

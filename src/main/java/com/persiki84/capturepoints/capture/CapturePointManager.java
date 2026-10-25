@@ -344,13 +344,13 @@ public class CapturePointManager {
 
     public static void completeCapture(CaptureSession session, String team, MinecraftServer server) {
         CapturePoint point = session.getPoint();
+        boolean sudden = finalForcedOpen;
         point.setOwnerTeam(team);
         CaptureRewards.pay(server, session, team);
         CaptureCommandRunner.onCaptured(server, point, team);
 
         boolean isFinalPoint = point instanceof FinalCapturePoint;
         if (isFinalPoint) {
-            PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(), new MatchVictoryPacket(team));
             activateCommandBlocks((FinalCapturePoint) point, team);
         } else {
             announceCompleted(server, point, team);
@@ -361,7 +361,8 @@ public class CapturePointManager {
         persist();
 
         if (isFinalPoint) {
-            com.persiki84.battlecraft.BattleCraftManager.getInstance().stopMatch(server, team);
+            com.persiki84.battlecraft.BattleCraftManager.getInstance().stopMatch(server,
+                    com.persiki84.battlecraft.MatchVerdict.finalPoint(team, sudden));
         }
     }
 

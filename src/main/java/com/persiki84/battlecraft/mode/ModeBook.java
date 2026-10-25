@@ -1,6 +1,7 @@
 package com.persiki84.battlecraft.mode;
 
 import com.google.gson.JsonObject;
+import com.persiki84.capturepoints.capture.CapturePointManager;
 import com.persiki84.shared.JsonRead;
 import net.minecraft.server.MinecraftServer;
 
@@ -90,5 +91,6 @@ public final class ModeBook {
         ModeStore.save(server, root);
         version++;
         ModeSync.lobbyToAll(server);
+        CapturePointManager.syncPoints();
     }
 }

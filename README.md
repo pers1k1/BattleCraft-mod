@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.25` in files, `25.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.25hotfix` in files, `25.10.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1394,6 +1394,18 @@ Version 2026.10.24hotfix - built; not yet checked in game.
 - **Network protocol.** battlecraft channel 7, capturepoints channel 4: update the server together with the clients.
 
 Version 2026.10.25 - built; not yet checked in game.
+
+## Hotfix, 25 October 2026 (2026.10.25hotfix)
+
+- **Why the match ended.** Every ending goes through one place and shows a banner: the winner (or draw, or match stopped), the reason (final point captured, first to the score target, score leader at the time cap, final point taken in sudden death, sudden death ran out, a team surrendered, an operator stopped the match) and the final score, for example `Red 143 : 120 Blue`. Surrender and an operator stop used to end the match without any banner.
+- **Sudden death is visible.** When it starts, a banner in the alert tone says that the final point is open to both teams and for how long, with the current score.
+- **Score per point.** Every capture point has its own score per minute: by mode (the default, takes the number from the match mode) or 0 to 10. `/bc` - Points - Match score, or `/capturepoint setscore "<point>" <mode|0-10>`. The final point gives no score, it ends the match.
+- **Point window on the big map.** Hovering over a point on the map opens a small window next to its icon: owner, role and capture time, score per minute, income (amount, interval and payout), capture reward and buff. It comes and goes with the motion set chosen in customization (light, frost, shatter). The window life is shared with the color window (`UiWindowMotion`).
+- **Bulk edits land at once.** A studio sends a batch of edits in a row with one snapshot request at the end, and repeats the request after 4 ticks: the server answers a snapshot request at most once per 3 ticks, so before only the first of several removals showed up and the rest came a second later. Fixed for modes, loot and caches, shop, selling, crafting and the hub.
+- **Attachments in the starting kit.** A gun in a mode kit opens the same workbench as loot and shop, from the tile menu or the inspector row; by command `/bc mode <mode> kit <i> attach "<attachment>"` and `detach <slot>`.
+- **Network protocol.** capturepoints channel 5: update the server together with the clients.
+
+Version 2026.10.25hotfix - built; not yet checked in game.
 
 ## Releases
 

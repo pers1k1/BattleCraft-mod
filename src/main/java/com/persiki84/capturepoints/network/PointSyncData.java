@@ -18,9 +18,11 @@ public class PointSyncData {
     public final boolean shownInHud;
     public final boolean hiddenInside;
     public final int markerRange;
+    public final PointPerks perks;
 
     public PointSyncData(String owner, ZoneArea area, ResourceLocation dimension, CaptureMode mode,
-                         boolean required, boolean shownInHud, boolean hiddenInside, int markerRange) {
+                         boolean required, boolean shownInHud, boolean hiddenInside, int markerRange,
+                         PointPerks perks) {
         this.owner = owner;
         this.area = area;
         this.dimension = dimension;
@@ -29,12 +31,14 @@ public class PointSyncData {
         this.shownInHud = shownInHud;
         this.hiddenInside = hiddenInside;
         this.markerRange = markerRange;
+        this.perks = perks;
     }
 
     public static PointSyncData of(CapturePoint point) {
         return new PointSyncData(point.getOwnerTeam(), point.getArea(),
                 point.getDimension().location(), point.getMode(),
-                point.isRequired(), point.isShownInHud(), point.isHiddenInside(), point.getMarkerRange());
+                point.isRequired(), point.isShownInHud(), point.isHiddenInside(), point.getMarkerRange(),
+                PointPerks.of(point));
     }
 
     public BlockPos pos() {
@@ -57,6 +61,7 @@ public class PointSyncData {
             buf.writeBoolean(point.shownInHud);
             buf.writeBoolean(point.hiddenInside);
             buf.writeVarInt(point.markerRange);
+            point.perks.write(buf);
         }
     }
 
@@ -73,8 +78,9 @@ public class PointSyncData {
             boolean shownInHud = buf.readBoolean();
             boolean hiddenInside = buf.readBoolean();
             int markerRange = buf.readVarInt();
+            PointPerks perks = PointPerks.read(buf);
             points.put(name, new PointSyncData(owner.isEmpty() ? null : owner, area, dimension, mode,
-                    required, shownInHud, hiddenInside, markerRange));
+                    required, shownInHud, hiddenInside, markerRange, perks));
         }
         return points;
     }

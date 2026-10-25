@@ -53,6 +53,14 @@ final class ModeOrders {
         return ROOT + mode.id() + " kit " + from + " move " + to;
     }
 
+    static String kitAttach(ModeId mode, int index, String option) {
+        return ROOT + mode.id() + " kit " + index + " attach \"" + option + "\"";
+    }
+
+    static String kitDetach(ModeId mode, int index, String slot) {
+        return ROOT + mode.id() + " kit " + index + " detach " + slot;
+    }
+
     static String kitClear(ModeId mode) {
         return ROOT + mode.id() + " kit clear";
     }

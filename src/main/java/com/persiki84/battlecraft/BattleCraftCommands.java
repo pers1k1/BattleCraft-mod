@@ -395,7 +395,7 @@ public class BattleCraftCommands {
                         .then(removeCommandBranch(START_CMD_SUGGESTIONS, config -> config.startCommands)))
                 .then(Commands.literal("stop")
                         .executes(context -> {
-                            BattleCraftManager.getInstance().stopMatch(context.getSource().getServer(), null);
+                            BattleCraftManager.getInstance().stopMatch(context.getSource().getServer(), MatchVerdict.operator());
                             return 1;
                         })
                         .then(Commands.literal("info").executes(context ->

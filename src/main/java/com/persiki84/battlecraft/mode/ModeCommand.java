@@ -3,15 +3,24 @@ package com.persiki84.battlecraft.mode;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.persiki84.shared.gunsmith.GunSlot;
+import com.persiki84.shared.gunsmith.GunSmith;
 import com.persiki84.shared.menu.MenuNetwork;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.item.ItemArgument;
+import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.function.ObjIntConsumer;
 
 // WHY: голос открыт всем, поэтому на литерале mode прав нет: они стоят на подветках правки, иначе
@@ -23,6 +32,7 @@ public final class ModeCommand {
     static final String SLOT = "slot";
     static final String INDEX = "index";
     static final String TO = "to";
+    static final String ATTACHMENT = "attachment";
     private static final int SLOT_MAX = 40;
 
     private ModeCommand() {}
@@ -107,7 +117,48 @@ public final class ModeCommand {
                                 .executes(context -> ModeEdits.countKit(context, id))))
                         .then(Commands.literal("move").then(Commands.argument(TO,
                                 IntegerArgumentType.integer(0, ModeLimits.KIT_ENTRIES_MAX - 1))
-                                .executes(context -> ModeEdits.moveKit(context, id)))));
+                                .executes(context -> ModeEdits.moveKit(context, id))))
+                        .then(Commands.literal("attach").then(Commands.argument(ATTACHMENT, StringArgumentType.string())
+                                .suggests(attachments(id)).executes(context -> ModeEdits.attachKit(context, id))))
+                        .then(Commands.literal("detach").then(Commands.argument(SLOT, StringArgumentType.word())
+                                .suggests(slots(id)).executes(context -> ModeEdits.detachKit(context, id)))));
+    }
+
+    // WHY: обвес это id с двоеточием, а оно без кавычек не разбирается: подсказка ставит кавычки
+    // WHY: сама и совпадает с набранным и с кавычкой, и без неё
+    private static SuggestionProvider<CommandSourceStack> attachments(ModeId id) {
+        return (context, builder) -> {
+            ItemStack stack = pointedStack(context, id);
+            String typed = builder.getRemaining().toLowerCase(Locale.ROOT);
+            for (String option : stack.isEmpty() ? List.<String>of() : GunSmith.options(stack)) {
+                String quoted = StringArgumentType.escapeIfRequired(option);
+                if (option.toLowerCase(Locale.ROOT).startsWith(typed)
+                        || quoted.toLowerCase(Locale.ROOT).startsWith(typed)) builder.suggest(quoted);
+            }
+            return builder.buildFuture();
+        };
+    }
+
+    private static SuggestionProvider<CommandSourceStack> slots(ModeId id) {
+        return (context, builder) -> {
+            List<String> names = new ArrayList<>();
+            ItemStack stack = pointedStack(context, id);
+            if (!stack.isEmpty()) {
+                for (GunSlot slot : GunSmith.slots(stack)) names.add(slot.id());
+            }
+            return SharedSuggestionProvider.suggest(names, builder);
+        };
+    }
+
+    // WHY: подсказка спрашивает про запись, номер которой набран раньше: недописанный номер это не ошибка
+    private static ItemStack pointedStack(CommandContext<CommandSourceStack> context, ModeId id) {
+        try {
+            int index = IntegerArgumentType.getInteger(context, INDEX);
+            List<KitEntry> kit = ModeBook.mode(id).kit();
+            return index < kit.size() ? kit.get(index).stack() : ItemStack.EMPTY;
+        } catch (IllegalArgumentException incomplete) {
+            return ItemStack.EMPTY;
+        }
     }
 
     private static int openMenu(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

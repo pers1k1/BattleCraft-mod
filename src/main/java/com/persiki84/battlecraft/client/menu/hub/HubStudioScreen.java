@@ -418,9 +418,12 @@ public final class HubStudioScreen extends StudioScreen {
     }
 
     private void setModules(List<Integer> indices, boolean on) {
+        List<String> commands = new ArrayList<>(indices.size());
         for (int index : indices) {
-            if (index < tiles.size()) now("module " + ModuleId.valueOf(tiles.get(index).key()).id() + " " + on);
+            if (index >= tiles.size()) continue;
+            commands.add(COMMAND + "module " + ModuleId.valueOf(tiles.get(index).key()).id() + " " + on);
         }
+        sendBatch(commands);
     }
 
     @Override

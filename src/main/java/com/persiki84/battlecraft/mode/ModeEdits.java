@@ -3,8 +3,11 @@ package com.persiki84.battlecraft.mode;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.persiki84.shared.gunsmith.GunSmith;
+import com.persiki84.shared.gunsmith.Outcome;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.arguments.item.ItemArgument;
@@ -14,6 +17,7 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.ObjIntConsumer;
 
 final class ModeEdits {
@@ -130,6 +134,46 @@ final class ModeEdits {
         int to = IntegerArgumentType.getInteger(context, ModeCommand.TO);
         return onEntry(context, id, index, kit -> kit.add(Math.min(to, kit.size() - 1), kit.remove(index)),
                 "battlecraft.mode.kit.moved");
+    }
+
+    static int attachKit(CommandContext<CommandSourceStack> context, ModeId id) {
+        String option = StringArgumentType.getString(context, ModeCommand.ATTACHMENT);
+        return smithKit(context, id, stack -> GunSmith.attach(stack, option), "battlecraft.mode.kit.attached",
+                GunSmith.optionName(option));
+    }
+
+    static int detachKit(CommandContext<CommandSourceStack> context, ModeId id) {
+        String slot = StringArgumentType.getString(context, ModeCommand.SLOT);
+        return smithKit(context, id, stack -> GunSmith.detach(stack, slot), "battlecraft.mode.kit.detached",
+                GunSmith.slotName(slot));
+    }
+
+    // WHY: обвес ставится на копию стака записи и пишется обратно целой записью: тот же предел
+    // WHY: длины тега, что при добавлении, иначе запись с обвесами пропала бы после перезапуска
+    private static int smithKit(CommandContext<CommandSourceStack> context, ModeId id,
+                                Function<ItemStack, Outcome> work, String key, Component shown) {
+        int index = IntegerArgumentType.getInteger(context, ModeCommand.INDEX);
+        List<KitEntry> kit = ModeBook.mode(id).kit();
+        if (index >= kit.size()) return fail(context, Component.translatable("battlecraft.mode.kit.no_entry", index));
+
+        KitEntry entry = kit.get(index);
+        ItemStack stack = entry.stack();
+        Outcome outcome = work.apply(stack);
+        if (outcome != Outcome.DONE) return fail(context, Component.translatable(refusal(outcome), shown));
+        KitEntry next = KitEntry.of(stack, entry.count());
+        if (next.tag().length() > ModeLimits.TEXT_MAX) {
+            return fail(context, Component.translatable("battlecraft.mode.kit.tag_too_long", ModeLimits.TEXT_MAX));
+        }
+        if (!ModeBook.edit(id, mode -> mode.kit().set(index, next))) return closed(context);
+        return reply(context, Component.translatable(key, shown, stack.getHoverName()));
+    }
+
+    private static String refusal(Outcome outcome) {
+        return switch (outcome) {
+            case NOT_A_GUN -> "battlecraft.mode.kit.attach.not_a_gun";
+            case INCOMPATIBLE -> "battlecraft.mode.kit.attach.incompatible";
+            default -> "battlecraft.mode.kit.attach.unknown";
+        };
     }
 
     private static int onEntry(CommandContext<CommandSourceStack> context, ModeId id, int index,

@@ -7,6 +7,7 @@ import com.persiki84.shared.client.menu.HeadingRow;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.ToggleRow;
 import com.persiki84.shared.client.menu.studio.StudioStack;
+import com.persiki84.shared.gunsmith.GunSmith;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 
@@ -42,6 +43,8 @@ final class ModeRows {
         boolean resetArmed();
 
         void removeChosen();
+
+        void openGuns();
     }
 
     private static final int ROW = 22;
@@ -71,6 +74,7 @@ final class ModeRows {
     private ActionRow clearRow;
     private ActionRow resetRow;
     private ActionRow removeRow;
+    private ActionRow gunsRow;
 
     ModeRows(Host host) {
         this.host = host;
@@ -113,6 +117,8 @@ final class ModeRows {
                 : Component.translatable("studio.modes.kit.clear.value"), host::clearKit).alerting();
         removeRow = action("studio.modes.kit.remove", () -> Component.translatable("studio.modes.kit.remove.value"),
                 host::removeChosen).alerting();
+        gunsRow = action("studio.modes.kit.guns", () -> Component.translatable("studio.modes.kit.guns.value"),
+                host::openGuns);
     }
 
     // WHY: «по умолчанию» снимается только выбором другого режима: выключить его значит оставить лобби без режима
@@ -192,6 +198,7 @@ final class ModeRows {
         kitHeading.setMessage(tile.name());
         stack.add(sized(kitHeading, width), x);
         stack.add(sized(countRow, width), x);
+        if (GunSmith.isGun(tile.icon())) stack.add(sized(gunsRow, width), x);
         stack.add(sized(removeRow, width), x, SECTION_GAP);
     }
 

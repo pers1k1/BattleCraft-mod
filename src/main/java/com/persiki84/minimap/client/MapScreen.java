@@ -48,6 +48,8 @@ public class MapScreen extends GlassScreen {
     private static final double MARKER_GRAB_PIXELS = 20.0;
     private static final float BASE_RADIUS = 5.0f;
     private static final float MARKER_DOT = 2.0f;
+    private static final float POINT_HOVER = 6.5f;
+    private static final float ENTERED = 0.999f;
     private static final float PLAYER_ARROW = 6.0f;
     private static final float MARKER_SCALE_MIN = 0.85f;
     private static final float MARKER_SCALE_MAX = 2.2f;
@@ -58,6 +60,11 @@ public class MapScreen extends GlassScreen {
     private final MapActionMenu actions = new MapActionMenu();
     private final PaletteStack palettes = new PaletteStack();
     private final MapTextPrompt prompt = new MapTextPrompt();
+    private final MapPointCards pointCards = new MapPointCards();
+    private String hoverPoint;
+    private boolean hoverLast;
+    private double hoverWorldX;
+    private double hoverWorldZ;
     private String hoveredLabel;
     private String armedLabel;
     private String clickedLabel;
@@ -104,7 +111,9 @@ public class MapScreen extends GlassScreen {
 
         MapTextureManager.renderMap(guiGraphics, mapX, mapZ, zoom, centerX, centerY, 0.0f, 0.0f, this.width, this.height);
         renderGrid(guiGraphics, centerX, centerY);
-        renderPoints(guiGraphics, centerX, centerY);
+        renderPoints(guiGraphics, mouseX, mouseY, centerX, centerY);
+        pointCards.hover(this.font, cardsAllowed() ? hoverPoint : null, hoverLast, hoverWorldX, hoverWorldZ);
+        pointCards.follow(mapX, mapZ, zoom, centerX, centerY);
         renderMarkers(guiGraphics, centerX, centerY);
         renderLabels(guiGraphics, mouseX, mouseY, centerX, centerY);
 
@@ -119,6 +128,7 @@ public class MapScreen extends GlassScreen {
 
     @Override
     protected void renderOverlay(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        pointCards.render(guiGraphics, this.width, this.height);
         actions.render(guiGraphics, this.font, mouseX, mouseY);
         palettes.render(guiGraphics, this.width, this.height, mouseX, mouseY);
         prompt.render(guiGraphics, this.font, this.width, this.height);
@@ -280,12 +290,14 @@ public class MapScreen extends GlassScreen {
                 UiRender.centerY(plateY, height, scale), scale, color);
     }
 
-    private void renderPoints(GuiGraphics guiGraphics, int centerX, int centerY) {
+    private void renderPoints(GuiGraphics guiGraphics, int mouseX, int mouseY, int centerX, int centerY) {
+        hoverPoint = null;
         for (Map.Entry<String, String> entry : ClientCaptureData.getAllPointOwners().entrySet()) {
             BlockPos pos = ClientCaptureData.getPointPosition(entry.getKey());
             if (pos != null) {
                 renderPointMarker(guiGraphics, pos.getX(), pos.getZ(), centerX, centerY,
                         MapRenderUtil.getTeamColor(entry.getValue()), entry.getKey());
+                notePointHover(mouseX, mouseY, pos, centerX, centerY, entry.getKey(), false);
             }
         }
 
@@ -294,9 +306,29 @@ public class MapScreen extends GlassScreen {
                 BlockPos pos = ClientCaptureData.getFinalPointPosition(entry.getKey());
                 if (pos != null) {
                     renderPointMarker(guiGraphics, pos.getX(), pos.getZ(), centerX, centerY, UiAccent.color(), entry.getKey());
+                    notePointHover(mouseX, mouseY, pos, centerX, centerY, entry.getKey(), true);
                 }
             }
         }
+    }
+
+    // WHY: окно точки открывается наведением на её значок; первая найденная точка под курсором
+    // WHY: побеждает, зазор вокруг значка прощает дрожание руки
+    private void notePointHover(int mouseX, int mouseY, BlockPos pos, int centerX, int centerY, String name,
+                                boolean last) {
+        if (hoverPoint != null) return;
+        float screenX = (float) (centerX + (pos.getX() - mapX) * zoom);
+        float screenY = (float) (centerY + (pos.getZ() - mapZ) * zoom);
+        float reach = POINT_HOVER * markerScale();
+        if (Math.abs(mouseX - screenX) > reach || Math.abs(mouseY - screenY) > reach) return;
+        hoverPoint = name;
+        hoverLast = last;
+        hoverWorldX = pos.getX();
+        hoverWorldZ = pos.getZ();
+    }
+
+    private boolean cardsAllowed() {
+        return !actions.open() && !prompt.open() && !palettes.any() && !hasDragged && shown() >= ENTERED;
     }
 
     private void renderPlayerDot(GuiGraphics guiGraphics, double px, double pz, float yRot, int cx, int cy, int color, String name) {

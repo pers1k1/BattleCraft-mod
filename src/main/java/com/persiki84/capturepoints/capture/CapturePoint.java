@@ -21,6 +21,10 @@ import java.util.List;
 
 public class CapturePoint {
     public static final int KIND_RANGE = 0;
+    // WHY: точка без своего числа берёт очки в минуту из режима матча; потолок 10: точка на 10 очков
+    // WHY: одна берёт цель 200 за 20 минут, больше смысла нет
+    public static final int SCORE_BY_MODE = -1;
+    public static final int SCORE_MAX = 10;
 
     private String name;
     private ResourceKey<Level> dimension = Level.OVERWORLD;
@@ -46,6 +50,7 @@ public class CapturePoint {
     private boolean shownInHud = true;
     private boolean hiddenInside = true;
     private int markerRange = KIND_RANGE;
+    private int scorePerMinute = SCORE_BY_MODE;
 
     private CaptureMode mode;
     private RewardSplit rewardSplit;
@@ -209,6 +214,9 @@ public class CapturePoint {
     public boolean isShownInHud() { return shownInHud; }
     public int getMarkerRange() { return markerRange; }
     public void setMarkerRange(int blocks) { this.markerRange = MarkerRange.normalize(blocks); }
+
+    public int getScorePerMinute() { return scorePerMinute; }
+    public void setScorePerMinute(int value) { this.scorePerMinute = Math.max(SCORE_BY_MODE, Math.min(SCORE_MAX, value)); }
     public void setShownInHud(boolean value) { this.shownInHud = value; }
     public boolean isHiddenInside() { return hiddenInside; }
     public void setHiddenInside(boolean value) { this.hiddenInside = value; }
@@ -310,6 +318,7 @@ public class CapturePoint {
         tag.putBoolean("shownInHud", shownInHud);
         tag.putBoolean("hiddenInside", hiddenInside);
         tag.putInt("markerRange", markerRange);
+        tag.putInt("scorePerMinute", scorePerMinute);
     }
 
     protected static void readTuning(CompoundTag tag, CapturePoint point) {
@@ -329,6 +338,7 @@ public class CapturePoint {
         point.shownInHud = !tag.contains("shownInHud") || tag.getBoolean("shownInHud");
         point.hiddenInside = !tag.contains("hiddenInside") || tag.getBoolean("hiddenInside");
         point.markerRange = MarkerRange.normalize(tag.getInt("markerRange"));
+        point.setScorePerMinute(tag.contains("scorePerMinute") ? tag.getInt("scorePerMinute") : SCORE_BY_MODE);
     }
 
     private static int percentOr(CompoundTag tag, String key, int fallback) {

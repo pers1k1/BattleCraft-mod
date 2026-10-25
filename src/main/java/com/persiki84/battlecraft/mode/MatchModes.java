@@ -2,6 +2,7 @@ package com.persiki84.battlecraft.mode;
 
 import com.persiki84.battlecraft.BattleCraftManager;
 import com.persiki84.battlecraft.modules.ModuleEvents;
+import com.persiki84.capturepoints.capture.CapturePoint;
 import com.persiki84.capturepoints.capture.CapturePointManager;
 import com.persiki84.shared.ActionGate;
 import net.minecraft.ChatFormatting;
@@ -28,6 +29,7 @@ public final class MatchModes {
     public static void matchStarting(MinecraftServer server) {
         ModeId chosen = ModeVotes.winner(server);
         MatchScore.begin(ModeBook.mode(chosen).copy());
+        CapturePointManager.syncPoints();
         ModeVotes.clear();
         ModuleEvents.syncToAll(server);
         ModeSync.scoreIfChanged();
@@ -44,6 +46,7 @@ public final class MatchModes {
     public static void matchEnded(MinecraftServer server) {
         MatchScore.end();
         CapturePointManager.forceFinalOpen(false);
+        CapturePointManager.syncPoints();
         ModuleEvents.syncToAll(server);
         ModeSync.scoreIfChanged();
     }
@@ -55,6 +58,24 @@ public final class MatchModes {
     public static long startMoney() {
         MatchMode mode = MatchScore.mode();
         return mode == null ? 0L : mode.startMoney();
+    }
+
+    // WHY: в матче точка без своего числа платит по идущему режиму, в лобби - по режиму по умолчанию:
+    // WHY: именно его увидит игрок, если голос ничего не сдвинет
+    public static int pointScore() {
+        MatchMode running = MatchScore.mode();
+        return running != null ? running.pointScore() : ModeBook.mode(ModeBook.active()).pointScore();
+    }
+
+    // WHY: правило «своё число или из режима» живёт в одном месте: окно точки у игрока и начисление
+    // WHY: счёта обязаны сходиться
+    public static int pointWorth(CapturePoint point) {
+        int own = point.getScorePerMinute();
+        return own == CapturePoint.SCORE_BY_MODE ? pointScore() : own;
+    }
+
+    public static Component scoreLine(MinecraftServer server) {
+        return ScoreLine.of(server);
     }
 
     public static CompoundTag save() {

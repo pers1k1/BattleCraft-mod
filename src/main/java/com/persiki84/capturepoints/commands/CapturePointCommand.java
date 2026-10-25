@@ -50,6 +50,7 @@ public class CapturePointCommand {
         root.then(IncomePayoutCommand.branch());
         PointBonusCommands.addBranches(root, POINT_SUGGESTIONS, CapturePointManager::getCapturePoint, context);
         CaptureTuningCommands.addBranches(root, POINT_SUGGESTIONS, CapturePointManager::getCapturePoint);
+        CaptureTuningCommands.addScoreBranch(root, POINT_SUGGESTIONS, CapturePointManager::getCapturePoint);
 
         dispatcher.register(root);
     }

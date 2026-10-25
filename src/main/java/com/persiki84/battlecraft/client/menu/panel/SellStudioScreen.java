@@ -428,9 +428,11 @@ public final class SellStudioScreen extends StudioScreen {
 
     @Override
     protected void deleteMarked(List<Integer> indices) {
+        List<String> commands = new ArrayList<>();
         for (SellTile tile : tilesAt(indices)) {
-            send(COMMAND + "price remove " + tile.item());
+            commands.add(COMMAND + "price remove " + tile.item());
         }
+        sendBatch(commands);
         selectedItem = null;
     }
 

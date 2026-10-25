@@ -91,7 +91,6 @@ public class CaptureHudOverlay {
     private static final UiTicker.Format SAMPLE =
             unused -> Component.translatable("battlecraft.custom.sample.capture").getString();
 
-    private static final Smooth bannerPresence = new Smooth(0.0f, PRESENCE_SPEED);
     private static final Map<String, Pill> pills = new LinkedHashMap<>();
     private static final Toggle centralToggle = new Toggle(11.0f, 120L);
     private static final Smooth centralProgress = new Smooth(14.0f);
@@ -122,8 +121,6 @@ public class CaptureHudOverlay {
         boolean wanted = !UiHud.rosterOpen();
         boolean points = wanted && PointsView.shown();
         renderProjectedMarkers(guiGraphics, mc, screenWidth / 2.0f, screenHeight / 2.0f, points);
-        ObjectiveHud.renderBanner(guiGraphics, mc, screenWidth, screenHeight,
-                UiAnim.easeOut(bannerPresence.to(wanted ? 1.0f : 0.0f, UiFrame.delta())));
 
         boolean matchRunning = com.persiki84.battlecraft.client.ClientGameData.getCurrentPhase()
                 == com.persiki84.battlecraft.BattleCraftManager.GamePhase.ACTIVE && mc.player.getTeam() != null;

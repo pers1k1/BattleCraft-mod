@@ -1,6 +1,7 @@
 package com.persiki84.battlecraft.client;
 
 import com.persiki84.capturepoints.client.ClientTreasury;
+import com.persiki84.capturepoints.client.MatchBanner;
 import com.persiki84.battlecraft.BattleCraftMod;
 import com.persiki84.battlecraft.client.hud.AnnounceHud;
 import com.persiki84.battlecraft.client.hud.RadioHud;
@@ -41,6 +42,7 @@ public final class ClientLifecycle {
         RadioTalk.forget();
         RosterOverlay.forget();
         ClientMatchMode.forget();
+        MatchBanner.forget();
     }
 
     @SubscribeEvent

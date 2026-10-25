@@ -61,6 +61,28 @@ public final class CaptureTuningCommands {
                 .then(positionBranch(points, lookup));
     }
 
+    // WHY: очки матча дают только обычные точки, финальная кончает матч сама, поэтому ветка
+    // WHY: вешается на один корень; «mode» и -1 значат «как в режиме матча»
+    public static void addScoreBranch(LiteralArgumentBuilder<CommandSourceStack> root,
+                                      SuggestionProvider<CommandSourceStack> points,
+                                      Function<String, CapturePoint> lookup) {
+        root.then(Commands.literal("setscore")
+                .then(Commands.argument("name", StringArgumentType.string())
+                        .suggests(points)
+                        .then(Commands.literal("mode").executes(context -> applyScore(context, lookup)))
+                        .then(Commands.argument("value", IntegerArgumentType.integer(CapturePoint.SCORE_BY_MODE,
+                                CapturePoint.SCORE_MAX)).executes(context -> applyNumber(context, lookup,
+                                CapturePoint::setScorePerMinute)))));
+    }
+
+    private static int applyScore(CommandContext<CommandSourceStack> context, Function<String, CapturePoint> lookup) {
+        CapturePoint point = resolve(context, lookup);
+        if (point == null) return 0;
+
+        point.setScorePerMinute(CapturePoint.SCORE_BY_MODE);
+        return confirm(context, point);
+    }
+
     // WHY: перенос точки мышью на карте студии: координата приходит от клиента, поэтому берётся
     // WHY: только в пределах мира, и чанк под ней не грузится - центр просто записывается
     private static LiteralArgumentBuilder<CommandSourceStack> positionBranch(

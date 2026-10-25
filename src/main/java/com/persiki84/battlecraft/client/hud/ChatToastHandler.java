@@ -44,6 +44,7 @@ public final class ChatToastHandler {
     private static final Set<String> SHOWN_ON_HUD = Set.of(
             "battlecraft.match.ended",
             "battlecraft.match.ended.winner",
+            "battlecraft.mode.sudden",
             "battlecraft.lobby.countdown",
             "battlecraft.lobby.waiting_for",
             "battlecraft.vote.started",
