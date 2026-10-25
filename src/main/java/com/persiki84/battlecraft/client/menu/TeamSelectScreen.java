@@ -3,10 +3,13 @@ package com.persiki84.battlecraft.client.menu;
 import com.persiki84.battlecraft.BattleCraftManager;
 import com.persiki84.battlecraft.client.ClientGameData;
 import com.persiki84.battlecraft.client.ClientLobbyData;
+import com.persiki84.battlecraft.client.ClientMatchMode;
+import com.persiki84.battlecraft.mode.ModeId;
 import com.persiki84.battlecraft.client.menu.lobby.LobbyColumn;
 import com.persiki84.battlecraft.client.menu.lobby.LobbyFigures;
 import com.persiki84.battlecraft.client.menu.lobby.LobbyGate;
 import com.persiki84.battlecraft.client.menu.lobby.LobbyLayout;
+import com.persiki84.battlecraft.client.menu.lobby.LobbyModeBand;
 import com.persiki84.battlecraft.client.menu.lobby.LobbyStatus;
 import com.persiki84.battlecraft.client.menu.lobby.LobbyText;
 import com.persiki84.battlecraft.client.menu.lobby.LobbyTiles;
@@ -51,6 +54,8 @@ public class TeamSelectScreen extends GlassScreen {
     private final LobbyStatus status = new LobbyStatus();
     private final LobbyText summary = new LobbyText();
     private final LobbyText undecided = new LobbyText();
+    private final LobbyModeBand modes = new LobbyModeBand();
+    private int hoveredMode = -1;
     private UiButton readyButton;
     private boolean readyShown;
     private int readyCooldownShown = -1;
@@ -153,6 +158,10 @@ public class TeamSelectScreen extends GlassScreen {
         UiTitle.title(graphics, this.font, getTitle(), centerX, TITLE_TOP, TITLE_SCALE, TITLE_TRACKING,
                 UiAccent.text());
         status.render(graphics, this.font, centerX, STATUS_Y, delta);
+        if (modes.shown()) {
+            pointMode(modes.at(mouseX, mouseY));
+            modes.render(graphics, this.font, centerX, buttonTop(), READY_WIDTH, hoveredMode, delta);
+        }
 
         measure();
         tiles.sync(layout);
@@ -186,6 +195,12 @@ public class TeamSelectScreen extends GlassScreen {
         if (index == hovered) return;
         hovered = index;
         if (index >= 0 && index < columns.size() && columns.get(index).gate().admits()) UiSound.hover();
+    }
+
+    private void pointMode(int index) {
+        if (index == hoveredMode) return;
+        hoveredMode = index;
+        if (modes.votable(index)) UiSound.hover();
     }
 
     private void renderSummary(GuiGraphics graphics, float centerX) {
@@ -223,7 +238,14 @@ public class TeamSelectScreen extends GlassScreen {
         if (super.mouseClicked(mouseX, mouseY, button)) return true;
         if (leaving() || button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
 
-        int index = layout.columnAt(localX(mouseX, mouseY), localY(mouseX, mouseY));
+        double localX = localX(mouseX, mouseY);
+        double localY = localY(mouseX, mouseY);
+        int mode = modes.shown() ? modes.at(localX, localY) : -1;
+        if (mode >= 0) {
+            vote(mode);
+            return true;
+        }
+        int index = layout.columnAt(localX, localY);
         if (index < 0 || index >= columns.size()) return false;
         choose(columns.get(index));
         return true;
@@ -253,6 +275,18 @@ public class TeamSelectScreen extends GlassScreen {
         UiSound.press();
         column.pressed();
         minecraft.getConnection().sendCommand("battlecraft select_team " + column.team());
+    }
+
+    private void vote(int index) {
+        if (!modes.votable(index)) {
+            UiSound.deny();
+            MenuFeedback.show(modes.lockedReason(), true);
+            return;
+        }
+        ModeId mode = modes.mode(index);
+        if (mode == ClientMatchMode.mine() || minecraft == null || minecraft.getConnection() == null) return;
+        UiSound.press();
+        minecraft.getConnection().sendCommand("battlecraft mode vote " + mode.id());
     }
 
     public static void open() {

@@ -11,6 +11,7 @@ import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.persiki84.battlecraft.craft.CraftCommand;
 import com.persiki84.battlecraft.menu.BattleCraftMenuState;
+import com.persiki84.battlecraft.mode.ModeCommand;
 import com.persiki84.battlecraft.modules.ModuleEvents;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
@@ -86,7 +87,8 @@ public class BattleCraftCommands {
                 .then(ShopCommand.build())
                 .then(MoneyCommand.pay())
                 .then(MoneyCommand.build())
-                .then(CraftCommand.build(build)));
+                .then(CraftCommand.build(build))
+                .then(ModeCommand.build(build)));
 
         dispatcher.register(Commands.literal("bc")
                 .executes(context -> openMenu(context, BattleCraftMenuState.MENU_ID))

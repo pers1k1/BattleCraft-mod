@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public class ClientCaptureData {
+    private static boolean finalForcedOpen;
     private static final Map<String, String> pointOwners = new HashMap<>();
     private static final Map<String, BlockPos> pointPositions = new HashMap<>();
     private static final Map<String, String> finalPointOwners = new HashMap<>();
@@ -103,6 +104,7 @@ public class ClientCaptureData {
     }
 
     public static void forget() {
+        finalForcedOpen = false;
         pointOwners.clear();
         pointPositions.clear();
         pointAreas.clear();
@@ -342,7 +344,12 @@ public class ClientCaptureData {
 
     // WHY: то же правило, что на сервере в CapturePointManager: финальную открывают обязательные
     // WHY: точки, а когда обязательных нет вовсе - открывать нечего, и она доступна сразу
+    public static void finalForcedOpen(boolean value) {
+        finalForcedOpen = value;
+    }
+
     public static boolean areAllPointsCapturedBySameTeam() {
+        if (finalForcedOpen) return true;
         String firstTeam = null;
         boolean anyRequired = false;
         for (Map.Entry<String, String> point : pointOwners.entrySet()) {

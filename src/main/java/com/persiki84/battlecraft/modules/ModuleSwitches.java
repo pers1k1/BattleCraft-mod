@@ -8,7 +8,13 @@ public final class ModuleSwitches {
 
     private ModuleSwitches() {}
 
+    // WHY: режим матча гасит модуль поверх выбора оператора, а не переписывает его: быстрый матч
+    // WHY: без рудников не имеет права выключить карьер навсегда
     public static boolean allows(ModuleId module) {
+        return STORE.allows(module) && !com.persiki84.battlecraft.mode.MatchScore.suppresses(module);
+    }
+
+    public static boolean stored(ModuleId module) {
         return STORE.allows(module);
     }
 
@@ -17,7 +23,11 @@ public final class ModuleSwitches {
     }
 
     public static int mask() {
-        return STORE.mask();
+        int mask = STORE.mask();
+        for (ModuleId module : ModuleId.values()) {
+            if (com.persiki84.battlecraft.mode.MatchScore.suppresses(module)) mask &= ~(1 << module.ordinal());
+        }
+        return mask;
     }
 
     public static void load() {

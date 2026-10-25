@@ -4,6 +4,7 @@ import com.persiki84.battlecraft.craft.CraftMenuState;
 import com.persiki84.battlecraft.menu.AnnounceMenuState;
 import com.persiki84.battlecraft.menu.ConfigMenuState;
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
+import com.persiki84.battlecraft.mode.ModeMenuState;
 import com.persiki84.battlecraft.modules.ModuleId;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -14,6 +15,7 @@ import net.minecraft.world.item.Items;
 // WHY: раздел управления узнаётся по значку раньше, чем читается подпись, поэтому у каждого свой
 // WHY: предмет; модуль берёт значок своего раздела, чтобы плитки в двух местах совпадали
 enum HubSection {
+    MODES("battlecraft.menu.modes", ModeMenuState.MENU_ID, "minecraft:target", null),
     POINTS("battlecraft.menu.points", "capturepoints", "minecraft:beacon", ModuleId.CAPTURE_POINTS),
     ZONES("battlecraft.menu.zones", "zones", "minecraft:shield", ModuleId.ZONES),
     MARKS("battlecraft.menu.marks", "marks", "minecraft:compass", null),

@@ -5,6 +5,9 @@
   "plugin": "com.persiki84.battlecraft.compat.superb.SuperbWarfarePlugin",
   "compatibilityLevel": "JAVA_17",
   "refmap": "battlecraft.refmap.json",
+  "mixins": [
+    "VehicleDestroyMixin"
+  ],
   "client": [
     "ThermalImagingMixin"
   ],

@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.24hotfix` in files, `24.10.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.25` in files, `25.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1380,6 +1380,20 @@ Version 2026.10.24 - built; not yet checked in game.
 - **Server TPS can be hidden from players.** /bc, Game rules: "Server TPS in the player list". Off stops the server from measuring and sending TPS, and the list drops the TPS and tick chips, keeping players online and your own ping. On by default.
 
 Version 2026.10.24hotfix - built; not yet checked in game.
+
+## Match modes, score and time cap, 25 October 2026
+
+- **Two match modes.** Main (with quarries) and Fast (capture only, quarries off for the match). Each mode is a preset with its own numbers: score per held point per minute, per kill, per destroyed armed SuperbWarfare vehicle or aircraft and per destroyed unarmed transport, a score target, a time cap and sudden death, quarries on or off, a starting kit and starting money. Both presets live with the world in `battlecraft/modes.json`; unknown keys in the file are kept, a broken file is set aside instead of overwritten.
+- **Win by score.** A held capture point gives its team score every minute (the final point does not count), a kill of another team's player and a destroyed vehicle that an enemy drove give score too: an armed vehicle or aircraft 5 by default, a pickup, boat or wheelchair without a weapon 0. A team that reaches the target wins at once, the final point still ends the match on capture. At the time cap the leader wins; if the lead is smaller than the sudden death margin, the final point opens to both teams for a few minutes, and after that the score decides or the match is a draw. Defaults: Main 200 points and 75 minutes, Fast 100 points and 35 minutes, sudden death below a lead of 5 for 5 or 3 minutes. Every number can be set to 0 to switch that rule off.
+- **The score lives with the match.** Mode snapshot, team scores, the scored minute and sudden death are written to `match.dat` with the phase and elapsed time, so a restart continues the same match with the same numbers; editing a preset mid-match does not change the running one. Switching the core off with `/bc toggle` mid-match closes the mode too: quarries come back and a forced final point closes. The time is the match clock the HUD shows, so the cap and the per-minute score do not drift from it.
+- **Lobby vote.** The team select screen shows a tile per mode with its vote count, left and right of the Ready button, so the team columns keep their rows. A vote is a request the server checks (lobby phase, rate, lock). With no votes or a tie, the default mode set in /bc is used; an operator can lock the mode and turn the vote off.
+- **HUD.** While a mode runs, the objective bar shows team scores (yours and the best rival) and the clock counts down to the cap or to the end of sudden death, which turns it red.
+- **Starting kit and money.** Given once, after the start commands, to every player in a match team. Items picked from the inventory keep their tags and attachments; stacks above the item's stack size are split. Money goes through the wallet: with Account currency and reset on start it replaces the global start balance, otherwise it is credited. With Item currency only the money that fits in the inventory is given, and a kit entry that does not fit drops one stack at the feet; the rest goes to the server log. Item data longer than 4096 characters is refused when added, since the file would drop it on the next start.
+- **Fast mode without quarries** switches the quarry module off for the duration of its match on top of the operator's module switch, which stays as it was; the modules page keeps showing the operator's choice. Quarry blocks stay unbreakable while quarries are off, by a mode or by the switch: before, a pickaxe broke the ore the vanilla way and the cell never came back.
+- **/bc mode.** `vote <mode>` for everyone; for operators `active <mode>`, `lock <true|false>`, `<mode> set points|kills|vehicles|transport|target|cap|sudden_margin|sudden_minutes <n>`, `<mode> quarries <bool>`, `<mode> money <n>`, `<mode> kit add slot <n>|<item> [count]`, `<mode> kit <i> count|remove|move`, `<mode> kit clear`, `<mode> reset`. The new **Modes** studio in /bc edits the same: nodes per mode, the kit as tiles (drag to reorder, drop from the shelf at the place it should take, select several to remove them at once), the numbers in the inspector.
+- **Network protocol.** battlecraft channel 7, capturepoints channel 4: update the server together with the clients.
+
+Version 2026.10.25 - built; not yet checked in game.
 
 ## Releases
 

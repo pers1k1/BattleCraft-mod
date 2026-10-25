@@ -458,7 +458,7 @@ public class CapturePointManager {
     // WHY: условий нет - значит выполнять нечего, и финальная открыта с начала матча; иначе карта
     // WHY: из одних необязательных точек кончалась бы матчем, который невозможно выиграть
     public static boolean isFinalPointAvailable() {
-        return !hasRequiredPoints() || getTeamWithAllPoints() != null;
+        return finalForcedOpen || !hasRequiredPoints() || getTeamWithAllPoints() != null;
     }
 
     // WHY: без этого правила команда, собравшая все обязательные точки, открывала финальную
@@ -470,7 +470,20 @@ public class CapturePointManager {
 
     // WHY: пусто значит «ограничения нет»: либо выключатель снят, либо обязательных точек нет
     public static String finalOpener() {
-        return finalForOpenerOnly ? getTeamWithAllPoints() : null;
+        return finalForOpenerOnly && !finalForcedOpen ? getTeamWithAllPoints() : null;
+    }
+
+    // WHY: внезапная смерть на потолке матча открывает финальную обеим командам. Флаг не пишется в
+    // WHY: points.dat: его держит счёт матча в match.dat и ставит заново после рестарта, а points.dat
+    // WHY: читается позже match.dat и затёр бы восстановленное
+    public static boolean isFinalForcedOpen() {
+        return finalForcedOpen;
+    }
+
+    public static void forceFinalOpen(boolean value) {
+        if (finalForcedOpen == value) return;
+        finalForcedOpen = value;
+        PacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(), new FinalOpenSyncPacket(value));
     }
 
     public static boolean isFinalForOpenerOnly() { return finalForOpenerOnly; }
@@ -482,6 +495,7 @@ public class CapturePointManager {
 
     public static void resetAllPoints() {
         CaptureSessions.cancelAll();
+        forceFinalOpen(false);
         TeamCooldowns.clear();
 
         for (CapturePoint point : capturePoints.values()) {
@@ -551,6 +565,7 @@ public class CapturePointManager {
         }
     }
 
+    private static boolean finalForcedOpen;
     private static boolean finalForOpenerOnly;
     private static IncomePayout incomePayout = IncomePayout.DEFAULT;
 
@@ -637,6 +652,7 @@ public class CapturePointManager {
         finalPoints.clear();
         TeamTreasury.forget();
         incomePayout = IncomePayout.DEFAULT;
+        finalForcedOpen = false;
         loadFailed = false;
 
         Path dataFile = server.getWorldPath(LevelResource.ROOT).resolve(DATA_FOLDER).resolve(DATA_FILE);

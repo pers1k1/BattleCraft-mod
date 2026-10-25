@@ -26,20 +26,23 @@ public final class MatchStore {
         private final BattleCraftManager.GamePhase phase;
         private final long elapsedMillis;
         private final Set<UUID> ready;
+        private final CompoundTag mode;
 
-        private Snapshot(BattleCraftManager.GamePhase phase, long elapsedMillis, Set<UUID> ready) {
+        private Snapshot(BattleCraftManager.GamePhase phase, long elapsedMillis, Set<UUID> ready, CompoundTag mode) {
             this.phase = phase;
             this.elapsedMillis = elapsedMillis;
             this.ready = ready;
+            this.mode = mode;
         }
 
         public BattleCraftManager.GamePhase phase() { return phase; }
         public long elapsedMillis() { return elapsedMillis; }
         public Set<UUID> ready() { return ready; }
+        public CompoundTag mode() { return mode; }
     }
 
     public static void save(MinecraftServer server, BattleCraftManager.GamePhase phase,
-                            long elapsedMillis, Set<UUID> ready) {
+                            long elapsedMillis, Set<UUID> ready, CompoundTag mode) {
         if (server == null) return;
 
         Path folder = server.getWorldPath(LevelResource.ROOT).resolve(FOLDER);
@@ -49,7 +52,7 @@ public final class MatchStore {
         try {
             Files.createDirectories(folder);
             try (FileOutputStream stream = new FileOutputStream(temporary.toFile())) {
-                NbtIo.writeCompressed(snapshot(phase, elapsedMillis, ready), stream);
+                NbtIo.writeCompressed(snapshot(phase, elapsedMillis, ready, mode), stream);
             }
             WorldFiles.moveIntoPlace(temporary, target);
         } catch (Exception failure) {
@@ -57,7 +60,8 @@ public final class MatchStore {
         }
     }
 
-    private static CompoundTag snapshot(BattleCraftManager.GamePhase phase, long elapsedMillis, Set<UUID> ready) {
+    private static CompoundTag snapshot(BattleCraftManager.GamePhase phase, long elapsedMillis, Set<UUID> ready,
+                                        CompoundTag mode) {
         CompoundTag tag = new CompoundTag();
         tag.putString("phase", phase.name());
         tag.putLong("elapsed", Math.max(0L, elapsedMillis));
@@ -69,6 +73,7 @@ public final class MatchStore {
             list.add(row);
         }
         tag.put("ready", list);
+        tag.put("mode", mode);
         return tag;
     }
 
@@ -82,6 +87,7 @@ public final class MatchStore {
             return read(NbtIo.readCompressed(stream));
         } catch (Exception failure) {
             BattleCraftMod.LOGGER.error("Failed to load match state", failure);
+            WorldFiles.setAside(target, BattleCraftMod.LOGGER);
             return null;
         }
     }
@@ -95,7 +101,7 @@ public final class MatchStore {
             CompoundTag row = list.getCompound(index);
             if (row.hasUUID("id")) ready.add(row.getUUID("id"));
         }
-        return new Snapshot(phase, tag.getLong("elapsed"), ready);
+        return new Snapshot(phase, tag.getLong("elapsed"), ready, tag.getCompound("mode"));
     }
 
     private static BattleCraftManager.GamePhase phaseOf(String name) {

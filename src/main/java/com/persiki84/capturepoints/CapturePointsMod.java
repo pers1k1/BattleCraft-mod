@@ -18,6 +18,7 @@ import com.persiki84.capturepoints.commands.FinalPointCommand;
 import com.persiki84.capturepoints.commands.ResetCooldownCommand;
 import com.persiki84.capturepoints.event.CaptureEventHandler;
 import com.persiki84.capturepoints.network.CapturePointSyncPacket;
+import com.persiki84.capturepoints.network.FinalOpenSyncPacket;
 import com.persiki84.capturepoints.network.FinalPointSyncPacket;
 import com.persiki84.capturepoints.network.GlobalMarkerSyncPacket;
 import com.persiki84.capturepoints.network.PacketHandler;
@@ -157,13 +158,19 @@ public class CapturePointsMod {
                 new FinalPointSyncPacket(finalPointOwners)
         );
 
+        syncFlags(player);
+
+        LOGGER.info("Synced {} capture points and {} final points to player {}",
+                pointOwners.size(), finalPointOwners.size(), player.getName().getString());
+    }
+
+    private void syncFlags(ServerPlayer player) {
         PacketHandler.INSTANCE.send(
                 PacketDistributor.PLAYER.with(() -> player),
                 new GlobalMarkerSyncPacket(CapturePointManager.isGlobalCaptureMarkers(), CapturePointManager.isGlobalFinalMarkers())
         );
-
-        LOGGER.info("Synced {} capture points and {} final points to player {}",
-                pointOwners.size(), finalPointOwners.size(), player.getName().getString());
+        PacketHandler.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player),
+                new FinalOpenSyncPacket(CapturePointManager.isFinalForcedOpen()));
     }
 
     private void syncAllPlayers(net.minecraft.server.MinecraftServer server) {

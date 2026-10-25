@@ -2,6 +2,7 @@ package com.persiki84.capturepoints.client;
 
 import com.persiki84.battlecraft.BattleCraftManager;
 import com.persiki84.battlecraft.client.ClientGameData;
+import com.persiki84.battlecraft.client.ClientMatchMode;
 import com.persiki84.battlecraft.client.hud.HudInk;
 import com.persiki84.minimap.client.MapRenderUtil;
 import com.persiki84.shared.client.ui.Toggle;
@@ -26,6 +27,9 @@ import java.util.Map;
 public final class ObjectiveHud {
     private static final float BAR_HEIGHT = 15.0f;
     private static final float SCORE_WIDTH = 20.0f;
+    private static final float SCORE_WIDTH_RUN = 26.0f;
+    private static final long MINUTE_MILLIS = 60_000L;
+    private static final long SECOND_MILLIS = 1000L;
     private static final float CLOCK_WIDTH = 40.0f;
     private static final float DOT_RADIUS = 2.2f;
     private static final float SCORE_SCALE = 1.05f;
@@ -58,6 +62,9 @@ public final class ObjectiveHud {
     private static int heldMineColor;
     private static int heldTheirsColor;
     private static long heldSeconds;
+    private static boolean scoring;
+    private static boolean countingDown;
+    private static boolean suddenShown;
 
     private ObjectiveHud() {}
 
@@ -95,13 +102,10 @@ public final class ObjectiveHud {
         if (!active) {
             reset();
         }
-        if (barToggle.cleared() && !active) {
-            heldTotal = 0;
-            heldSeconds = 0L;
-        }
-        if (alpha <= 0.01f || heldTotal <= 0) return 0.0f;
+        if (barToggle.cleared() && !active) clearHeld();
+        if (alpha <= 0.01f || (heldTotal <= 0 && !scoring)) return 0.0f;
 
-        float width = SCORE_WIDTH * 2.0f + CLOCK_WIDTH;
+        float width = scoreWidth() * 2.0f + CLOCK_WIDTH;
         float x = centerX - width / 2.0f;
         float y = top - (1.0f - UiAnim.easeOut(alpha)) * 6.0f;
 
@@ -112,46 +116,64 @@ public final class ObjectiveHud {
     }
 
     public static void preview(GuiGraphics graphics, float centerX, float top, float alpha, float delta) {
-        int total = heldTotal;
-        long seconds = heldSeconds;
-        int mine = heldMine;
-        int theirs = heldTheirs;
-        if (total <= 0) {
-            heldTotal = SAMPLE_POINTS;
-            heldSeconds = SAMPLE_SECONDS;
-            heldMine = SAMPLE_MINE;
-            heldTheirs = SAMPLE_THEIRS;
-        }
+        boolean staged = heldTotal <= 0 && !scoring;
+        if (staged) stageSample();
         try {
-            float width = SCORE_WIDTH * 2.0f + CLOCK_WIDTH;
+            float width = scoreWidth() * 2.0f + CLOCK_WIDTH;
             float x = centerX - width / 2.0f;
             HudLayout.sample(HudSlot.OBJECTIVE, width, BAR_HEIGHT);
             UiVital.card(graphics, x, top, width, BAR_HEIGHT, UiMetrics.radius(BAR_HEIGHT), alpha);
             renderScoreboard(graphics, mc(), x, top, width, alpha, sampleBoard);
         } finally {
-            heldTotal = total;
-            heldSeconds = seconds;
-            heldMine = mine;
-            heldTheirs = theirs;
+            if (staged) clearHeld();
         }
+    }
+
+    // WHY: образец повторяет полосу матча, а у каждого матча теперь есть режим: счёт команд и обратный
+    // WHY: отсчёт. От прошлого матча он не зависит, иначе после внезапной смерти часы в лобби краснели
+    private static void stageSample() {
+        heldTotal = SAMPLE_POINTS;
+        heldSeconds = SAMPLE_SECONDS;
+        heldMine = SAMPLE_MINE;
+        heldTheirs = SAMPLE_THEIRS;
+        scoring = true;
+        countingDown = true;
+        suddenShown = false;
+    }
+
+    private static void clearHeld() {
+        heldTotal = 0;
+        heldSeconds = 0L;
+        heldMine = 0;
+        heldTheirs = 0;
+        scoring = false;
+        countingDown = false;
+        suddenShown = false;
     }
 
     private static Minecraft mc() {
         return Minecraft.getInstance();
     }
 
+    // WHY: очки режима бывают трёхзначными, а счёт точек не больше двух знаков
+    private static float scoreWidth() {
+        return scoring ? SCORE_WIDTH_RUN : SCORE_WIDTH;
+    }
+
     private static void renderScoreboard(GuiGraphics graphics, Minecraft mc, float x, float y, float width,
                                          float alpha, Board shown) {
         float scoreY = UiRender.centerY(y, BAR_HEIGHT, SCORE_SCALE);
+        float side = scoreWidth();
+        UiTicker clock = countingDown ? shown.countdown : shown.clock;
         shown.mine.set(heldMine);
-        shown.clock.set(heldSeconds, UiTicker.CLOCK);
+        clock.set(heldSeconds, UiTicker.CLOCK);
         shown.theirs.set(heldTheirs);
 
         UiRender.dot(graphics, x + 6.5f, y + BAR_HEIGHT / 2.0f, DOT_RADIUS, UiTheme.alpha(mineColor(), alpha));
-        shown.mine.draw(graphics, mc.font, x + SCORE_WIDTH - 2.5f, scoreY, SCORE_SCALE, HudInk.text(), alpha);
-        shown.clock.draw(graphics, mc.font, x + width / 2.0f, UiRender.centerY(y, BAR_HEIGHT, CLOCK_SCALE),
-                CLOCK_SCALE, HudInk.text(), alpha);
-        shown.theirs.draw(graphics, mc.font, x + width - SCORE_WIDTH + 2.5f, scoreY, SCORE_SCALE, HudInk.text(),
+        shown.mine.draw(graphics, mc.font, x + side - 2.5f, scoreY, SCORE_SCALE, HudInk.text(), alpha);
+        clock.draw(graphics, mc.font, x + width / 2.0f, UiRender.centerY(y, BAR_HEIGHT, CLOCK_SCALE),
+                CLOCK_SCALE, suddenShown ? UiPalette.alert() : HudInk.text(), alpha);
+        shown.theirs.draw(graphics, mc.font, x + width - side + 2.5f, scoreY, SCORE_SCALE, HudInk.text(),
                 alpha);
         UiRender.dot(graphics, x + width - 6.5f, y + BAR_HEIGHT / 2.0f, DOT_RADIUS,
                 UiTheme.alpha(theirsColor(), alpha));
@@ -218,8 +240,27 @@ public final class ObjectiveHud {
         heldTotal = counted;
         heldMineColor = MapRenderUtil.getTeamColor(team);
         heldTheirsColor = enemy == null ? UiAccent.color() : MapRenderUtil.getTeamColor(enemy);
-
         heldSeconds = ClientGameData.getMatchElapsedMillis() / 1000L;
+        measureScore(team);
+    }
+
+    // WHY: при идущем режиме полоса показывает очки команд, а часы считают вниз до потолка или до
+    // WHY: конца внезапной смерти; без режима остаётся прежний счёт удержанных точек и часы вперёд
+    private static void measureScore(String team) {
+        scoring = ClientMatchMode.running();
+        suddenShown = scoring && ClientMatchMode.sudden();
+        countingDown = scoring && (suddenShown || ClientMatchMode.capMinutes() > 0);
+        if (!scoring) return;
+
+        String rival = ClientMatchMode.bestRivalTeam(team);
+        heldMine = ClientMatchMode.scoreOf(team);
+        heldTheirs = ClientMatchMode.scoreOf(rival);
+        if (rival != null) heldTheirsColor = MapRenderUtil.getTeamColor(rival);
+        if (!countingDown) return;
+        long end = suddenShown ? ClientMatchMode.suddenEndMillis()
+                : ClientMatchMode.capMinutes() * MINUTE_MILLIS;
+        long left = Math.max(0L, end - ClientGameData.getMatchElapsedMillis());
+        heldSeconds = (left + SECOND_MILLIS - 1L) / SECOND_MILLIS;
     }
 
     private static void trackFinal() {
@@ -241,6 +282,7 @@ public final class ObjectiveHud {
     private static final class Board {
         private final UiTicker mine = new UiTicker().align(UiTicker.CENTER);
         private final UiTicker clock = new UiTicker().align(UiTicker.CENTER).rising();
+        private final UiTicker countdown = new UiTicker().align(UiTicker.CENTER);
         private final UiTicker theirs = new UiTicker().align(UiTicker.CENTER);
     }
 }

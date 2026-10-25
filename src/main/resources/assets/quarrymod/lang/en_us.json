@@ -59,6 +59,7 @@
   "quarrymod.menu.list.custom": "%s · cooldown %s s",
   "quarrymod.menu.action.aimed": "Aimed at",
   "quarrymod.event.taken": "Someone got this block first!",
+  "quarrymod.event.closed": "Quarries are closed right now",
   "quarrymod.marker.timer": "%s:%s",
   "quarrymod.marker.ready": "ready",
   "quarrymod.marker.multiplier": "x%s",

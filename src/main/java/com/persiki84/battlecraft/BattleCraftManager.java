@@ -120,16 +120,22 @@ public class BattleCraftManager {
         return Math.max(0L, System.currentTimeMillis() - matchStartTime);
     }
 
+    // WHY: выключение ядра обрывает матч мимо stopMatch, поэтому режим закрывается здесь же и сразу
+    // WHY: пишется в match.dat: иначе погашенные карьеры и открытая финальная жили при выключенном ядре,
+    // WHY: а краш поднимал оборванный матч заново
     public void setSoftDisabled(boolean disabled) {
         this.softDisabled = disabled;
         config.modEnabled = !disabled;
         config.save();
+        MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
         if (disabled) {
             resetState();
+            if (server != null) {
+                com.persiki84.battlecraft.mode.MatchModes.matchEnded(server);
+                persistMatch(server);
+            }
         }
-        if (net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer() != null) {
-            syncToAll(net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer());
-        }
+        if (server != null) syncToAll(server);
     }
 
     public void selectTeam(ServerPlayer player, String teamName) {
@@ -362,11 +368,13 @@ public class BattleCraftManager {
         phase = GamePhase.ACTIVE;
         matchStartTime = System.currentTimeMillis();
         KillRewardMod.setMatchActive(true);
+        com.persiki84.battlecraft.mode.MatchModes.matchStarting(server);
 
         // WHY: модули сбрасывают точки, склад и тайники по событию старта, поэтому оно идёт до команд
         // WHY: старта: иначе владельцы и настройки, выставленные этими командами, тут же стирались
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new MatchEvent.Started(server));
         executeConsoleCommands(server, config.startCommands);
+        com.persiki84.battlecraft.mode.MatchModes.matchStarted(server);
 
         persistMatch(server);
         syncToAll(server);
@@ -389,6 +397,7 @@ public class BattleCraftManager {
         MatchStore.Snapshot saved = MatchStore.load(server);
         if (saved == null) {
             resetState();
+            com.persiki84.battlecraft.mode.MatchModes.restore(new net.minecraft.nbt.CompoundTag(), false);
             return;
         }
 
@@ -397,13 +406,14 @@ public class BattleCraftManager {
         readyPlayers.clear();
         readyPlayers.addAll(saved.ready());
         KillRewardMod.setMatchActive(phase == GamePhase.ACTIVE);
+        com.persiki84.battlecraft.mode.MatchModes.restore(saved.mode(), phase == GamePhase.ACTIVE && !softDisabled);
     }
 
     private void persistMatch(MinecraftServer server) {
         long elapsed = phase == GamePhase.ACTIVE && matchStartTime > 0
                 ? System.currentTimeMillis() - matchStartTime
                 : 0L;
-        MatchStore.save(server, phase, elapsed, readyPlayers);
+        MatchStore.save(server, phase, elapsed, readyPlayers, com.persiki84.battlecraft.mode.MatchModes.save());
     }
 
     public void stopMatch(MinecraftServer server, String winnerTeam) {
@@ -428,6 +438,7 @@ public class BattleCraftManager {
          server.getPlayerList().broadcastSystemMessage(msg, false);
 
          resetState();
+         com.persiki84.battlecraft.mode.MatchModes.matchEnded(server);
          persistMatch(server);
          syncToAll(server);
          net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new MatchEvent.Ended(server));
@@ -471,6 +482,7 @@ public class BattleCraftManager {
         lobbyTimer = 0;
         lobbyMaxTimer = 0;
         KillRewardMod.setMatchActive(false);
+        com.persiki84.battlecraft.mode.MatchModes.lobbyReset();
     }
 
     private void checkLobbyStart(MinecraftServer server) {

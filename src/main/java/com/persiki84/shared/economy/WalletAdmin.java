@@ -6,9 +6,13 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.function.LongSupplier;
+
 // WHY: правки оператора идут той же дорогой, что и игровые деньги: в режиме «Предмет» баланс это
 // WHY: стопки в инвентаре, поэтому менять его можно только игроку в сети и только целиком
 public final class WalletAdmin {
+    private static LongSupplier matchStartMoney = () -> 0L;
+
     public static final long UNKNOWN = -1L;
 
     private WalletAdmin() {}
@@ -68,7 +72,10 @@ public final class WalletAdmin {
     // WHY: сброс ставит стартовый баланс каждому известному счёту; игрок, впервые вошедший позже,
     // WHY: получает его же при заведении счёта
     public static int resetAll(WalletEntryKind kind, String operator) {
-        long start = Wallets.settings().startBalance();
+        return resetAll(kind, operator, Wallets.settings().startBalance());
+    }
+
+    private static int resetAll(WalletEntryKind kind, String operator, long start) {
         int changed = 0;
         for (WalletAccount account : Wallets.all()) {
             long delta = start - account.balance();
@@ -82,9 +89,16 @@ public final class WalletAdmin {
         return changed;
     }
 
+    // WHY: стартовые деньги режима матча подменяют общую сумму сброса, а не идут вторым начислением:
+    // WHY: порядок подписчиков события старта не гарантирован, и два источника перетирали бы друг друга
+    public static void matchStartMoney(LongSupplier source) {
+        matchStartMoney = source;
+    }
+
     public static void matchStarted() {
         if (!Wallet.accounts() || !Wallets.settings().resetOnStart()) return;
-        resetAll(WalletEntryKind.RESET, "");
+        long override = matchStartMoney.getAsLong();
+        resetAll(WalletEntryKind.RESET, "", override > 0L ? Wallets.clamp(override) : Wallets.settings().startBalance());
     }
 
     public static void mode(CurrencyMode mode) {

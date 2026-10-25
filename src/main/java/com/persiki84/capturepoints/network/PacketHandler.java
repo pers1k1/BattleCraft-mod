@@ -9,7 +9,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.Optional;
 
 public class PacketHandler {
-    private static final String PROTOCOL_VERSION = "3";
+    private static final String PROTOCOL_VERSION = "4";
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(CapturePointsMod.MOD_ID, "main"),
             () -> PROTOCOL_VERSION,
@@ -115,6 +115,12 @@ public class PacketHandler {
         );
 
         registerTreasury();
+        registerFinalOpen();
+    }
+
+    private static void registerFinalOpen() {
+        INSTANCE.registerMessage(id(), FinalOpenSyncPacket.class, FinalOpenSyncPacket::encode,
+                FinalOpenSyncPacket::decode, FinalOpenSyncPacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
 
     private static void registerTreasury() {

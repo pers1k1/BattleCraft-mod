@@ -59,6 +59,7 @@
   "quarrymod.menu.list.custom": "%s · кулдаун %s с",
   "quarrymod.menu.action.aimed": "По прицелу",
   "quarrymod.event.taken": "Блок уже забрал кто-то другой!",
+  "quarrymod.event.closed": "Карьеры сейчас закрыты",
   "quarrymod.marker.timer": "%s:%s",
   "quarrymod.marker.ready": "готово",
   "quarrymod.marker.multiplier": "x%s",

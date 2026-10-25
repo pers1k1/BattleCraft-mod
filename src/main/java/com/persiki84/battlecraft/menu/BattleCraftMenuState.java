@@ -120,7 +120,7 @@ public final class BattleCraftMenuState {
 
     private static void putModules(CompoundTag tag) {
         for (ModuleId module : ModuleId.values()) {
-            tag.putBoolean(moduleKey(module), ModuleSwitches.allows(module));
+            tag.putBoolean(moduleKey(module), ModuleSwitches.stored(module));
         }
     }
 

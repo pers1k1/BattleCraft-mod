@@ -38,10 +38,10 @@ public class QuarryEventHandler {
 
     // WHY: карьер выдаёт награду и отменяет ломание сам, поэтому слушает последним: запреты лобби,
     // WHY: зон и защиты точек обязаны успеть отменить событие раньше, иначе порядок регистрации решал,
-    // WHY: копается ли руда внутри защищённой точки
+    // WHY: копается ли руда внутри защищённой точки. Погашенный карьер (выключатель или режим матча)
+    // WHY: блок всё равно защищает: ванильное ломание уносило руду мимо отката, и клетка терялась навсегда
     @SubscribeEvent(priority = EventPriority.LOW)
     public void onBlockBreak(BlockEvent.BreakEvent event) {
-        if (!ModuleSwitches.allows(ModuleId.QUARRY)) return;
         if (!(event.getLevel() instanceof ServerLevel level)) return;
 
         QuarryBlockManager manager = manager();
@@ -52,7 +52,11 @@ public class QuarryEventHandler {
         if (!manager.isQuarryBlock(pos, dimension)) return;
 
         event.setCanceled(true);
-        mine(level, manager, event, pos, dimension);
+        if (ModuleSwitches.allows(ModuleId.QUARRY)) {
+            mine(level, manager, event, pos, dimension);
+            return;
+        }
+        refuse(event.getPlayer(), pos, event.getState().getBlock(), 0, "quarrymod.event.closed");
     }
 
     private void mine(ServerLevel level, QuarryBlockManager manager, BlockEvent.BreakEvent event,

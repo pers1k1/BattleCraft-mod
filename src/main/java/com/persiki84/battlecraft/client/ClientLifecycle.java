@@ -40,6 +40,7 @@ public final class ClientLifecycle {
         RadioChirp.forget();
         RadioTalk.forget();
         RosterOverlay.forget();
+        ClientMatchMode.forget();
     }
 
     @SubscribeEvent
