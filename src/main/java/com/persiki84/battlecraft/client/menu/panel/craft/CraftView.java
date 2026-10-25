@@ -15,9 +15,9 @@ import java.util.List;
 import java.util.Map;
 
 // WHY: снимок меню разбирается один раз на его приход, а не в кадре: плитки держат готовые стаки
-final class CraftView {
+public final class CraftView {
     private static final CraftPhase[] PHASES = CraftPhase.values();
-    static final CraftView EMPTY = new CraftView(false, false, List.of());
+    public static final CraftView EMPTY = new CraftView(false, false, List.of());
 
     private final boolean arrived;
     private final boolean running;
@@ -39,7 +39,11 @@ final class CraftView {
         }
     }
 
-    static CraftView of(CompoundTag state) {
+    public static CraftView of(List<CraftBan> bans, boolean running) {
+        return new CraftView(true, running, List.copyOf(bans));
+    }
+
+    public static CraftView of(CompoundTag state) {
         if (!state.contains(CraftMenuState.BANS)) return EMPTY;
 
         List<CraftBan> bans = new ArrayList<>();
@@ -59,23 +63,23 @@ final class CraftView {
         return new CraftBan(BuiltInRegistries.ITEM.get(id), tag, phase == null ? CraftPhase.ALWAYS : phase);
     }
 
-    boolean arrived() {
+    public boolean arrived() {
         return arrived;
     }
 
-    boolean running() {
+    public boolean running() {
         return running;
     }
 
-    int total() {
+    public int total() {
         return bans.size();
     }
 
-    int active() {
+    public int active() {
         return active;
     }
 
-    List<CraftTile> tiles(CraftPhase phase) {
+    public List<CraftTile> tiles(CraftPhase phase) {
         return tiles.get(phase);
     }
 

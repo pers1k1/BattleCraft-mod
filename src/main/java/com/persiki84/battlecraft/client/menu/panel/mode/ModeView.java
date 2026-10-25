@@ -13,13 +13,13 @@ import java.util.List;
 import java.util.Map;
 
 // WHY: снимок разбирается один раз на приход: плитки и цифры строк читают готовое, а не NBT в кадре
-final class ModeView {
-    static final ModeView EMPTY = new ModeView(false, ModeId.MAIN, false, "");
+public final class ModeView {
+    public static final ModeView EMPTY = new ModeView(false, ModeId.MAIN, false, "");
 
-    record Settings(boolean quarries, int pointScore, int killScore, int vehicleScore, int transportScore,
-                    int scoreTarget, int capMinutes, int suddenMargin, int suddenMinutes, int startMoney,
-                    List<KitTile> kit) {
-        static final Settings NONE = new Settings(true, 0, 0, 0, 0, 0, 0, 0, 0, 0, List.of());
+    public record Settings(boolean quarries, int pointScore, int killScore, int vehicleScore, int transportScore,
+                           int scoreTarget, int capMinutes, int suddenMargin, int suddenMinutes, int startMoney,
+                           String description, List<KitTile> kit) {
+        static final Settings NONE = new Settings(true, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", List.of());
     }
 
     private final boolean arrived;
@@ -35,7 +35,7 @@ final class ModeView {
         this.running = running;
     }
 
-    static ModeView of(CompoundTag state) {
+    public static ModeView of(CompoundTag state) {
         if (!state.contains(ModeMenuState.MODES)) return EMPTY;
         ModeId active = ModeId.byId(state.getString(ModeMenuState.ACTIVE));
         ModeView view = new ModeView(true, active == null ? ModeId.MAIN : active,
@@ -52,7 +52,8 @@ final class ModeView {
                 tag.getInt(ModeMenuState.KILL_SCORE), tag.getInt(ModeMenuState.VEHICLE_SCORE),
                 tag.getInt(ModeMenuState.TRANSPORT_SCORE), tag.getInt(ModeMenuState.TARGET), tag.getInt(ModeMenuState.CAP),
                 tag.getInt(ModeMenuState.SUDDEN_MARGIN), tag.getInt(ModeMenuState.SUDDEN_MINUTES),
-                (int) Math.min(Integer.MAX_VALUE, tag.getLong(ModeMenuState.MONEY)), kit(tag));
+                (int) Math.min(Integer.MAX_VALUE, tag.getLong(ModeMenuState.MONEY)),
+                tag.getString(ModeMenuState.DESCRIPTION), kit(tag));
     }
 
     private static List<KitTile> kit(CompoundTag tag) {
@@ -67,12 +68,12 @@ final class ModeView {
         return List.copyOf(tiles);
     }
 
-    boolean arrived() { return arrived; }
-    ModeId active() { return active; }
-    boolean locked() { return locked; }
-    String running() { return running; }
+    public boolean arrived() { return arrived; }
+    public ModeId active() { return active; }
+    public boolean locked() { return locked; }
+    public String running() { return running; }
 
-    Settings settings(ModeId id) {
+    public Settings settings(ModeId id) {
         return modes.getOrDefault(id, Settings.NONE);
     }
 }

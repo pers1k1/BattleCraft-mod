@@ -33,6 +33,7 @@ public final class ModeCommand {
     static final String INDEX = "index";
     static final String TO = "to";
     static final String ATTACHMENT = "attachment";
+    static final String TEXT = "text";
     private static final int SLOT_MAX = 40;
 
     private ModeCommand() {}
@@ -51,6 +52,9 @@ public final class ModeCommand {
                                     .executes(context -> ModeEdits.quarries(context, id))))
                     .then(Commands.literal("money").then(Commands.argument(VALUE, LongArgumentType.longArg(0L,
                             ModeLimits.MONEY_MAX)).executes(context -> ModeEdits.money(context, id))))
+                    .then(Commands.literal("describe").executes(context -> ModeEdits.undescribe(context, id))
+                            .then(Commands.argument(TEXT, StringArgumentType.greedyString())
+                                    .executes(context -> ModeEdits.describe(context, id))))
                     .then(Commands.literal("reset").executes(context -> ModeEdits.reset(context, id))));
         }
         return root;

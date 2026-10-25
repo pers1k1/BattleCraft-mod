@@ -13,6 +13,7 @@ import com.persiki84.battlecraft.client.menu.lobby.LobbyModeBand;
 import com.persiki84.battlecraft.client.menu.lobby.LobbyStatus;
 import com.persiki84.battlecraft.client.menu.lobby.LobbyText;
 import com.persiki84.battlecraft.client.menu.lobby.LobbyTiles;
+import com.persiki84.battlecraft.client.menu.rules.MatchRulesScreen;
 import com.persiki84.battlecraft.network.S2CLobbyRosterPacket;
 import com.persiki84.shared.client.menu.GlassScreen;
 import com.persiki84.shared.client.menu.MenuFeedback;
@@ -39,6 +40,9 @@ public class TeamSelectScreen extends GlassScreen {
     private static final float COLUMNS_TOP = STATUS_Y + LobbyStatus.HEIGHT + 8.0f;
     private static final int READY_WIDTH = 168;
     private static final int BUTTON_HEIGHT = 20;
+    private static final int RULES_WIDTH = 98;
+    private static final int RULES_HEIGHT = 18;
+    private static final int RULES_MARGIN = 10;
     private static final float UNDECIDED_LIFT = 16.0f;
     private static final float BUTTON_LIFT = 52.0f;
     private static final float SUMMARY_GAP = 13.0f;
@@ -73,6 +77,8 @@ public class TeamSelectScreen extends GlassScreen {
         readyButton = new UiButton((this.width - READY_WIDTH) / 2, (int) buttonTop(), READY_WIDTH, BUTTON_HEIGHT,
                 readyLabel(readyCooldownShown), pressed -> toggleReady());
         addRenderableWidget(readyButton);
+        addRenderableWidget(new UiButton(this.width - RULES_WIDTH - RULES_MARGIN, RULES_MARGIN, RULES_WIDTH,
+                RULES_HEIGHT, Component.translatable("rules.match.button"), pressed -> MatchRulesScreen.open(this)));
         syncColumns();
         refreshState();
     }

@@ -17,6 +17,7 @@ public final class MatchMode {
     private int suddenMargin;
     private int suddenMinutes;
     private long startMoney;
+    private String description = "";
     private final List<KitEntry> kit = new ArrayList<>();
 
     private MatchMode(ModeId id) {
@@ -50,6 +51,7 @@ public final class MatchMode {
         copy.suddenMargin = suddenMargin;
         copy.suddenMinutes = suddenMinutes;
         copy.startMoney = startMoney;
+        copy.description = description;
         copy.kit.addAll(kit);
         return copy;
     }
@@ -65,6 +67,7 @@ public final class MatchMode {
     public int suddenMargin() { return suddenMargin; }
     public int suddenMinutes() { return suddenMinutes; }
     public long startMoney() { return startMoney; }
+    public String description() { return description; }
     public List<KitEntry> kit() { return kit; }
 
     public void quarries(boolean value) { quarries = value; }
@@ -77,6 +80,7 @@ public final class MatchMode {
     public void suddenMargin(int value) { suddenMargin = ModeLimits.clamp(value, ModeLimits.SUDDEN_MARGIN_MAX); }
     public void suddenMinutes(int value) { suddenMinutes = ModeLimits.clamp(value, ModeLimits.SUDDEN_MINUTES_MAX); }
     public void startMoney(long value) { startMoney = ModeLimits.money(value); }
+    public void description(String value) { description = ModeLimits.description(value); }
 
     // WHY: набор режется по пределу записей при вводе и при чтении файла, а не при выдаче:
     // WHY: иначе файл, правленый руками, раздавал бы больше, чем видно в студии

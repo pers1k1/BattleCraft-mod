@@ -8,7 +8,7 @@ import net.minecraft.world.item.Items;
 
 // WHY: предмет, которого нет в сборке (мод сняли), остаётся в наборе погашенной плиткой с меткой:
 // WHY: сервер его при выдаче пропустит, а молча выкинуть запись значило бы потерять настройку
-record KitTile(int index, KitEntry entry, String key, ItemStack icon, Component name, Component corner,
+public record KitTile(int index, KitEntry entry, String key, ItemStack icon, Component name, Component corner,
                Component plate, boolean faded) implements StudioTile {
 
     static KitTile of(int index, KitEntry entry) {
@@ -22,7 +22,7 @@ record KitTile(int index, KitEntry entry, String key, ItemStack icon, Component 
                 Component.literal("x" + entry.count()), plate, missing);
     }
 
-    int count() {
+    public int count() {
         return entry.count();
     }
 }

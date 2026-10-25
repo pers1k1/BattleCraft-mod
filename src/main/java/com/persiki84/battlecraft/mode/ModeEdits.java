@@ -65,6 +65,18 @@ final class ModeEdits {
                 Component.translatable("battlecraft.mode.field.money"), String.valueOf(value));
     }
 
+    static int describe(CommandContext<CommandSourceStack> context, ModeId id) {
+        String value = StringArgumentType.getString(context, ModeCommand.TEXT);
+        if (ModeLimits.description(value).isEmpty()) return undescribe(context, id);
+        if (!ModeBook.edit(id, mode -> mode.description(value))) return closed(context);
+        return reply(context, Component.translatable("battlecraft.mode.described", name(id)));
+    }
+
+    static int undescribe(CommandContext<CommandSourceStack> context, ModeId id) {
+        if (!ModeBook.edit(id, mode -> mode.description(""))) return closed(context);
+        return reply(context, Component.translatable("battlecraft.mode.undescribed", name(id)));
+    }
+
     static int reset(CommandContext<CommandSourceStack> context, ModeId id) {
         MatchMode fresh = MatchMode.defaults(id);
         boolean done = ModeBook.edit(id, mode -> copyInto(fresh, mode));
@@ -72,7 +84,7 @@ final class ModeEdits {
         return reply(context, Component.translatable("battlecraft.mode.reset", name(id)));
     }
 
-    // WHY: сброс оставляет набор и деньги: их собирали руками, и заводских значений у них нет
+    // WHY: сброс оставляет набор, деньги и описание: их собирали руками, и заводских значений у них нет
     private static void copyInto(MatchMode fresh, MatchMode target) {
         target.quarries(fresh.quarries());
         target.pointScore(fresh.pointScore());

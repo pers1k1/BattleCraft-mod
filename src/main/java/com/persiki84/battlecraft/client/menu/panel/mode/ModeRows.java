@@ -3,6 +3,7 @@ package com.persiki84.battlecraft.client.menu.panel.mode;
 import com.persiki84.battlecraft.mode.ModeId;
 import com.persiki84.battlecraft.mode.ModeLimits;
 import com.persiki84.shared.client.menu.ActionRow;
+import com.persiki84.shared.client.menu.FieldRow;
 import com.persiki84.shared.client.menu.HeadingRow;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.ToggleRow;
@@ -45,6 +46,8 @@ final class ModeRows {
         void removeChosen();
 
         void openGuns();
+
+        boolean pending(String key);
     }
 
     private static final int ROW = 22;
@@ -75,12 +78,37 @@ final class ModeRows {
     private ActionRow resetRow;
     private ActionRow removeRow;
     private ActionRow gunsRow;
+    private static final String DESCRIPTION = "mode:description";
+    private FieldRow descriptionRow;
 
     ModeRows(Host host) {
         this.host = host;
         createChoiceRows();
         createMatchRows();
         createStartRows();
+        createTextRows();
+    }
+
+    // WHY: описание читают игроки в правилах матча; уходит отложенной командой, как числа: на паузе в
+    // WHY: наборе и при закрытии студии, а не на каждую букву
+    private void createTextRows() {
+        descriptionRow = new FieldRow(0, 0, 10, ROW, Component.translatable("studio.modes.description"),
+                Component.translatable("studio.modes.description.placeholder"), "", ModeLimits.DESCRIPTION_MAX,
+                this::describe);
+        descriptionRow.hint("studio.modes.description.hint");
+    }
+
+    private void describe(String value) {
+        if (value.strip().equals(settings().description())) return;
+        host.later(DESCRIPTION, ModeOrders.describe(host.mode(), value));
+    }
+
+    // WHY: поле показывает сохранённое описание выбранного режима, но не перебивает ни набираемый, ни
+    // WHY: ещё не ушедший на сервер текст
+    private void syncDescription() {
+        String saved = settings().description();
+        if (descriptionRow.capturing() || host.pending(DESCRIPTION) || descriptionRow.value().strip().equals(saved)) return;
+        descriptionRow.box().setValue(saved);
     }
 
     private void createChoiceRows() {
@@ -188,6 +216,8 @@ final class ModeRows {
         stack.add(sized(transportRow, width), x);
         stack.add(sized(startHeading, width), x, SECTION_GAP);
         stack.add(sized(moneyRow, width), x);
+        syncDescription();
+        stack.add(sized(descriptionRow, width), x);
         stack.add(sized(addRow, width), x);
         clearRow.active = !settings().kit().isEmpty();
         stack.add(sized(clearRow, width), x);

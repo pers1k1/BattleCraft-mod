@@ -1,6 +1,7 @@
 package com.persiki84.battlecraft.client.menu.hub;
 
 import com.persiki84.battlecraft.client.menu.TeamSelectScreen;
+import com.persiki84.battlecraft.client.menu.rules.MatchRulesScreen;
 import com.persiki84.battlecraft.menu.BattleCraftMenuState;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.shared.client.menu.ActionRow;
@@ -63,6 +64,8 @@ final class HubInspector {
                 "battlecraft.menu.action.toggle", () -> screen.now("ready"))));
         add(stack, x, width, row("surrender", () -> action("battlecraft.menu.surrender",
                 "battlecraft.menu.action.vote", () -> screen.now("surrender start"))));
+        add(stack, x, width, row("rules", () -> action("rules.match.open", "rules.match.open.value",
+                () -> MatchRulesScreen.open(screen))));
         if (screen.admin()) buildOperator(stack, x, width);
     }
 

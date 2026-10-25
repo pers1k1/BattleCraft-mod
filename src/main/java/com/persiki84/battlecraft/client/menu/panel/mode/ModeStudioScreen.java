@@ -256,6 +256,11 @@ public final class ModeStudioScreen extends StudioScreen implements ModeRows.Hos
     }
 
     @Override
+    public boolean pending(String key) {
+        return committing(key);
+    }
+
+    @Override
     public void openGuns() {
         KitTile tile = chosen();
         if (tile != null) openGuns(tile.index());

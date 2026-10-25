@@ -61,6 +61,11 @@ final class ModeOrders {
         return ROOT + mode.id() + " kit " + index + " detach " + slot;
     }
 
+    static String describe(ModeId mode, String text) {
+        String trimmed = text.strip();
+        return ROOT + mode.id() + " describe" + (trimmed.isEmpty() ? "" : " " + trimmed);
+    }
+
     static String kitClear(ModeId mode) {
         return ROOT + mode.id() + " kit clear";
     }

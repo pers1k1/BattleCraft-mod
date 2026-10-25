@@ -14,6 +14,7 @@ import net.minecraftforge.server.ServerLifecycleHooks;
 
 import javax.annotation.Nullable;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 // WHY: в одиночной игре поиск рецептов зовут и клиент, и встроенный сервер в одной JVM, поэтому
@@ -165,6 +166,10 @@ public final class CraftRules {
     @Nullable
     public static CraftBan clientBan(ItemStack stack) {
         return client.find(stack, clientRunning);
+    }
+
+    public static List<CraftBan> clientBans() {
+        return client.all();
     }
 
     public static boolean clientRunning() {

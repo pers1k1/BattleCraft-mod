@@ -18,45 +18,6 @@ public class GameRulesScreen extends PanelScreen {
     private static final String MARKERS_COMMAND = "battlecraft markers";
     private static final int RANGE_STEP = 50;
 
-    private static final GameRule[] CLIENT_RULES = {
-            GameRule.FIRST_PERSON_ONLY,
-            GameRule.BLOCK_DEBUG_KEYS,
-            GameRule.BLOCK_ADVANCEMENTS,
-            GameRule.BLOCK_MOD_LIST,
-            GameRule.BLOCK_RESOURCE_PACKS,
-            GameRule.BLOCK_VOICE_GROUPS,
-            GameRule.SPECTATOR_LIGHT,
-            GameRule.BLOCK_SUBTITLES,
-            GameRule.NO_ENCHANT_GLINT,
-            GameRule.CHECK_CONFIGS,
-            GameRule.SERVER_PULSE
-    };
-
-    private static final GameRule[] COMBAT_RULES = {
-            GameRule.AIM_WALKS,
-            GameRule.FIRE_WALKS,
-            GameRule.RELOAD_WALKS,
-            GameRule.ZOOM_LOCKED_WHILE_AIMING,
-            GameRule.NO_JUMP_WHILE_AIMING,
-            GameRule.NO_DODGE_WHILE_AIMING,
-            GameRule.ESCORT_PROJECTILES,
-            GameRule.NO_REFIT_WHEN_HURT,
-            GameRule.NO_REFIT_IN_COMBAT,
-            GameRule.CAPTURE_GLOW,
-            GameRule.IFF_DEVICE
-    };
-
-    private static final GameRule[] PARKOUR_RULES = {
-            GameRule.PARKOUR_HIDES_WEAPON,
-            GameRule.DODGE_BLOCKS_FIRE,
-            GameRule.NO_SLIDE_WITH_GUN,
-            GameRule.NO_CLIMB_WITH_GUN,
-            GameRule.CRAWL_SPAM_PENALTY,
-            GameRule.SPRINT_COSTS_STAMINA,
-            GameRule.STAMINA_LIMITS_MOVES,
-            GameRule.NO_SPRINT_BOOST_WITH_GUN
-    };
-
     // WHY: без SuperbWarfare или Curios выдавать нечего, и строка обязана сказать почему,
     // WHY: а не молча включаться в положение, которое ничего не делает
     private static void block(GameRule rule, ToggleRow row) {
@@ -80,9 +41,9 @@ public class GameRulesScreen extends PanelScreen {
     @Override
     protected List<Page> pages() {
         return List.of(
-                new Page(Component.translatable("battlecraft.rules.tab.client"), () -> rows(CLIENT_RULES)),
-                new Page(Component.translatable("battlecraft.rules.tab.combat"), () -> rows(COMBAT_RULES)),
-                new Page(Component.translatable("battlecraft.rules.tab.parkour"), () -> rows(PARKOUR_RULES)),
+                new Page(Component.translatable("battlecraft.rules.tab.client"), () -> rows(GameRuleGroups.CLIENT_RULES)),
+                new Page(Component.translatable("battlecraft.rules.tab.combat"), () -> rows(GameRuleGroups.COMBAT_RULES)),
+                new Page(Component.translatable("battlecraft.rules.tab.parkour"), () -> rows(GameRuleGroups.PARKOUR_RULES)),
                 new Page(Component.translatable("battlecraft.rules.tab.markers"), this::markerRows));
     }
 
@@ -107,7 +68,7 @@ public class GameRulesScreen extends PanelScreen {
         return state.contains(key) ? state.getInt(key) : MarkerRange.DEFAULT_BLOCKS;
     }
 
-    private List<AbstractWidget> rows(GameRule[] rules) {
+    private List<AbstractWidget> rows(List<GameRule> rules) {
         List<AbstractWidget> rows = new ArrayList<>();
         for (GameRule rule : rules) {
             ToggleRow row = toggle(rule.label(), () -> MenuData.state(menuId()).getBoolean(rule.id()),

@@ -3,6 +3,7 @@ package com.persiki84.battlecraft.mode;
 import com.persiki84.shared.menu.MenuStates;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerPlayer;
 
 public final class ModeMenuState {
@@ -21,6 +22,7 @@ public final class ModeMenuState {
     public static final String SUDDEN_MARGIN = "suddenMargin";
     public static final String SUDDEN_MINUTES = "suddenMinutes";
     public static final String MONEY = "startMoney";
+    public static final String DESCRIPTION = "description";
     public static final String KIT = "kit";
     public static final String ITEM = "item";
     public static final String TAG = "tag";
@@ -32,7 +34,7 @@ public final class ModeMenuState {
         MenuStates.register(MENU_ID, 2, ModeMenuState::snapshot);
     }
 
-    static CompoundTag snapshot(ServerPlayer viewer) {
+    public static CompoundTag snapshot(ServerPlayer viewer) {
         CompoundTag state = new CompoundTag();
         state.putString(ACTIVE, ModeBook.active().id());
         state.putBoolean(LOCKED, ModeBook.locked());
@@ -43,6 +45,19 @@ public final class ModeMenuState {
             modes.put(id.id(), describe(ModeBook.mode(id)));
         }
         state.put(MODES, modes);
+        return state;
+    }
+
+    // WHY: игрок в правилах видит цифры идущего матча: правка пресета посреди матча на матч не влияет,
+    // WHY: и книга разошлась бы с HUD. Набор берётся из книги: в снимке матча его нет
+    public static CompoundTag livePlayerView(ServerPlayer viewer) {
+        CompoundTag state = snapshot(viewer);
+        MatchMode running = MatchScore.mode();
+        if (running == null) return state;
+        CompoundTag modes = state.getCompound(MODES);
+        CompoundTag live = describe(running);
+        live.put(KIT, modes.getCompound(running.id().id()).getList(KIT, Tag.TAG_COMPOUND));
+        modes.put(running.id().id(), live);
         return state;
     }
 
@@ -58,6 +73,7 @@ public final class ModeMenuState {
         tag.putInt(SUDDEN_MARGIN, mode.suddenMargin());
         tag.putInt(SUDDEN_MINUTES, mode.suddenMinutes());
         tag.putLong(MONEY, mode.startMoney());
+        tag.putString(DESCRIPTION, mode.description());
         ListTag kit = new ListTag();
         for (KitEntry entry : mode.kit()) {
             CompoundTag row = new CompoundTag();

@@ -9,7 +9,7 @@ import net.minecraft.world.item.ItemStack;
 // WHY: запрет, который сейчас не действует (фаза другая), лежит на витрине погашенным: админ видит,
 // WHY: что закрыто прямо сейчас, не сверяя фазу узла с тем, идёт ли матч. Ключ запрета собирается
 // WHY: один раз: по нему ищут выбор, отметки и счёт рецептов, и строка на кадр была бы аллокацией
-record CraftTile(CraftBan ban, String key, boolean active, ItemStack icon, Component name, Component corner,
+public record CraftTile(CraftBan ban, String key, boolean active, ItemStack icon, Component name, Component corner,
                  Component plate, boolean faded) implements StudioTile {
 
     static CraftTile of(CraftBan ban, boolean matchRunning) {
@@ -26,7 +26,7 @@ record CraftTile(CraftBan ban, String key, boolean active, ItemStack icon, Compo
                 : "studio.craft.state.wait_lobby");
     }
 
-    CraftPhase phase() {
+    public CraftPhase phase() {
         return ban.phase();
     }
 }

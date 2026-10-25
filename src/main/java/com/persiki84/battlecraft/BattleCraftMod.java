@@ -35,6 +35,7 @@ import com.persiki84.battlecraft.menu.AnnounceMenuState;
 import com.persiki84.battlecraft.menu.ConfigMenuState;
 import com.persiki84.battlecraft.menu.ModuleMenuStates;
 import com.persiki84.battlecraft.mode.ModeMenuState;
+import com.persiki84.battlecraft.rules.MatchRulesMenuState;
 import com.persiki84.battlecraft.network.PacketHandler;
 import com.persiki84.battlecraft.projectile.ProjectileChunkLoader;
 import com.persiki84.battlecraft.sound.ModSounds;
@@ -104,6 +105,7 @@ public class BattleCraftMod {
         AnnounceMenuState.register();
         ConfigMenuState.register();
         ModeMenuState.register();
+        MatchRulesMenuState.register();
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {

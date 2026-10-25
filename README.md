@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.25hotfix` in files, `25.10.26hotfix PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.25v3` in files, `25.10.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1406,6 +1406,16 @@ Version 2026.10.25 - built; not yet checked in game.
 - **Network protocol.** capturepoints channel 5: update the server together with the clients.
 
 Version 2026.10.25hotfix - built; not yet checked in game.
+
+## Match rules for players, 25 October 2026 (v3)
+
+- **Match rules screen.** Every player can open it from the pause menu (the button takes the place of the two vanilla feedback links), from the team select screen (top right) and from `/bc`. It is a read-only studio: modes, craft bans and game rules on the left, tiles in the middle, numbers and text on the right; search filters the tiles and the rules.
+- **Mode.** Both modes, with the one that runs now (or the default one in the lobby) marked: how to win in words, the score target, the time cap, sudden death, score per point, kill, combat vehicle and transport, quarries, starting money and the starting kit as tiles. Under the generated text goes the operator's own description of the mode: `/bc` - Modes - Description for players, or `/bc mode <mode> describe <text>` (up to 200 characters, `describe` alone removes it; the studio field is sent after a pause in typing).
+- **Craft bans.** Banned items as tiles per phase (always, in a match, in the lobby), each with when it applies and whether it applies right now. When an operator changes the bans, every player gets one toast that keeps counting while it is shown (a batch of edits is one toast), with the names, and the new tiles are marked until their phase is opened. During a match the mode page shows the numbers of the running match, not later edits of the preset.
+- **Game rules.** The server rules in the same groups as the operator's game rules studio, on or off, with the explanation on hover.
+- **Network.** No protocol change: the rules come through the menu channel, so an old client simply does not have the screen.
+
+Version 2026.10.25v3 - built; not yet checked in game.
 
 ## Releases
 

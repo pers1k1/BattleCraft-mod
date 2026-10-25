@@ -2,6 +2,7 @@ package com.persiki84.battlecraft.client.menu;
 
 import com.persiki84.battlecraft.client.menu.custom.PaletteButton;
 import com.persiki84.battlecraft.client.menu.custom.CustomizeScreen;
+import com.persiki84.battlecraft.client.menu.rules.MatchRulesScreen;
 import com.persiki84.battlecraft.BattleCraftManager;
 import com.persiki84.battlecraft.BattleCraftMod;
 import com.persiki84.battlecraft.client.ClientGameData;
@@ -27,6 +28,8 @@ public final class PauseMenuLayout {
     private static final String MODS_KEY = "fml.menu.mods";
     private static final String ADVANCEMENTS_KEY = "gui.advancements";
     private static final List<String> LEAVE_KEYS = List.of("menu.returnToMenu", "menu.disconnect");
+    private static final String FEEDBACK_KEY = "menu.sendFeedback";
+    private static final String BUGS_KEY = "menu.reportBugs";
 
     private PauseMenuLayout() {}
 
@@ -34,6 +37,7 @@ public final class PauseMenuLayout {
     public static void onInit(ScreenEvent.Init.Post event) {
         if (!(event.getScreen() instanceof PauseScreen screen)) return;
 
+        placeRules(event, screen);
         AbstractWidget mods = find(screen, MODS_KEY);
         AbstractWidget leave = find(screen, LEAVE_KEYS);
         if (mods == null || leave == null) return;
@@ -74,6 +78,20 @@ public final class PauseMenuLayout {
                     mc.player.connection.sendCommand("battlecraft surrender start");
                     screen.onClose();
                 });
+    }
+
+    // WHY: ряд ссылок на отзывы Mojang в сборке не нужен никому, а правила матча нужны каждому игроку:
+    // WHY: кнопка правил встаёт на его место во всю ширину
+    private static void placeRules(ScreenEvent.Init.Post event, PauseScreen screen) {
+        AbstractWidget feedback = find(screen, FEEDBACK_KEY);
+        AbstractWidget bugs = find(screen, BUGS_KEY);
+        if (feedback == null || bugs == null || Minecraft.getInstance().player == null) return;
+
+        int width = bugs.getX() + bugs.getWidth() - feedback.getX();
+        event.removeListener(feedback);
+        event.removeListener(bugs);
+        event.addListener(new UiButton(feedback.getX(), feedback.getY(), width, feedback.getHeight(),
+                Component.translatable("rules.match.button"), pressed -> MatchRulesScreen.open(screen)));
     }
 
     private static void blockAdvancements(PauseScreen screen) {

@@ -24,6 +24,7 @@ final class ModeJson {
         mode.suddenMargin(whole(source, "suddenMargin", mode.suddenMargin()));
         mode.suddenMinutes(whole(source, "suddenMinutes", mode.suddenMinutes()));
         mode.startMoney(money(source, mode.startMoney()));
+        mode.description(JsonRead.text(source, "description"));
         readKit(mode, source.get("kit"));
         return mode;
     }
@@ -69,6 +70,7 @@ final class ModeJson {
         target.addProperty("suddenMargin", mode.suddenMargin());
         target.addProperty("suddenMinutes", mode.suddenMinutes());
         target.addProperty("startMoney", mode.startMoney());
+        target.addProperty("description", mode.description());
         target.add("kit", kit(mode));
         return target;
     }

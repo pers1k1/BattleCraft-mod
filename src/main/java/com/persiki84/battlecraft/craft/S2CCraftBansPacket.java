@@ -4,6 +4,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.ArrayList;
@@ -49,7 +51,11 @@ public final class S2CCraftBansPacket {
     }
 
     public static void handle(S2CCraftBansPacket packet, Supplier<NetworkEvent.Context> context) {
-        context.get().enqueueWork(() -> CraftRules.acceptClient(packet.bans, packet.matchRunning));
+        context.get().enqueueWork(() -> {
+            CraftRules.acceptClient(packet.bans, packet.matchRunning);
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+                    () -> () -> com.persiki84.battlecraft.client.menu.rules.CraftBanToasts.accept(packet.bans));
+        });
         context.get().setPacketHandled(true);
     }
 }
