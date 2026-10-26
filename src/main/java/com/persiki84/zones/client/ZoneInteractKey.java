@@ -1,8 +1,7 @@
 package com.persiki84.zones.client;
 
+import com.persiki84.battlecraft.client.bases.TravelScreen;
 import com.persiki84.capturepoints.client.KeyBindings;
-import com.persiki84.zones.Zone;
-import com.persiki84.zones.ZoneType;
 import com.persiki84.zones.ZonesMod;
 import com.persiki84.zones.client.menu.ShopScreen;
 import net.minecraft.client.Minecraft;
@@ -22,10 +21,14 @@ public final class ZoneInteractKey {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null || minecraft.screen != null) return;
 
-        Zone zone = ZoneOccupancy.current();
-        if (zone == null || zone.type() != ZoneType.SHOP) return;
+        boolean shop = ShopPlaces.here();
+        if (!shop && !ShopPlaces.travelOnly(ZoneOccupancy.current())) return;
         if (!KeyBindings.CAPTURE_KEY.consumeClick()) return;
 
-        ShopScreen.open();
+        if (shop) {
+            ShopScreen.open();
+        } else {
+            TravelScreen.open(null);
+        }
     }
 }

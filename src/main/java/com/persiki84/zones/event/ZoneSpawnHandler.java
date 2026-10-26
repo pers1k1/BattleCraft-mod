@@ -1,5 +1,8 @@
 package com.persiki84.zones.event;
 
+import com.persiki84.battlecraft.bases.BaseNetwork;
+import com.persiki84.battlecraft.bases.BaseSpot;
+import com.persiki84.battlecraft.bases.RespawnChoices;
 import com.persiki84.shared.zone.ZoneArea;
 import com.persiki84.zones.Zone;
 import com.persiki84.zones.ZoneLookup;
@@ -9,6 +12,7 @@ import com.persiki84.zones.ZonesMod;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import com.persiki84.battlecraft.modules.ModuleId;
 import com.persiki84.battlecraft.modules.ModuleSwitches;
@@ -30,7 +34,9 @@ public class ZoneSpawnHandler {
     @SubscribeEvent
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        if (player.level().isClientSide || !ModuleSwitches.allows(ModuleId.ZONES)) return;
+        if (player.level().isClientSide) return;
+        if (spawnAtChosenBase(player)) return;
+        if (!ModuleSwitches.allows(ModuleId.ZONES)) return;
 
         Zone spawn = spawnZoneFor(player);
         if (spawn == null) return;
@@ -41,13 +47,35 @@ public class ZoneSpawnHandler {
                 player.getYRot(), player.getXRot());
     }
 
+    // WHY: точку-базу игрок выбрал на экране смерти; домашняя база идёт прежним путём, с якорем зоны
+    private static boolean spawnAtChosenBase(ServerPlayer player) {
+        BaseSpot chosen = RespawnChoices.take(player);
+        if (chosen == null) return false;
+        ServerLevel level = levelFor(player, chosen.dimension());
+        BlockPos target = placeAt(level, player, chosen);
+        player.teleportTo(level, target.getX() + 0.5, target.getY(), target.getZ() + 0.5,
+                player.getYRot(), player.getXRot());
+        return true;
+    }
+
+    private static ServerLevel levelOf(ServerPlayer player, Zone spawn) {
+        return levelFor(player, spawn.dimension());
+    }
+
     // WHY: у базы есть свой мир, и возрождение обязано вести в него: иначе игрок, умерший в аду,
     // WHY: вставал бы по координатам базы, но в аду
-    private static ServerLevel levelOf(ServerPlayer player, Zone spawn) {
-        if (spawn.dimension() == null) return player.serverLevel();
+    public static ServerLevel levelFor(ServerPlayer player, ResourceLocation dimension) {
+        if (dimension == null) return player.serverLevel();
 
-        ServerLevel level = player.server.getLevel(ResourceKey.create(Registries.DIMENSION, spawn.dimension()));
+        ServerLevel level = player.server.getLevel(ResourceKey.create(Registries.DIMENSION, dimension));
         return level == null ? player.serverLevel() : level;
+    }
+
+    // WHY: перелёт домой ставит игрока у якоря зоны, как возрождение: иначе база-бункер под землёй
+    // WHY: высаживала бы его на крышу
+    public static BlockPos placeAt(ServerLevel level, ServerPlayer player, BaseSpot spot) {
+        Zone home = BaseNetwork.homeZone(spot);
+        return home != null ? spawnTarget(level, player, home) : pickPlacement(level, player, spot.area());
     }
 
     private static Zone spawnZoneFor(ServerPlayer player) {

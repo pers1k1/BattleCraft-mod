@@ -12,6 +12,7 @@
   "zones.info.empty": "No zones yet.",
   "zones.hud.safe": "You are at the base",
   "zones.hud.shop": "Press %s to open the shop",
+  "zones.hud.travel": "Press %s to travel to another base",
   "zones.hud.capture": "Press %s to start capturing the point",
   "zones.shop.error.not_in_shop": "You can only trade inside a shop zone.",
   "zones.shop.error.nothing_to_sell": "Nothing to sell.",

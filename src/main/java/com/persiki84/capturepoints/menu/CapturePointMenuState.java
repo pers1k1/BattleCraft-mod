@@ -1,5 +1,6 @@
 package com.persiki84.capturepoints.menu;
 
+import com.persiki84.capturepoints.capture.BaseRules;
 import com.persiki84.capturepoints.capture.CapturePoint;
 import com.persiki84.capturepoints.capture.CapturePointManager;
 import com.persiki84.capturepoints.event.BlockProtectionHandler;
@@ -20,6 +21,11 @@ public final class CapturePointMenuState {
     public static final String FINAL_MARKERS = "finalMarkers";
     public static final String FINAL_OPENER_ONLY = "finalOpenerOnly";
     public static final String INCOME_PAYOUT = "incomePayout";
+    public static final String BASE_RESPAWN = "baseRespawn";
+    public static final String BASE_TRAVEL = "baseTravel";
+    public static final String BASE_SHOP = "baseShop";
+    public static final String BASE_CHANNEL = "baseChannel";
+    public static final String BASE_COOLDOWN = "baseCooldown";
     public static final String FINAL_FLAG = "final";
 
     private static final int TICKS_PER_SECOND = 20;
@@ -49,6 +55,11 @@ public final class CapturePointMenuState {
         tag.putBoolean(FINAL_MARKERS, CapturePointManager.isGlobalFinalMarkers());
         tag.putBoolean(FINAL_OPENER_ONLY, CapturePointManager.isFinalForOpenerOnly());
         tag.putString(INCOME_PAYOUT, CapturePointManager.incomePayout().id());
+        tag.putBoolean(BASE_RESPAWN, BaseRules.respawn());
+        tag.putBoolean(BASE_TRAVEL, BaseRules.travel());
+        tag.putBoolean(BASE_SHOP, BaseRules.shop());
+        tag.putInt(BASE_CHANNEL, BaseRules.channelSeconds());
+        tag.putInt(BASE_COOLDOWN, BaseRules.cooldownSeconds());
         return tag;
     }
 
@@ -86,6 +97,7 @@ public final class CapturePointMenuState {
         tag.putInt("teamCooldown", point.getTeamCooldown());
         tag.putString("cooldownScope", point.getTeamCooldownScope().id());
         tag.putInt("scorePerMinute", point.getScorePerMinute());
+        tag.putBoolean("base", point.isBase());
     }
 
     private static void putRewards(CompoundTag tag, CapturePoint point) {

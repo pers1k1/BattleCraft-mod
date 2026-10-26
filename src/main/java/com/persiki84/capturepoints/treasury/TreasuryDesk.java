@@ -55,7 +55,7 @@ public final class TreasuryDesk {
         if (player.isCreative() && !(Wallet.accounts() && Wallet.isCurrency(item))) {
             return "capturepoints.treasury.error.creative";
         }
-        if (!ShopTransactions.treasuryReady(player, team)) return "";
+        if (!ShopTransactions.treasuryReady(player)) return "";
         return TeamTreasury.peek(team, slot, item).isEmpty() ? "capturepoints.treasury.error.gone" : null;
     }
 

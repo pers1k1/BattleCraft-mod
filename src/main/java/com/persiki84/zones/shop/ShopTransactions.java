@@ -6,6 +6,8 @@ import com.persiki84.sellmod.SellManager;
 import com.persiki84.shared.economy.Wallet;
 import com.persiki84.shared.economy.WalletEntryKind;
 import com.persiki84.shared.ActionGate;
+import com.persiki84.battlecraft.bases.BaseNetwork;
+import com.persiki84.capturepoints.capture.BaseRules;
 import com.persiki84.zones.Zone;
 import com.persiki84.zones.ZonesMod;
 import com.persiki84.zones.ZoneLookup;
@@ -31,23 +33,18 @@ public final class ShopTransactions {
                 Component.translatable(module.label())).copy().withStyle(ChatFormatting.RED));
     }
 
+    // WHY: торговать можно в своём или ничейном магазине и на своей точке-базе. Магазин чужой базы
+    // WHY: игрок не видит, но сервер раньше пускал в него по одной клавише
     public static boolean canShopHere(ServerPlayer player) {
         Zone zone = ZoneLookup.smallestOfTypeAt(ZoneLookup.dimensionOf(player), ZoneType.SHOP,
                 player.getX(), player.getY(), player.getZ());
-        return zone != null;
+        if (zone != null && (zone.ownerTeam() == null || zone.belongsTo(ZoneLookup.teamNameOf(player)))) return true;
+        return BaseRules.shop() && BaseNetwork.onPointBase(player);
     }
 
-    // WHY: казна команды открывается в магазине, где команда торгует: в ничейном или в своём, но не
-    // WHY: в магазине чужой базы. Остальные условия те же, что у покупки
-    public static boolean treasuryReady(ServerPlayer player, String team) {
-        if (!ready(player, ModuleId.ZONES)) return false;
-
-        Zone zone = ZoneLookup.smallestOfTypeAt(ZoneLookup.dimensionOf(player), ZoneType.SHOP,
-                player.getX(), player.getY(), player.getZ());
-        if (zone == null || zone.ownerTeam() == null || zone.ownerTeam().equals(team)) return zone != null;
-
-        deny(player, "capturepoints.treasury.error.foreign_shop");
-        return false;
+    // WHY: казна команды открывается там же, где команда торгует, и с теми же условиями, что у покупки
+    public static boolean treasuryReady(ServerPlayer player) {
+        return ready(player, ModuleId.ZONES);
     }
 
     private static boolean ready(ServerPlayer player, ModuleId module) {

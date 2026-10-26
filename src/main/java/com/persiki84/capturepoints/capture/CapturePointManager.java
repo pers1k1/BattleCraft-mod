@@ -640,6 +640,7 @@ public class CapturePointManager {
 
         mainTag.put("points", pointsList);
         mainTag.put("finalPoints", finalPointsList);
+        BaseRules.save(mainTag);
         TeamCooldowns.save(mainTag);
         CaptureRewards.save(mainTag);
         return mainTag;
@@ -653,6 +654,7 @@ public class CapturePointManager {
         finalPoints.clear();
         TeamTreasury.forget();
         incomePayout = IncomePayout.DEFAULT;
+        BaseRules.reset();
         finalForcedOpen = false;
         loadFailed = false;
 
@@ -706,6 +708,7 @@ public class CapturePointManager {
             finalPoints.put(point.getName(), point);
         }
 
+        BaseRules.load(mainTag);
         TeamCooldowns.load(mainTag);
         CaptureRewards.load(mainTag);
     }

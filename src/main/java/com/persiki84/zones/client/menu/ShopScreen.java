@@ -1,5 +1,7 @@
 package com.persiki84.zones.client.menu;
 
+import com.persiki84.battlecraft.client.bases.ClientBases;
+import com.persiki84.battlecraft.client.bases.TravelScreen;
 import com.persiki84.capturepoints.client.ClientTreasury;
 import com.persiki84.capturepoints.network.TreasuryTakePacket;
 import com.persiki84.sellmod.client.ClientSellData;
@@ -88,6 +90,8 @@ public class ShopScreen extends GlassScreen {
     private final TreasuryPane treasury = new TreasuryPane();
     private boolean treasuryOpen;
     private int shownTreasury = -1;
+    private int shownBases = -1;
+    private boolean travelHere;
     private long lastTreasuryClick;
 
     private EditBox search;
@@ -167,6 +171,8 @@ public class ShopScreen extends GlassScreen {
     private void rebuild() {
         boolean typing = search != null && search.isFocused();
         clearWidgets();
+        shownBases = ClientBases.version();
+        travelHere = !previewing && ClientBases.travel() && ClientBases.currentBaseId() != null;
 
         int left = contentLeft();
         int top = contentTop();
@@ -175,6 +181,7 @@ public class ShopScreen extends GlassScreen {
         addSellButton();
         addSectionButtons(left, top);
         addTreasuryButton(left, top);
+        addTravelButton(left, top);
         addTabButtons(left + SIDEBAR_WIDTH + PANEL_GAP, top);
         addBuyButton(left + SIDEBAR_WIDTH + GRID_WIDTH + PANEL_GAP * 2, top);
 
@@ -286,7 +293,7 @@ public class ShopScreen extends GlassScreen {
             rebuild();
             return;
         }
-        if (ClientTreasury.version() != shownTreasury) {
+        if (ClientTreasury.version() != shownTreasury || ClientBases.version() != shownBases) {
             rebuild();
             return;
         }
@@ -319,7 +326,8 @@ public class ShopScreen extends GlassScreen {
     }
 
     private int sectionCapacity() {
-        int height = panelHeight() - (int) UiMetrics.PAD_WIDE * 2 - (treasuryShown() ? ROW_HEIGHT : 0);
+        int height = panelHeight() - (int) UiMetrics.PAD_WIDE * 2 - (treasuryShown() ? ROW_HEIGHT : 0)
+                - (travelShown() ? ROW_HEIGHT : 0);
         int plain = Math.max(1, height / ROW_HEIGHT);
         if (ClientShopData.offered().size() <= plain) return plain;
 
@@ -792,6 +800,23 @@ public class ShopScreen extends GlassScreen {
                 pressed -> openTreasury()).lit();
         button.active = !treasuryOpen;
         button.hint("zones.shop.treasury.hint");
+        addRenderableWidget(button);
+    }
+
+    // WHY: где стоит игрок, решается на пересборке: колонка разделов спрашивает это при каждом расчёте
+    private boolean travelShown() {
+        return travelHere;
+    }
+
+    // WHY: перелёт живёт в магазине базы внизу колонки, над казной: шапка магазина на 720p уже полная,
+    // WHY: а перелёт, как и казна, не товар и не раздел
+    private void addTravelButton(int left, int top) {
+        if (!travelShown()) return;
+        int y = top + panelHeight() - (int) UiMetrics.PAD_WIDE - ROW_HEIGHT * (treasuryShown() ? 2 : 1);
+        UiButton button = new UiButton(left + (int) UiMetrics.GAP, y, SIDEBAR_WIDTH - (int) UiMetrics.GAP * 2,
+                ROW_HEIGHT - 2, Component.translatable("battlecraft.bases.travel.button"),
+                pressed -> TravelScreen.open(this)).lit();
+        button.hint("battlecraft.bases.travel.button.hint");
         addRenderableWidget(button);
     }
 

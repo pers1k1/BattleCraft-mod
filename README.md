@@ -4,7 +4,7 @@ BattleCraft is a consolidated Minecraft Forge 1.20.1 server-oriented modpack tha
 
 ## Technical Specifications
 
-*   **Version**: dated releases - `2026.10.25v3` in files, `25.10.26v3 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
+*   **Version**: dated releases - `2026.10.26` in files, `26.10.26 PRE-ALPHA` on screen. This is a public test build: expect rough edges and report what breaks.
 *   **Platform**: Minecraft Forge 1.20.1 (Forge 47.4.22)
 *   **Java Version**: Toolchain set to Java 17
 *   **Build System**: Gradle
@@ -1416,6 +1416,17 @@ Version 2026.10.25hotfix - built; not yet checked in game.
 - **Network.** No protocol change: the rules come through the menu channel, so an old client simply does not have the screen.
 
 Version 2026.10.25v3 - built; not yet checked in game.
+
+## Point bases, 26 October 2026
+
+- **A capture point can be a base.** An operator marks an ordinary point as a base: `/bc` - Points - point - Point base, or `/capturepoint setbase "<point>" true`. While a team holds it, the point works as one more base of that team. The final point cannot be a base.
+- **Respawn at a point base.** The death screen shows a button per point base of your team under the vanilla ones (in two columns when they do not fit); they wake up together with the vanilla Respawn button. The vanilla button still leads to the home base. The server checks the choice at the moment of respawn: if the point was lost while the death screen was open, the player respawns at home. The choice goes by its own packet, so it works with the chat hidden too.
+- **Travel between bases.** The shop of an own base has a Travel button at the bottom of the section column; with the shop at point bases switched off, ALT on an own point base opens the travel window directly. One end of the trip is always a point base: from home to a point, from a point home or to another point. Pick a base, then stand still for the channel time (5 s by default): moving more than 1.5 blocks, any hit (even one that immortality after respawn absorbs), a knockdown or entering combat breaks it. Travel is refused from outside an own base and when either base was lost during the channel; a vehicle stays behind. Travel home lands at the base spawn anchor, as a respawn does. After arrival a cooldown starts (60 s by default). The countdown, refusals and arrival come as toasts (above the hotbar with toasts off), so they reach players with the chat hidden too. By command `/battlecraft travel <base>`.
+- **Shop at a point base.** ALT on an own point base opens the shop with the team treasury, the HUD shows the shop prompt there and no longer offers to capture an own point. The server now also checks the owner of a shop zone: a player trades in an own or a neutral shop, never in an enemy one.
+- **Rules.** Respawn, travel and shop at point bases are switched on and off separately, with the channel (1-30 s) and the cooldown (0-600 s): `/bc` - Points - common section - Point bases, or `/capturepoint bases respawn|travel|shop <bool>` and `/capturepoint bases channel|cooldown <seconds>`. All three are on by default and do nothing until a point is marked as a base. The rules are saved with the points in `points.dat`.
+- **Network protocol.** battlecraft channel 8: update the server together with the clients.
+
+Version 2026.10.26 - built; not yet checked in game.
 
 ## Releases
 

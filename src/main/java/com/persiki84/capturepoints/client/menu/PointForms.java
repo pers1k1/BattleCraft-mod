@@ -5,6 +5,7 @@ import com.persiki84.capturepoints.menu.CapturePointMenuState;
 import com.persiki84.shared.client.menu.ActionRow;
 import com.persiki84.shared.client.menu.FieldRow;
 import com.persiki84.shared.client.menu.HeadingRow;
+import com.persiki84.capturepoints.capture.BaseRules;
 import com.persiki84.shared.client.menu.MenuFeedback;
 import com.persiki84.shared.client.menu.NumberRow;
 import com.persiki84.shared.client.menu.PickRow;
@@ -35,6 +36,12 @@ final class PointForms {
     private final PointStudioScreen screen;
     private final HeadingRow commonHeading = heading("studio.points.group.common");
     private final HeadingRow createHeading = heading("studio.points.group.new");
+    private final HeadingRow basesHeading = heading("studio.points.group.bases");
+    private ToggleRow baseRespawnRow;
+    private ToggleRow baseTravelRow;
+    private ToggleRow baseShopRow;
+    private NumberRow baseChannelRow;
+    private NumberRow baseCooldownRow;
     private final ToggleRow protectionRow;
     private final ToggleRow breakPlacedRow;
     private final ToggleRow denyPlaceRow;
@@ -75,6 +82,7 @@ final class PointForms {
                 value -> screen.now(FINAL + "openeronly " + value));
         openerOnlyRow.hint("capturepoints.menu.final_opener_only.hint");
         payoutRow = payoutRow();
+        createBaseRows();
         resetAllRow = new ActionRow(0, 0, 10, ROW, Component.translatable("capturepoints.menu.reset_all"),
                 () -> Component.translatable(screen.isArmed(RESET_ALL) ? "studio.sure"
                         : "capturepoints.menu.action.reset"), this::pressResetAll).alerting();
@@ -107,6 +115,28 @@ final class PointForms {
                 () -> IncomePayout.byId(PointStudioScreen.state().getString(CapturePointMenuState.INCOME_PAYOUT)).ordinal(),
                 picked -> screen.now(POINT + "incomepayout " + IncomePayout.values()[picked].id()));
         row.hint("capturepoints.menu.payout.hint");
+        return row;
+    }
+
+    // WHY: правила сети баз общие для всех точек-баз, поэтому живут в общем разделе, а не у точки
+    private void createBaseRows() {
+        baseRespawnRow = toggle("capturepoints.menu.bases.respawn", CapturePointMenuState.BASE_RESPAWN,
+                value -> screen.now(POINT + "bases respawn " + value));
+        baseTravelRow = toggle("capturepoints.menu.bases.travel", CapturePointMenuState.BASE_TRAVEL,
+                value -> screen.now(POINT + "bases travel " + value));
+        baseShopRow = toggle("capturepoints.menu.bases.shop", CapturePointMenuState.BASE_SHOP,
+                value -> screen.now(POINT + "bases shop " + value));
+        baseChannelRow = baseNumber("capturepoints.menu.bases.channel", CapturePointMenuState.BASE_CHANNEL, "channel",
+                BaseRules.CHANNEL_MIN, BaseRules.CHANNEL_MAX);
+        baseCooldownRow = baseNumber("capturepoints.menu.bases.cooldown", CapturePointMenuState.BASE_COOLDOWN, "cooldown",
+                0, BaseRules.COOLDOWN_MAX);
+    }
+
+    private NumberRow baseNumber(String label, String key, String verb, int minimum, int maximum) {
+        NumberRow row = new NumberRow(0, 0, 10, ROW, Component.translatable(label),
+                () -> PointStudioScreen.state().getInt(key),
+                value -> screen.later("bases:" + verb, POINT + "bases " + verb + " " + value), minimum, maximum, 1);
+        row.hint(label + ".hint");
         return row;
     }
 
@@ -163,6 +193,12 @@ final class PointForms {
         stack.add(sized(finalMarkersRow, width), x);
         stack.add(sized(openerOnlyRow, width), x);
         stack.add(sized(payoutRow, width), x);
+        stack.add(sized(basesHeading, width), x, ROW / 3);
+        stack.add(sized(baseRespawnRow, width), x);
+        stack.add(sized(baseTravelRow, width), x);
+        stack.add(sized(baseShopRow, width), x);
+        stack.add(sized(baseChannelRow, width), x);
+        stack.add(sized(baseCooldownRow, width), x);
         stack.add(sized(resetAllRow, width), x, ROW / 3);
     }
 

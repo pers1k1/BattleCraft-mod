@@ -1,7 +1,5 @@
 package com.persiki84.zones.client;
 
-import com.persiki84.zones.Zone;
-import com.persiki84.zones.ZoneType;
 import com.persiki84.zones.ZonesMod;
 import com.persiki84.zones.client.menu.ShopScreen;
 import net.minecraft.client.Minecraft;
@@ -24,9 +22,6 @@ public final class ShopPresence {
 
         if (shop.previewing()) return;
 
-        Zone zone = ZoneOccupancy.current();
-        if (zone == null || zone.type() != ZoneType.SHOP) {
-            shop.dismiss();
-        }
+        if (!ShopPlaces.here()) shop.dismiss();
     }
 }

@@ -203,6 +203,7 @@ final class PointInspector {
         heading(stack, x, width, "studio.points.group.show");
         add(stack, x, width, ownerRow());
         if (!entry.last()) add(stack, x, width, toggle("required", "capturepoints.menu.required", "setrequired"));
+        if (!entry.last()) add(stack, x, width, toggle("base", "capturepoints.menu.base", "setbase"));
         add(stack, x, width, toggle("shownInHud", "capturepoints.menu.shown_in_hud", "sethud"));
         add(stack, x, width, toggle("hiddenInside", "capturepoints.menu.hidden_inside", "sethideinside"));
         NumberRow range = (NumberRow) number("range", "capturepoints.menu.marker_range", "markerRange",

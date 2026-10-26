@@ -9,7 +9,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.Optional;
 
 public class PacketHandler {
-    private static final String PROTOCOL_VERSION = "7";
+    private static final String PROTOCOL_VERSION = "8";
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation("battlecraft", "main"),
             () -> PROTOCOL_VERSION,
@@ -44,6 +44,20 @@ public class PacketHandler {
         registerCraftBans();
         registerServerPulse();
         registerModes();
+        registerBases();
+    }
+
+    private static void registerBases() {
+        INSTANCE.registerMessage(id(), com.persiki84.battlecraft.bases.S2CBasesPacket.class,
+                com.persiki84.battlecraft.bases.S2CBasesPacket::encode,
+                com.persiki84.battlecraft.bases.S2CBasesPacket::decode,
+                com.persiki84.battlecraft.bases.S2CBasesPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        INSTANCE.registerMessage(id(), com.persiki84.battlecraft.bases.C2SBaseRequestPacket.class,
+                com.persiki84.battlecraft.bases.C2SBaseRequestPacket::encode,
+                com.persiki84.battlecraft.bases.C2SBaseRequestPacket::decode,
+                com.persiki84.battlecraft.bases.C2SBaseRequestPacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 
     private static void registerModes() {

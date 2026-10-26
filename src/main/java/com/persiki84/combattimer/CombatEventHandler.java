@@ -34,6 +34,12 @@ public class CombatEventHandler {
     private static final Map<UUID, UUID> lastAttackers = new HashMap<>();
     private static final Set<UUID> punishing = new HashSet<>();
 
+    // WHY: перелёт между базами и прочие отказы «в бою» спрашивают тот же таймер, что видит игрок
+    public static boolean inCombat(UUID player) {
+        Long endTime = combatTimers.get(player);
+        return endTime != null && endTime > System.currentTimeMillis();
+    }
+
     @SubscribeEvent
     public void onDamage(LivingAttackEvent event) {
         if (event.getEntity().level().isClientSide) return;

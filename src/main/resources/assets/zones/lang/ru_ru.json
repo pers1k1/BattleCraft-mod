@@ -12,6 +12,7 @@
   "zones.info.empty": "Зон пока нет.",
   "zones.hud.safe": "Вы на базе",
   "zones.hud.shop": "Нажмите %s чтобы открыть меню покупки",
+  "zones.hud.travel": "Нажмите %s для перелёта на другую базу",
   "zones.hud.capture": "Нажмите %s чтобы начать захват точки",
   "zones.shop.error.not_in_shop": "Торговать можно только в зоне магазина.",
   "zones.shop.error.nothing_to_sell": "Продавать нечего.",

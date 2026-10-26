@@ -7,6 +7,7 @@ import com.persiki84.battlecraft.client.hud.AnnounceHud;
 import com.persiki84.battlecraft.client.hud.RadioHud;
 import com.persiki84.battlecraft.client.island.IslandModel;
 import com.persiki84.battlecraft.client.lyrics.SpotifyBridge;
+import com.persiki84.battlecraft.client.bases.ClientBases;
 import com.persiki84.battlecraft.client.media.MediaWatch;
 import com.persiki84.battlecraft.client.menu.rules.CraftBanToasts;
 import com.persiki84.battlecraft.client.roster.RosterOverlay;
@@ -45,6 +46,7 @@ public final class ClientLifecycle {
         ClientMatchMode.forget();
         MatchBanner.forget();
         CraftBanToasts.forget();
+        ClientBases.forget();
     }
 
     @SubscribeEvent

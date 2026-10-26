@@ -51,6 +51,7 @@ public class CapturePoint {
     private boolean hiddenInside = true;
     private int markerRange = KIND_RANGE;
     private int scorePerMinute = SCORE_BY_MODE;
+    private boolean base;
 
     private CaptureMode mode;
     private RewardSplit rewardSplit;
@@ -215,6 +216,9 @@ public class CapturePoint {
     public int getMarkerRange() { return markerRange; }
     public void setMarkerRange(int blocks) { this.markerRange = MarkerRange.normalize(blocks); }
 
+    public boolean isBase() { return base; }
+    public void setBase(boolean value) { this.base = value; }
+
     public int getScorePerMinute() { return scorePerMinute; }
     public void setScorePerMinute(int value) { this.scorePerMinute = Math.max(SCORE_BY_MODE, Math.min(SCORE_MAX, value)); }
     public void setShownInHud(boolean value) { this.shownInHud = value; }
@@ -319,6 +323,7 @@ public class CapturePoint {
         tag.putBoolean("hiddenInside", hiddenInside);
         tag.putInt("markerRange", markerRange);
         tag.putInt("scorePerMinute", scorePerMinute);
+        tag.putBoolean("base", base);
     }
 
     protected static void readTuning(CompoundTag tag, CapturePoint point) {
@@ -339,6 +344,7 @@ public class CapturePoint {
         point.hiddenInside = !tag.contains("hiddenInside") || tag.getBoolean("hiddenInside");
         point.markerRange = MarkerRange.normalize(tag.getInt("markerRange"));
         point.setScorePerMinute(tag.contains("scorePerMinute") ? tag.getInt("scorePerMinute") : SCORE_BY_MODE);
+        point.base = tag.getBoolean("base") && !(point instanceof FinalCapturePoint);
     }
 
     private static int percentOr(CompoundTag tag, String key, int fallback) {

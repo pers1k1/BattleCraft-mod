@@ -92,6 +92,13 @@ public final class ToastHud {
         add(new Note(key, message, endsAt, endsAt, false), true);
     }
 
+    // WHY: отсчёт, оборванный сервером, гаснет сразу: сорванный перелёт иначе ещё считал бы секунды
+    public static void dismiss(String keyPrefix) {
+        for (Note note : notes) {
+            if (note.key != null && note.key.startsWith(keyPrefix)) note.expiresAt = 0L;
+        }
+    }
+
     private static void add(Note note) {
         add(note, false);
     }

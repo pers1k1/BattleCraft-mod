@@ -117,9 +117,18 @@ public final class ZoneHud {
         if (shelters(zone.type())) return null;
 
         String key = KeyLabel.of(KeyBindings.CAPTURE_KEY);
-        if (zone.type() == ZoneType.SHOP) return Component.translatable("zones.hud.shop", key);
-        if (startsItself(zone)) return null;
+        if (ShopPlaces.isShop(zone)) return Component.translatable("zones.hud.shop", key);
+        if (ShopPlaces.travelOnly(zone)) return Component.translatable("zones.hud.travel", key);
+        if (startsItself(zone) || ownPoint(zone)) return null;
         return Component.translatable("zones.hud.capture", key);
+    }
+
+    // WHY: на своей точке захватывать нечего, и подсказка «нажмите, чтобы захватить» только путала
+    private static boolean ownPoint(Zone zone) {
+        if (zone.type() != ZoneType.CAPTURE_POINT || zone.ownerTeam() == null) return false;
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft.player != null && minecraft.player.getTeam() != null
+                && zone.ownerTeam().equals(minecraft.player.getTeam().getName());
     }
 
     private static boolean startsItself(Zone zone) {

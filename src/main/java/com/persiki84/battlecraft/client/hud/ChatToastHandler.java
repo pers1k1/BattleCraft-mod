@@ -30,15 +30,29 @@ public final class ChatToastHandler {
             "capturepoints.capture.defend_warning", 2
     );
 
-    private static final Map<String, Integer> COUNTDOWN_ARGS = Map.of(
-            "capturepoints.capture.on_cooldown", 1,
-            "battlecraft.error.surrender_too_early", 0,
-            "battlecraft.error.vote_cooldown", 0,
-            "quarrymod.event.cooldown_remaining", 0,
-            "airdrop.despawn.warning", 0,
-            "airdrop.interact.opening", 0,
-            "immortality.respawn.given", 0,
-            "immortality.give.target", 0
+    private static final String TRAVEL_KEYS = "battlecraft.bases.travel.";
+    private static final String TRAVEL_CHANNEL = TRAVEL_KEYS + "channel";
+
+    private static final Map<String, Integer> COUNTDOWN_ARGS = Map.ofEntries(
+            Map.entry("capturepoints.capture.on_cooldown", 1),
+            Map.entry("battlecraft.error.surrender_too_early", 0),
+            Map.entry("battlecraft.error.vote_cooldown", 0),
+            Map.entry("quarrymod.event.cooldown_remaining", 0),
+            Map.entry("airdrop.despawn.warning", 0),
+            Map.entry("airdrop.interact.opening", 0),
+            Map.entry("immortality.respawn.given", 0),
+            Map.entry("immortality.give.target", 0),
+            Map.entry(TRAVEL_CHANNEL, 0),
+            Map.entry("battlecraft.bases.travel.cooldown", 0)
+    );
+
+    private static final Map<String, String> ENDS_COUNTDOWN = Map.of(
+            "battlecraft.bases.travel.moved", TRAVEL_CHANNEL,
+            "battlecraft.bases.travel.hurt", TRAVEL_CHANNEL,
+            "battlecraft.bases.travel.down", TRAVEL_CHANNEL,
+            "battlecraft.bases.travel.combat", TRAVEL_CHANNEL,
+            "battlecraft.bases.travel.lost", TRAVEL_CHANNEL,
+            "battlecraft.bases.travel.arrived", TRAVEL_CHANNEL
     );
 
     private static final Set<String> SHOWN_ON_HUD = Set.of(
@@ -103,7 +117,9 @@ public final class ChatToastHandler {
         TranslatableContents contents = (TranslatableContents) own.getContents();
         String key = contents.getKey();
         if (SHOWN_ON_HUD.contains(key)) return;
-        if (Minecraft.getInstance().screen instanceof GlassScreen) {
+        String ended = ENDS_COUNTDOWN.get(key);
+        if (ended != null) ToastHud.dismiss(ended);
+        if (Minecraft.getInstance().screen instanceof GlassScreen && !key.startsWith(TRAVEL_KEYS)) {
             MenuFeedback.show(message, failure(message));
             return;
         }

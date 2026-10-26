@@ -51,6 +51,8 @@ public class CapturePointCommand {
         PointBonusCommands.addBranches(root, POINT_SUGGESTIONS, CapturePointManager::getCapturePoint, context);
         CaptureTuningCommands.addBranches(root, POINT_SUGGESTIONS, CapturePointManager::getCapturePoint);
         CaptureTuningCommands.addScoreBranch(root, POINT_SUGGESTIONS, CapturePointManager::getCapturePoint);
+        CaptureTuningCommands.addBaseBranch(root, POINT_SUGGESTIONS, CapturePointManager::getCapturePoint);
+        root.then(BaseRuleCommands.branch());
 
         dispatcher.register(root);
     }

@@ -75,6 +75,13 @@ public final class CaptureTuningCommands {
                                 CapturePoint::setScorePerMinute)))));
     }
 
+    // WHY: точкой-базой бывает только обычная точка: финальная кончает матч, базой ей быть некогда
+    public static void addBaseBranch(LiteralArgumentBuilder<CommandSourceStack> root,
+                                     SuggestionProvider<CommandSourceStack> points,
+                                     Function<String, CapturePoint> lookup) {
+        root.then(flagBranch("setbase", points, lookup, CapturePoint::setBase));
+    }
+
     private static int applyScore(CommandContext<CommandSourceStack> context, Function<String, CapturePoint> lookup) {
         CapturePoint point = resolve(context, lookup);
         if (point == null) return 0;
